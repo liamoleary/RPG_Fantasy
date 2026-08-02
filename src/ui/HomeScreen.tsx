@@ -137,7 +137,11 @@ export function HomeScreen() {
                 className="boon"
                 style={{ ['--bc' as string]: 'var(--fx-primary)' }}
                 data-on={d.id === difficulty}
-                onClick={() => setDifficulty(d.id)}
+                onClick={() => {
+                  setDifficulty(d.id)
+                  // Save it now — otherwise the choice is lost unless a run starts.
+                  useGame.getState().setDifficulty(d.id)
+                }}
               >
                 <span className="boon-branch">{d.id === difficulty ? '● selected' : 'select'}</span>
                 <strong>{d.name}</strong>

@@ -184,9 +184,10 @@ export function Board({
     </div>
   )
   return (
+    // Front row on top, matching the battle view: your line faces the enemy.
     <div className="board" style={compact ? { opacity: 0.95 } : undefined}>
-      {render([4, 5, 6], 'back')}
       {render([0, 1, 2, 3], 'front')}
+      {render([4, 5, 6], 'back')}
     </div>
   )
 }

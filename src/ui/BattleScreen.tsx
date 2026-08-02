@@ -177,7 +177,15 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
 
   return (
     <div className="screen">
-      <Ladder run={run} onInspect={() => {}} />
+      {/* HP is already applied when the replay starts, so the ladder would
+          spoil the outcome — hold its space until the fight has played out. */}
+      {done ? (
+        <Ladder run={run} onInspect={() => {}} />
+      ) : (
+        <div className="row center dim tiny" style={{ height: 52, justifyContent: 'center' }}>
+          Round {run.round}
+        </div>
+      )}
 
       <div className="side-label">
         <span className="eyebrow" style={{ color: foeFaction?.colors.accent }}>
@@ -240,10 +248,12 @@ function SnapBoard({ snaps, fx, flip }: { snaps: StackSnap[]; fx: Frame['fx']; f
   }
   const front = row([0, 1, 2, 3], 'front')
   const back = row([4, 5, 6], 'back')
+  // Front rows meet at the divider: the enemy block is back-then-front, yours
+  // is front-then-back.
   return (
     <div className="board">
-      {flip ? front : back}
       {flip ? back : front}
+      {flip ? front : back}
     </div>
   )
 }

@@ -1,9 +1,10 @@
 import { create } from 'zustand'
-import { BOON_BY_ID, HERO_BY_ID, unit } from '../data/index'
+import { BOON_BY_ID } from '../data/index'
 import type { FactionId } from '../data/types'
-import type { BattleResult, BoardStack } from '../engine/battle'
+import type { BattleResult } from '../engine/battle'
 import {
   moveStack,
+  offerSlots,
   promote as campPromote,
   recruit as campRecruit,
   sell as campSell,
@@ -20,11 +21,9 @@ import {
   applyBoon,
   autoArrangePlayer,
   newRun,
-  opponentOf,
   player,
   renownFor,
   resolveBattles,
-  byId,
   type RunState,
 } from '../engine/run'
 import { DEFAULT_SAVE, loadSave, writeSave, type SaveData } from './persist'
@@ -102,9 +101,11 @@ export const useGame = create<Store>((set, get) => ({
     // Stack uids are minted from a counter; restart it past anything saved.
     const highest = active.warlords.flatMap((w) => w.board).reduce((n, s) => Math.max(n, Number(s.uid.replace(/\D/g, '')) || 0), 0)
     resetUid(highest)
+    // A run saved mid-'result' must come back to the result screen — dropping it
+    // on Muster lets Fight resolve the same round twice.
     set({
       run: active,
-      screen: active.phase === 'over' ? 'runover' : 'muster',
+      screen: active.phase === 'over' ? 'runover' : active.phase === 'result' ? 'result' : 'muster',
       selected: null,
       playerBattle: null,
     })
@@ -166,8 +167,15 @@ export const useGame = create<Store>((set, get) => ({
     const cost = tierUpCost(p.camp, p.mods)
     if (cost === null || p.gold < cost || p.camp.tier >= MAX_CAMP_TIER) return
     p.gold -= cost
-    p.camp = { ...p.camp, tier: p.camp.tier + 1, tierDiscount: 0 }
-    p.camp = { ...p.camp, offer: rollOffer(p.factionId, p.camp, p.mods, makeUiRng(run, 900 + p.camp.tier)) }
+    const tier = p.camp.tier + 1
+    p.camp = { ...p.camp, tier, tierDiscount: 0 }
+    // Battlegrounds convention (§15): a tier-up keeps the offer on the board and
+    // only fills the slot(s) it just unlocked — it is not a free reroll.
+    const added = offerSlots(p.camp, p.mods) - p.camp.offer.length
+    if (added > 0) {
+      const rolled = rollOffer(p.factionId, p.camp, p.mods, makeUiRng(run, 900 + tier))
+      p.camp = { ...p.camp, offer: [...p.camp.offer, ...rolled.slice(0, added)] }
+    }
     persist(get().save, run)
     set({ run: { ...run } })
   },
@@ -233,12 +241,18 @@ export const useGame = create<Store>((set, get) => ({
   fight: () => {
     const { run } = get()
     if (!run) return
+    // Only a fresh Muster may start a battle; resolving twice would double the
+    // damage across the whole lobby. (chooseBoon returns 'levelup' to 'muster'.)
+    if (run.phase !== 'muster') return
     const p = player(run)
     p.board = p.board.filter((s) => s.count > 0)
-    const oppId = opponentOf(run, p.id)
     resolveBattles(run)
     const report = run.reports.find((r) => r.aId === p.id || r.bId === p.id)
-    void oppId
+    // Only the player's replay needs its event log; the other three pairings
+    // would otherwise dump their whole battle into localStorage every round.
+    for (const r of run.reports) {
+      if (r.aId !== p.id && r.bId !== p.id) r.result.events = []
+    }
     persist(get().save, run)
     set({
       run: { ...run },
@@ -259,7 +273,6 @@ export const useGame = create<Store>((set, get) => ({
     if (run.finished || !p.alive) {
       const placement = p.placement ?? 1
       const earned = renownFor(placement)
-      const hero = HERO_BY_ID.get(p.heroId)
       const best = get().save.stats.bestPlacementByHero[p.heroId] ?? 99
       const save: SaveData = {
         ...get().save,
@@ -271,7 +284,6 @@ export const useGame = create<Store>((set, get) => ({
         },
         activeRun: null,
       }
-      void hero
       writeSave(save)
       set({ save, screen: 'runover', renownEarned: earned, playerBattle: null })
       return
@@ -308,12 +320,3 @@ export const useGame = create<Store>((set, get) => ({
 function makeUiRng(run: RunState, salt: number) {
   return makeRng(hashSeed(`${run.seed}|ui|${run.round}|${salt}`))
 }
-
-// Convenience selectors used across screens.
-export const selectPlayer = (s: Store) => (s.run ? player(s.run) : null)
-export const selectOpponent = (s: Store) => {
-  if (!s.run) return null
-  const id = opponentOf(s.run, s.run.playerId)
-  return id ? byId(s.run, id) : null
-}
-export const stackUnit = (st: BoardStack) => unit(st.unitId)

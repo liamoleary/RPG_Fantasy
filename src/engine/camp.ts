@@ -164,8 +164,13 @@ export function promote(board: BoardStack[], gold: number, uid: string, camp: Ca
   if (gold < cost) return { ok: false, reason: 'Not enough gold', board, gold }
   let slot = stack.slot
   // A promotion can change the legal row (e.g. a back-row line ending in a brawler).
-  if (target.row === 'front' && slot >= FRONT_SLOTS) slot = firstOpenSlot(board.filter((s) => s.uid !== uid), target) ?? slot
-  if (target.row === 'back' && slot < FRONT_SLOTS) slot = firstOpenSlot(board.filter((s) => s.uid !== uid), target) ?? slot
+  const rowChanges = (target.row === 'front' && slot >= FRONT_SLOTS) || (target.row === 'back' && slot < FRONT_SLOTS)
+  if (rowChanges) {
+    // Keeping the old slot would leave the stack in a row it may not stand in.
+    const open = firstOpenSlot(board.filter((s) => s.uid !== uid), target)
+    if (open === null) return { ok: false, reason: 'No room in the target row', board, gold }
+    slot = open
+  }
   const next = board.map((s) => (s.uid === uid ? { ...s, unitId: target.id, slot, spent: s.spent + cost } : s))
   return { ok: true, board: next, gold: gold - cost }
 }

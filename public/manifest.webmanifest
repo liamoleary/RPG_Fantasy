@@ -1,0 +1,19 @@
+{
+  "name": "Bannerfell",
+  "short_name": "Bannerfell",
+  "description": "A pocket warband roguelike — draft an army, outlast seven rival warlords.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0c0d13",
+  "theme_color": "#0c0d13",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,453 @@
+/** The lobby: 8 warlords, paired auto-battles, hero attrition, placements. */
+import { BOON_BY_ID, FACTIONS, HERO_BY_ID, faction, heroesOfFaction, unit } from '../data/index'
+import type { BoonDef, FactionId, HeroDef, HeroMods } from '../data/types'
+import { ZERO_MODS, addMods } from '../data/types'
+import { economyGold, simulateBattle, type BattleResult, type BoardStack, type HeroState } from './battle'
+import { heroLevel, isLevelUpRound, offerBoons } from './boons'
+import { MAX_CAMP_TIER, income, newCamp, rollOffer, type CampState } from './camp'
+import { autoPosition, NOISE, pickBoon, rivalMuster, type Archetype, type Difficulty } from './rivals'
+import { hashSeed, makeRng, type RNG } from './rng'
+
+export const LOBBY_SIZE = 8
+export const START_HP = 30
+export const HARD_CAP_ROUND = 16
+export const SUDDEN_DEATH_DAMAGE = 5
+
+export type Phase = 'muster' | 'levelup' | 'battle' | 'result' | 'over'
+
+export interface Warlord {
+  id: string
+  name: string
+  factionId: FactionId
+  heroId: string
+  isPlayer: boolean
+  hp: number
+  alive: boolean
+  placement: number | null
+  eliminatedRound: number | null
+  gold: number
+  board: BoardStack[]
+  camp: CampState
+  mods: HeroMods
+  boonsTaken: string[]
+  archetype: Archetype
+  lastOpponentId: string | null
+  wins: number
+  losses: number
+}
+
+export interface Pairing {
+  aId: string
+  bId: string
+  /** b is a ghost copy of an eliminated warlord's last board */
+  ghost: boolean
+}
+
+export interface BattleReport {
+  aId: string
+  bId: string
+  ghost: boolean
+  winner: 'a' | 'b' | 'tie'
+  damage: number
+  result: BattleResult
+}
+
+export interface RunState {
+  seed: number
+  round: number
+  phase: Phase
+  difficulty: Difficulty
+  warlords: Warlord[]
+  playerId: string
+  pairings: Pairing[]
+  reports: BattleReport[]
+  /** boons offered to the player this round (levelup phase only) */
+  boonOffer: BoonDef[]
+  ghostBoards: Record<string, BoardStack[]>
+  finished: boolean
+  placementCounter: number
+  log: string[]
+}
+
+// ── helpers ────────────────────────────────────────────────────────────────
+
+export const heroDef = (id: string): HeroDef => {
+  const h = HERO_BY_ID.get(id)
+  if (!h) throw new Error(`unknown hero ${id}`)
+  return h
+}
+
+export const player = (run: RunState): Warlord => {
+  const w = run.warlords.find((x) => x.id === run.playerId)
+  if (!w) throw new Error('no player')
+  return w
+}
+
+export const byId = (run: RunState, id: string): Warlord => {
+  const w = run.warlords.find((x) => x.id === id)
+  if (!w) throw new Error(`no warlord ${id}`)
+  return w
+}
+
+export function heroState(w: Warlord, round: number): HeroState {
+  return { heroId: w.heroId, name: w.name, factionId: w.factionId, level: heroLevel(round), mods: w.mods }
+}
+
+/** Round rng — derived from the run seed so state stays serializable. */
+function roundRng(run: RunState, salt: number): RNG {
+  return makeRng(hashSeed(`${run.seed}:${run.round}:${salt}`))
+}
+
+export function pairingFor(run: RunState, id: string): Pairing | undefined {
+  return run.pairings.find((p) => p.aId === id || p.bId === id)
+}
+
+export function opponentOf(run: RunState, id: string): string | null {
+  const p = pairingFor(run, id)
+  if (!p) return null
+  return p.aId === id ? p.bId : p.aId
+}
+
+// ── lobby creation ─────────────────────────────────────────────────────────
+
+export interface NewRunOptions {
+  seed: number
+  factionId: FactionId
+  heroId: string
+  playerName?: string
+  difficulty?: Difficulty
+}
+
+export function newRun(opts: NewRunOptions): RunState {
+  const rng = makeRng(opts.seed)
+  const warlords: Warlord[] = []
+  // Ids are positional, not generated, so a serialized run resumes identically.
+  const playerId = 'w0'
+
+  warlords.push(
+    makeWarlord(playerId, opts.playerName ?? 'You', opts.factionId, opts.heroId, true, 'balanced'),
+  )
+
+  const usedNames = new Set<string>()
+  for (let i = 0; i < LOBBY_SIZE - 1; i++) {
+    const f = rng.pick(FACTIONS)
+    const heroes = heroesOfFaction(f.id)
+    const hero = rng.pick(heroes)
+    const fd = faction(f.id)
+    let name = ''
+    for (let tries = 0; tries < 12; tries++) {
+      name = `${rng.pick(fd.nameBank)} ${rng.pick(fd.titleBank)}`
+      if (!usedNames.has(name)) break
+    }
+    usedNames.add(name)
+    warlords.push(
+      makeWarlord(`w${i + 1}`, name, f.id, hero.id, false, rng.pick(['aggro', 'greedy', 'balanced', 'economy'] as Archetype[])),
+    )
+  }
+
+  const run: RunState = {
+    seed: opts.seed,
+    round: 1,
+    phase: 'muster',
+    difficulty: opts.difficulty ?? 'standard',
+    warlords,
+    playerId,
+    pairings: [],
+    reports: [],
+    boonOffer: [],
+    ghostBoards: {},
+    finished: false,
+    placementCounter: LOBBY_SIZE,
+    log: [],
+  }
+
+  beginRound(run)
+  return run
+}
+
+function makeWarlord(
+  id: string,
+  name: string,
+  factionId: FactionId,
+  heroId: string,
+  isPlayer: boolean,
+  archetype: Archetype,
+): Warlord {
+  return {
+    id,
+    name,
+    factionId,
+    heroId,
+    isPlayer,
+    hp: START_HP,
+    alive: true,
+    placement: null,
+    eliminatedRound: null,
+    gold: 0,
+    board: [],
+    camp: newCamp(),
+    mods: { ...ZERO_MODS },
+    boonsTaken: [],
+    archetype,
+    lastOpponentId: null,
+    wins: 0,
+    losses: 0,
+  }
+}
+
+// ── round lifecycle ────────────────────────────────────────────────────────
+
+/** Start of Muster: income, Growth, offers, rival turns, pairings, level-up. */
+export function beginRound(run: RunState) {
+  const rng = roundRng(run, 1)
+
+  for (const w of run.warlords) {
+    if (!w.alive) continue
+    applyGrowth(w)
+    w.gold = income(run.round, w.mods) + economyGold(w.board)
+    w.camp.rerollsUsedThisRound = 0
+    if (!w.camp.frozen || w.camp.offer.length === 0) {
+      w.camp.offer = rollOffer(w.factionId, w.camp, w.mods, rng.fork(hashSeed(w.id)))
+    }
+    w.camp.frozen = false
+  }
+
+  // Rivals take their whole Muster now; the player's is interactive.
+  for (const w of run.warlords) {
+    if (!w.alive || w.isPlayer) continue
+    if (isLevelUpRound(run.round)) {
+      const offers = offerBoons(run.round, w.heroId, w.factionId, new Set(w.boonsTaken), rng.fork(hashSeed(`b${w.id}`)))
+      if (offers.length > 0) {
+        const chosen = pickBoon(offers, w.archetype, NOISE[run.difficulty], rng.fork(hashSeed(`p${w.id}`)))
+        applyBoon(w, chosen)
+      }
+    }
+    const out = rivalMuster(
+      {
+        board: w.board,
+        gold: w.gold,
+        camp: w.camp,
+        mods: w.mods,
+        round: run.round,
+        archetype: w.archetype,
+        factionId: w.factionId,
+        noise: NOISE[run.difficulty],
+      },
+      rng.fork(hashSeed(`m${w.id}`)),
+    )
+    w.board = out.board
+    w.camp = out.camp
+    w.gold = out.gold
+  }
+
+  run.pairings = makePairings(run, roundRng(run, 2))
+
+  const p = player(run)
+  if (p.alive && isLevelUpRound(run.round)) {
+    run.boonOffer = offerBoons(run.round, p.heroId, p.factionId, new Set(p.boonsTaken), roundRng(run, 3))
+    run.phase = run.boonOffer.length > 0 ? 'levelup' : 'muster'
+  } else {
+    run.boonOffer = []
+    run.phase = 'muster'
+  }
+}
+
+/**
+ * Growth: end-of-Muster permanent stats, applied at the top of the next one.
+ * HP grows every Muster, ATK every *other* Muster — ungated ATK growth
+ * compounds with stack count and runs away with the whole lobby by round 8.
+ */
+function applyGrowth(w: Warlord) {
+  const hd = heroDef(w.heroId)
+  const extraHp = hd.passive.id === 'growthPlusHp' ? (hd.passive.x ?? 1) : 0
+  for (const s of w.board) {
+    const g = unit(s.unitId).keywords.find((k) => k.k === 'growth')
+    if (!g) continue
+    const amount = (g.x ?? 1) + w.mods.growthBonus
+    s.growthTicks += 1
+    s.bonusHp += amount + extraHp
+    if (s.growthTicks % 2 === 0) s.bonusAtk += amount
+  }
+}
+
+export function applyBoon(w: Warlord, boon: BoonDef) {
+  w.boonsTaken.push(boon.id)
+  w.mods = addMods(w.mods, boon.mods)
+  if (boon.mods.campTierUp) {
+    w.camp = { ...w.camp, tier: Math.min(MAX_CAMP_TIER, w.camp.tier + boon.mods.campTierUp), tierDiscount: 0 }
+  }
+}
+
+export function choosePlayerBoon(run: RunState, boonId: string) {
+  const boon = BOON_BY_ID.get(boonId)
+  if (!boon || !run.boonOffer.some((b) => b.id === boonId)) return
+  applyBoon(player(run), boon)
+  run.boonOffer = []
+  run.phase = 'muster'
+}
+
+function makePairings(run: RunState, rng: RNG): Pairing[] {
+  const alive = run.warlords.filter((w) => w.alive)
+  let pool = rng.shuffle(alive.map((w) => w.id))
+  const pairs: Pairing[] = []
+
+  // Try to avoid repeating last round's opponent (Battlegrounds rule).
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const trial: Pairing[] = []
+    const q = pool.slice()
+    let clean = true
+    while (q.length >= 2) {
+      const a = q.shift() as string
+      let idx = q.findIndex((b) => byId(run, a).lastOpponentId !== b)
+      if (idx === -1) {
+        idx = 0
+        clean = false
+      }
+      const b = q.splice(idx, 1)[0]
+      trial.push({ aId: a, bId: b, ghost: false })
+    }
+    if (q.length === 1) {
+      const lone = q[0]
+      const ghostId = lastEliminated(run)
+      trial.push({ aId: lone, bId: ghostId ?? lone, ghost: true })
+    }
+    pairs.length = 0
+    pairs.push(...trial)
+    if (clean) break
+    pool = rng.shuffle(pool)
+  }
+  return pairs
+}
+
+function lastEliminated(run: RunState): string | null {
+  const dead = run.warlords.filter((w) => !w.alive && w.eliminatedRound !== null)
+  if (dead.length === 0) return null
+  dead.sort((a, b) => (b.eliminatedRound ?? 0) - (a.eliminatedRound ?? 0))
+  return dead[0].id
+}
+
+// ── battle phase ───────────────────────────────────────────────────────────
+
+export function resolveBattles(run: RunState): BattleReport[] {
+  const reports: BattleReport[] = []
+
+  for (const p of run.pairings) {
+    const a = byId(run, p.aId)
+    const bSource = byId(run, p.bId)
+    const bBoard = p.ghost ? (run.ghostBoards[p.bId] ?? bSource.board) : bSource.board
+
+    const seed = hashSeed(`${run.seed}|${run.round}|${p.aId}|${p.bId}`)
+    const result = simulateBattle(
+      { board: a.board, hero: heroState(a, run.round) },
+      { board: bBoard, hero: heroState(bSource, run.round) },
+      heroDef(a.heroId),
+      heroDef(bSource.heroId),
+      seed,
+      { round: run.round },
+    )
+    reports.push({ aId: p.aId, bId: p.bId, ghost: p.ghost, winner: result.winner, damage: result.damageToLoser, result })
+  }
+
+  // Apply outcomes only after every battle has resolved, so damage is simultaneous.
+  for (const r of reports) {
+    const a = byId(run, r.aId)
+    const b = byId(run, r.bId)
+    a.lastOpponentId = r.ghost ? null : r.bId
+    if (!r.ghost) b.lastOpponentId = r.aId
+
+    if (r.winner === 'tie') {
+      const d = r.result.damageToBoth
+      a.hp -= d
+      if (!r.ghost) b.hp -= d
+      run.log.push(`R${run.round}: ${a.name} and ${b.name} fought to a standstill (−${d} each).`)
+      continue
+    }
+
+    const winnerIsA = r.winner === 'a'
+    const winner = winnerIsA ? a : b
+    const loser = winnerIsA ? b : a
+    // A ghost is a dead warlord's last board — it neither takes nor records damage.
+    const loserIsGhost = r.ghost && loser.id === b.id
+    const winnerIsGhost = r.ghost && winner.id === b.id
+
+    if (!winnerIsGhost) winner.wins++
+    if (!loserIsGhost) {
+      loser.hp -= r.damage
+      loser.losses++
+    }
+    run.log.push(`R${run.round}: ${winner.name} defeated ${loser.name}${loserIsGhost ? ' (ghost)' : ` (−${r.damage} HP)`}.`)
+  }
+
+  if (run.round >= HARD_CAP_ROUND) {
+    for (const w of run.warlords) {
+      if (!w.alive) continue
+      w.hp -= SUDDEN_DEATH_DAMAGE
+    }
+    run.log.push(`R${run.round}: Sudden Death — every banner takes ${SUDDEN_DEATH_DAMAGE}.`)
+  }
+
+  eliminate(run)
+  run.reports = reports
+  run.phase = 'result'
+  return reports
+}
+
+function eliminate(run: RunState) {
+  const dying = run.warlords.filter((w) => w.alive && w.hp <= 0)
+  // Same-round eliminations share the lower placements, broken by remaining HP.
+  dying.sort((a, b) => a.hp - b.hp)
+  for (const w of dying) {
+    w.alive = false
+    w.hp = 0
+    w.eliminatedRound = run.round
+    w.placement = run.placementCounter
+    run.placementCounter -= 1
+    run.ghostBoards[w.id] = w.board.map((s) => ({ ...s }))
+    run.log.push(`R${run.round}: ${w.name} is eliminated — ${ordinal(w.placement)} place.`)
+  }
+
+  const alive = run.warlords.filter((w) => w.alive)
+  if (alive.length === 1) {
+    alive[0].placement = 1
+    run.finished = true
+    run.phase = 'over'
+    run.log.push(`${alive[0].name} stands alone. Victory.`)
+  } else if (alive.length === 0) {
+    run.finished = true
+    run.phase = 'over'
+  }
+}
+
+export function advanceRound(run: RunState) {
+  if (run.finished) return
+  run.round += 1
+  run.reports = []
+  beginRound(run)
+}
+
+export function ordinal(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd']
+  const v = n % 100
+  return n + (s[(v - 20) % 10] ?? s[v] ?? s[0])
+}
+
+// ── player Muster actions (wrappers that keep the run consistent) ───────────
+
+export function playerReady(run: RunState) {
+  const p = player(run)
+  p.board = p.board.filter((s) => s.count > 0)
+  run.phase = 'battle'
+}
+
+export function autoArrangePlayer(run: RunState) {
+  const p = player(run)
+  p.board = autoPosition(p.board)
+}
+
+// ── Renown ─────────────────────────────────────────────────────────────────
+
+export const RENOWN_BY_PLACEMENT: Record<number, number> = { 1: 100, 2: 70, 3: 50, 4: 50, 5: 30, 6: 30, 7: 15, 8: 15 }
+
+export function renownFor(placement: number, feats: string[] = []): number {
+  return (RENOWN_BY_PLACEMENT[placement] ?? 15) + feats.length * 10
+}

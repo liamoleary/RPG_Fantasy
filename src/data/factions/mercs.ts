@@ -117,7 +117,7 @@ export const MERC_UNITS: UnitDef[] = [
     init: 2,
     musterSize: 2,
     row: 'front',
-    keywords: [{ k: 'bulwark', x: 2 }, { k: 'guard', x: 1 }],
+    keywords: [{ k: 'bulwark', x: 2 }, { k: 'guard', x: 1 }, { k: 'cover', x: 1 }],
     rank: {
       veteran: { hp: 1 },
       honoredName: 'Braced Pikes',

@@ -116,7 +116,7 @@ export const VANGUARD_UNITS: UnitDef[] = [
     init: 3,
     musterSize: 2,
     row: 'front',
-    keywords: [{ k: 'bulwark', x: 2 }, { k: 'guard', x: 1 }],
+    keywords: [{ k: 'bulwark', x: 2 }, { k: 'guard', x: 1 }, { k: 'cover', x: 2 }],
     rank: {
       veteran: { hp: 1 },
       honoredName: 'Sister-Shield',
@@ -196,7 +196,7 @@ export const VANGUARD_UNITS: UnitDef[] = [
     init: 3,
     musterSize: 1,
     row: 'front',
-    keywords: [{ k: 'bulwark', x: 4 }, { k: 'guard', x: 1 }],
+    keywords: [{ k: 'bulwark', x: 4 }, { k: 'guard', x: 1 }, { k: 'cover', x: 2 }],
     ability: {
       trigger: 'battleStart',
       effect: { type: 'alliesBulwark', x: 1 },

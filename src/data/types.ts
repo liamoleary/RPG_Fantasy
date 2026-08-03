@@ -18,6 +18,7 @@ export type KeywordId =
   | 'growth'
   | 'frenzy'
   | 'summon'
+  | 'cover'
 
 export interface Keyword {
   k: KeywordId
@@ -217,6 +218,8 @@ export interface HeroMods {
   chargeAll: boolean
   lifestealAll: boolean
   cleaveFront: boolean
+  /** Overwatch: every front-row stack gains this many Cover charges */
+  frontCover: number
   retaliationAtk: number
   firstStrikeBulwark: number
   // Magic — spell
@@ -251,6 +254,7 @@ export const ZERO_MODS: HeroMods = {
   chargeAll: false,
   lifestealAll: false,
   cleaveFront: false,
+  frontCover: 0,
   retaliationAtk: 0,
   firstStrikeBulwark: 0,
   spellPower: 0,

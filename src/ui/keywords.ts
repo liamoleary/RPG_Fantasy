@@ -26,13 +26,21 @@ const ENTRIES: Record<KeywordId, Entry> = {
   },
   volley: {
     name: 'Volley',
-    detail: () => 'shoots any enemy stack in either row, and is never retaliated against',
-    generic: 'Ranged. Shoots any enemy stack in either row, even through a full front line, and never provokes retaliation.',
+    detail: () => 'shoots any enemy stack in either row, and is never retaliated against — Cover units can intercept it',
+    generic:
+      'Ranged. Shoots any enemy stack in either row, even through a full front line, and never provokes retaliation. Volleys can strike any row — Cover units can intercept them.',
   },
   siege: {
     name: 'Siege',
     detail: () => 'ignores Bulwark entirely and hunts the best-armoured target',
     generic: 'Ignores Bulwark entirely and prefers the enemy stack with the most armour.',
+  },
+  cover: {
+    name: 'Cover',
+    detail: (x) =>
+      `the first ${x} volley${x === 1 ? '' : 's'} each battle aimed at the back-row stacks behind this one hit this stack instead`,
+    generic:
+      'The first X volleys each battle aimed at a back-row stack this unit stands over are taken by this unit instead. Only front-row stacks can cover, and each covers the two back slots behind it. Siege and hero spells ignore Cover.',
   },
   guard: {
     name: 'Guard',

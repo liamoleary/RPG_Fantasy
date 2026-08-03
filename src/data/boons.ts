@@ -14,6 +14,7 @@ export const BOONS: BoonDef[] = [
   { id: 'b_levy', name: 'Mass Levy', branch: 'might', minRound: 2, text: 'Tier 1–2 recruits arrive with +2 extra count. → makes cheap stacks scale.', mods: { t12CountBonus: 2 } },
   { id: 'b_elite_muster', name: 'Elite Muster', branch: 'might', minRound: 4, text: 'Tier 4–5 recruits arrive with +1 extra count. → makes elites worth stacking.', mods: { t45CountBonus: 1 } },
   { id: 'b_shieldwall', name: 'Shield Wall', branch: 'might', minRound: 2, text: '+2 Bulwark to front-row stacks at battle start.', mods: { frontBulwark: 2 } },
+  { id: 'b_overwatch', name: 'Overwatch', branch: 'might', minRound: 4, text: 'Your front-row stacks gain Cover 1 — each intercepts one volley aimed at the back line behind it. → rewards holding a full front row.', mods: { frontCover: 1 } },
   { id: 'b_bloodlust', name: 'Bloodlust', branch: 'might', minRound: 4, text: 'Frenzy triggers grant +2 extra ATK. → pushes you toward casualty-hungry stacks.', mods: { frenzyAtk: 2 } },
   { id: 'b_fertile', name: 'Fertile Ground', branch: 'might', minRound: 4, text: 'Growth grants +1 extra ATK and HP. → rewards buying Growth early and holding it.', mods: { growthBonus: 1 } },
   { id: 'b_volleydrill', name: 'Volley Drill', branch: 'might', minRound: 4, text: '+2 ATK to Volley stacks. → makes ranged units the plan.', mods: { volleyAtk: 2 } },

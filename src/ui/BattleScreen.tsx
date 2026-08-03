@@ -51,6 +51,13 @@ function describe(e: BattleEvent, playerIsA: boolean): string {
       return 'Rooted — it cannot act.'
     case 'venom':
       return 'Venom courses through the ranks.'
+    case 'cover': {
+      const name = (uid: string, fallback: string) => {
+        const sn = e.snap.find((x) => x.uid === uid)
+        return sn ? unit(sn.unitId).name : fallback
+      }
+      return `${name(e.by, 'The front line')} covers ${name(e.saved, 'the back line')} — volley intercepted.`
+    }
     case 'heal':
       return 'Healed.'
     case 'cleave':

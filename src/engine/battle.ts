@@ -63,6 +63,8 @@ export interface StackSnap {
   alive: boolean
   rooted: boolean
   rank: number
+  /** Cover charges still available this battle (§3.3 pips) */
+  cover: number
 }
 
 export type BattleEvent =
@@ -71,6 +73,7 @@ export type BattleEvent =
   | { t: 'attack'; src: string; dst: string; side: Side; dmg: number; absorbed: number; killed: number; retaliation: boolean; snap: StackSnap[] }
   | { t: 'cleave'; src: string; dst: string; dmg: number; killed: number; snap: StackSnap[] }
   | { t: 'venom'; uid: string; units: number; snap: StackSnap[] }
+  | { t: 'cover'; src: string; saved: string; by: string; left: number; snap: StackSnap[] }
   | { t: 'buff'; uids: string[]; text: string; snap: StackSnap[] }
   | { t: 'heal'; uid: string; amount: number; revived: number; snap: StackSnap[] }
   | { t: 'frenzy'; uid: string; atk: number; snap: StackSnap[] }
@@ -138,6 +141,8 @@ interface RStack {
   abilityEcho: boolean
   /** extra ATK on top of each Frenzy trigger */
   frenzyPlus: number
+  /** Cover charges left this battle (front row only) */
+  coverLeft: number
 }
 
 interface Ctx {
@@ -168,6 +173,7 @@ function snap(s: RStack): StackSnap {
     alive: s.alive,
     rooted: false,
     rank: s.rank,
+    cover: s.coverLeft,
   }
 }
 
@@ -248,6 +254,8 @@ function buildStack(bs: BoardStack, side: Side, hero: HeroState, heroDef: HeroDe
     firstShotDouble: honored ? honored.type === 'firstShotDouble' : false,
     abilityEcho: honored ? honored.type === 'abilityEcho' : false,
     frenzyPlus: honored && honored.type === 'frenzyPlus' ? honored.x : 0,
+    // Cover is a front-line job: a back-row stack cannot shield anything.
+    coverLeft: row === 'front' ? (kw(def, 'cover') ?? 0) + extraKw('cover') + m.frontCover : 0,
   }
 }
 
@@ -336,7 +344,27 @@ function chooseTarget(ctx: Ctx, attacker: RStack): RStack | undefined {
     for (const f of foes) if (f.bulwark > best.bulwark) best = f
     if (best.bulwark > 0) return best
   }
-  if (attacker.volley) return ctx.rng.pick(foes)
+  if (attacker.volley) {
+    const picked = ctx.rng.pick(foes)
+    // Cover (§2.1): a volley into a covered back-row stack is taken by the
+    // front-row unit standing over it. Siege ignores Cover unconditionally —
+    // a Siege unit reaches this branch whenever no Bulwark target exists, so
+    // the check has to be on the attacker, not on which branch it fell through.
+    const guard = attacker.siege ? undefined : interceptorFor(ctx, picked)
+    if (guard) {
+      guard.coverLeft -= 1
+      ctx.events.push({
+        t: 'cover',
+        src: attacker.uid,
+        saved: picked.uid,
+        by: guard.uid,
+        left: guard.coverLeft,
+        snap: snaps(picked, guard),
+      })
+      return guard
+    }
+    return picked
+  }
 
   const front = foes.filter((f) => f.row === 'front')
   if (front.length > 0) {
@@ -345,6 +373,36 @@ function chooseTarget(ctx: Ctx, attacker: RStack): RStack | undefined {
     return mirrored ?? ctx.rng.pick(front)
   }
   return ctx.rng.pick(foes)
+}
+
+/**
+ * Coverage map (Design Notes 02 §2.1). Four front slots sit over three back
+ * slots, offset like bricks: back slot `b` stands behind front slots `b` and
+ * `b + 1`. Slots are 0-3 front and 4-6 back, so the back index is slot - 4.
+ */
+export function coveringSlotsFor(backSlot: number): [number, number] {
+  const b = backSlot - FRONT_SLOTS
+  return [b, b + 1]
+}
+
+/**
+ * The front-row stack that intercepts a volley aimed at `target`, if any.
+ * More remaining charges wins; ties go to the lower slot, so the choice never
+ * depends on iteration order and stays deterministic.
+ */
+function interceptorFor(ctx: Ctx, target: RStack): RStack | undefined {
+  if (target.row !== 'front' && target.slot >= FRONT_SLOTS) {
+    const [a, b] = coveringSlotsFor(target.slot)
+    let best: RStack | undefined
+    for (const s of ctx.stacks) {
+      if (s.side !== target.side || !s.alive || s.row !== 'front') continue
+      if (s.coverLeft <= 0) continue
+      if (s.slot !== a && s.slot !== b) continue
+      if (!best || s.coverLeft > best.coverLeft || (s.coverLeft === best.coverLeft && s.slot < best.slot)) best = s
+    }
+    return best
+  }
+  return undefined
 }
 
 function adjacentAlly(ctx: Ctx, s: RStack): RStack | undefined {

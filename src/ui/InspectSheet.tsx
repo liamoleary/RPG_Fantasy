@@ -19,6 +19,31 @@ export function lineFormsOf(unitId: string): UnitDef[] {
   return lineOf(lineRootOf(unitId)).map(unit)
 }
 
+export interface PromoteBlock {
+  /** the next form, if this unit has one at all */
+  target: UnitDef | null
+  ok: boolean
+  cost: number | null
+  reason?: string
+}
+
+/**
+ * Why you can or cannot promote, in one place. Returning a reason rather than
+ * `null` is the point: a promotion that silently vanishes from the sheet reads
+ * as a bug, not a requirement.
+ */
+export function promoteBlock(unitId: string, campTier: number, gold: number, mods: HeroMods): PromoteBlock {
+  const def = unit(unitId)
+  if (!def.lineNext) return { target: null, ok: false, cost: null }
+  const target = unit(def.lineNext)
+  const cost = promoteCost(target, mods)
+  if (target.tier > campTier) {
+    return { target, ok: false, cost, reason: `Needs Camp Tier ${target.tier} — you are on Tier ${campTier}.` }
+  }
+  if (gold < cost) return { target, ok: false, cost, reason: `Costs ${cost}g — you have ${gold}.` }
+  return { target, ok: true, cost }
+}
+
 export interface StackContext {
   count: number
   bonusAtk?: number
@@ -29,6 +54,8 @@ export function InspectSheet({
   unitId,
   context,
   mods = ZERO_MODS,
+  campTier,
+  gold,
   extra,
   actions,
   onClose,
@@ -38,6 +65,9 @@ export function InspectSheet({
   context?: StackContext
   /** for promotion pricing; read-only callers can leave it out */
   mods?: HeroMods
+  /** live camp tier and purse, so the line can say what is blocking a promotion */
+  campTier?: number
+  gold?: number
   /** Phase B slot — Banner Rank progress renders here (§3.3) */
   extra?: ReactNode
   actions?: ReactNode
@@ -48,6 +78,9 @@ export function InspectSheet({
   const hp = def.hp + (context?.bonusHp ?? 0)
   const forms = lineFormsOf(unitId)
   const currentIndex = forms.findIndex((f) => f.id === unitId)
+  const tierLocked = (tier: number) => campTier !== undefined && tier > campTier
+  const nextBlock =
+    campTier !== undefined && gold !== undefined ? promoteBlock(unitId, campTier, gold, mods) : null
 
   return (
     <div className="scrim" onClick={onClose}>
@@ -123,7 +156,11 @@ export function InspectSheet({
                         <span className="gold" style={{ display: 'block' }}>
                           {promoteCost(f, mods)}g
                         </span>
-                        <span className="dim">Camp T{f.tier}</span>
+                        {/* Say whether the tier is a wall or already cleared,
+                            rather than a bare number the player must decode. */}
+                        <span className={tierLocked(f.tier) ? 'g-locked' : 'dim'}>
+                          {tierLocked(f.tier) ? `🔒 Camp T${f.tier}` : `Camp T${f.tier}`}
+                        </span>
                       </>
                     ) : (
                       <span className="dim">earlier</span>
@@ -132,6 +169,13 @@ export function InspectSheet({
                 </div>
               )
             })}
+            {nextBlock?.target && (
+              <div className={`tiny ${nextBlock.ok ? 'gold' : 'g-locked'}`}>
+                {nextBlock.ok
+                  ? `Promote now for ${nextBlock.cost}g — the whole stack upgrades at once and keeps its count.`
+                  : nextBlock.reason}
+              </div>
+            )}
           </div>
         )}
 

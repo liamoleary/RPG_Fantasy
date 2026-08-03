@@ -4,7 +4,7 @@ import { FACTIONS, HEROES } from '../data/index'
 import type { FactionId } from '../data/types'
 import type { Difficulty } from '../engine/rivals'
 import { useGame } from '../state/store'
-import { KEYWORD_GLOSSARY } from './keywords'
+import { GlossarySheet } from './Glossary'
 import { Plate } from './Plate'
 import { Sigil } from './Sigil'
 
@@ -179,7 +179,7 @@ export function HomeScreen() {
             </label>
             <div className="eyebrow">Help</div>
             <button className="btn" onClick={() => setShowKeywords(true)}>
-              Keywords — what every ability word means
+              Symbols &amp; keywords — what everything on a card means
             </button>
             <button className="btn btn-primary" onClick={() => setShowSettings(false)}>
               Done
@@ -188,25 +188,7 @@ export function HomeScreen() {
         </div>
       )}
 
-      {showKeywords && (
-        <div className="scrim" onClick={() => setShowKeywords(false)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
-            <h2>Keywords</h2>
-            <div className="small dim">
-              Every unit card shows these with its own numbers filled in — tap any card to read it there.
-            </div>
-            {KEYWORD_GLOSSARY.map((k) => (
-              <div key={k.id} className="panel small">
-                <strong style={{ display: 'block' }}>{k.name}</strong>
-                <span className="dim">{k.text}</span>
-              </div>
-            ))}
-            <button className="btn btn-primary" onClick={() => setShowKeywords(false)}>
-              Close
-            </button>
-          </div>
-        </div>
-      )}
+      {showKeywords && <GlossarySheet onClose={() => setShowKeywords(false)} />}
     </div>
   )
 }

@@ -17,7 +17,8 @@ import {
 import { heroLevel } from '../engine/boons'
 import { heroState, opponentOf, player, type RunState } from '../engine/run'
 import { useGame } from '../state/store'
-import { InspectSheet, RankProgress } from './InspectSheet'
+import { InspectSheet, RankProgress, promoteBlock } from './InspectSheet'
+import { GlossarySheet } from './Glossary'
 import { Plate } from './Plate'
 import { unitArtFor, usePreloadArt } from './preload'
 import { Ladder, WarlordSheet } from './Ladder'
@@ -63,6 +64,7 @@ export function MusterScreen({ run }: { run: RunState }) {
   const store = useGame()
   const p = player(run)
   const [heroOpen, setHeroOpen] = useState(false)
+  const [glossary, setGlossary] = useState(false)
   const [rowInfo, setRowInfo] = useState<Row | null>(null)
   const [offerIndex, setOfferIndex] = useState<number | null>(null)
   const [stackUid, setStackUid] = useState<string | null>(null)
@@ -107,8 +109,7 @@ export function MusterScreen({ run }: { run: RunState }) {
   const offerBlock = recruitBlock(offerUnitId)
   const offerStack = offerUnitId ? stackOfUnit(p.board, offerUnitId) : undefined
   const inspectedStack = stackUid ? p.board.find((s) => s.uid === stackUid) : null
-  const promoteTarget = inspectedStack ? canPromote(inspectedStack, p.camp) : null
-  const pCost = promoteTarget ? promoteCost(promoteTarget, p.mods) : null
+  const promo = inspectedStack ? promoteBlock(inspectedStack.unitId, p.camp.tier, p.gold, p.mods) : null
 
   return (
     <div className="screen">
@@ -120,8 +121,11 @@ export function MusterScreen({ run }: { run: RunState }) {
           <div className="row" style={{ gap: 6 }}>
             <span style={{ fontWeight: 800 }}>{hero.name}</span>
             <span className="kw">Lv {level}</span>
-            <button className="btn btn-sm btn-ghost" onClick={() => setHeroOpen(true)}>
+            <button className="btn btn-sm btn-ghost" onClick={() => setHeroOpen(true)} aria-label="Your hero">
               ⓘ
+            </button>
+            <button className="btn btn-sm btn-ghost" onClick={() => setGlossary(true)} aria-label="Symbols and keywords">
+              ?
             </button>
           </div>
         </div>
@@ -199,6 +203,8 @@ export function MusterScreen({ run }: { run: RunState }) {
         <InspectSheet
           unitId={offerUnitId}
           mods={p.mods}
+          campTier={p.camp.tier}
+          gold={p.gold}
           extra={
             <RankProgress
               unitId={offerUnitId}
@@ -230,6 +236,8 @@ export function MusterScreen({ run }: { run: RunState }) {
         <InspectSheet
           unitId={inspectedStack.unitId}
           mods={p.mods}
+          campTier={p.camp.tier}
+          gold={p.gold}
           context={{ count: inspectedStack.count, bonusAtk: inspectedStack.bonusAtk, bonusHp: inspectedStack.bonusHp }}
           extra={<RankProgress unitId={inspectedStack.unitId} count={inspectedStack.count} rank={inspectedStack.rank} />}
           onClose={() => setStackUid(null)}
@@ -244,16 +252,17 @@ export function MusterScreen({ run }: { run: RunState }) {
               >
                 Move
               </button>
-              {promoteTarget && pCost !== null && (
+              {promo?.target && (
                 <button
                   className="btn btn-sm btn-gold grow"
-                  disabled={p.gold < pCost}
+                  disabled={!promo.ok}
+                  title={promo.reason}
                   onClick={() => {
                     store.promote(inspectedStack.uid)
                     setStackUid(null)
                   }}
                 >
-                  Promote → {promoteTarget.name} · {pCost}g
+                  Promote → {promo.target.name} · {promo.cost}g
                 </button>
               )}
               <button
@@ -274,6 +283,7 @@ export function MusterScreen({ run }: { run: RunState }) {
       {store.scouting && foe && <ScoutSheet run={run} foeId={foe.id} onClose={() => store.setScouting(false)} />}
       {store.inspecting && <WarlordSheet run={run} id={store.inspecting} onClose={() => store.inspect(null)} />}
       {heroOpen && <HeroSheet run={run} onClose={() => setHeroOpen(false)} />}
+      {glossary && <GlossarySheet onClose={() => setGlossary(false)} />}
       {run.phase === 'levelup' && run.boonOffer.length > 0 && (
         <BoonModal offers={run.boonOffer} level={level} onPick={store.chooseBoon} />
       )}

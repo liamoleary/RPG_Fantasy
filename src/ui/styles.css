@@ -819,6 +819,100 @@ h3 {
   color: color-mix(in srgb, var(--sc) 70%, #fff);
 }
 
+/* ── glossary ───────────────────────────────────────────────────────────── */
+
+.glossary-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--fx-radius);
+  background: var(--panel-2);
+}
+/* Each mark is drawn the way the game draws it, so the page is a key rather
+   than a description of a key. */
+.glossary-mark {
+  flex: none;
+  min-width: 30px;
+  height: 22px;
+  padding: 0 5px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(11, 17, 29, 0.85);
+  border: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.g-count {
+  border-color: var(--fx-primary);
+}
+.g-atk {
+  color: #ffb46b;
+}
+.g-hp {
+  color: #7fd39a;
+}
+.g-bul {
+  color: #9ecbff;
+}
+.g-dim {
+  color: var(--ink-dim);
+}
+.g-gold {
+  background: linear-gradient(180deg, var(--gold), #a8802c);
+  border-color: #f0d68d;
+  color: #23180a;
+}
+.g-promote {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.g-promote-soon {
+  border-color: color-mix(in srgb, var(--gold) 40%, var(--line));
+  color: color-mix(in srgb, var(--gold) 55%, var(--ink-dim));
+}
+.g-vet {
+  color: #cf8f4e;
+  font-size: 14px;
+}
+.g-hon {
+  color: var(--gold);
+  font-size: 14px;
+}
+.g-you {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold);
+}
+.g-foe {
+  border-color: var(--danger);
+}
+.g-dead {
+  color: var(--ink-dim);
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+.g-dmg {
+  color: #ff8f7a;
+}
+.g-heal {
+  color: #7fd39a;
+}
+.g-buff {
+  color: #ffd97a;
+}
+.g-kw {
+  color: var(--fx-accent);
+  border-color: color-mix(in srgb, var(--fx-accent) 45%, transparent);
+}
+/* A locked requirement should look locked, not like flavour text. */
+.g-locked {
+  color: #ffb46b;
+  font-weight: 700;
+}
+
 /* ── modals ─────────────────────────────────────────────────────────────── */
 
 .scrim {

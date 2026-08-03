@@ -350,8 +350,9 @@ h3 {
 }
 
 .slot {
-  /* Fixed height so both lines match; the flex basis above fixes the width. */
-  height: 74px;
+  /* 4:5 like the painted cards, so empty slots and filled ones line up
+     however wide the row gets. */
+  aspect-ratio: 4 / 5;
   border-radius: var(--fx-radius);
   border: 1px dashed color-mix(in srgb, var(--line) 80%, transparent);
   background: #ffffff06;
@@ -383,22 +384,93 @@ h3 {
   text-transform: uppercase;
 }
 
+/* The card IS the art window: a 4:5 plate with every bit of chrome layered
+   over it. The faction frame stays on the outside so a Vanguard card still
+   reads blue-and-gold at thumbnail size (GDD §11.2). */
 .stack {
   position: relative;
   width: 100%;
-  height: 74px;
+  aspect-ratio: 4 / 5;
   border-radius: var(--fx-radius);
   border: 1px solid var(--sc, var(--line));
   background: linear-gradient(160deg, color-mix(in srgb, var(--sc) 34%, var(--panel-2)), var(--panel));
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 1px;
-  padding: 4px 2px;
+  justify-content: flex-end;
+  gap: 0;
+  padding: 0;
   color: var(--ink);
   overflow: hidden;
   transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+/* ── painted plates ─────────────────────────────────────────────────────── */
+
+.plate {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.plate-fallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: color-mix(in srgb, var(--sc, var(--ink-dim)) 70%, #fff);
+  opacity: 0.75;
+}
+
+.card-art {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: #0b111d;
+}
+.card-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(transparent 45%, rgba(6, 10, 18, 0.92));
+}
+/* A faction-tinted foot under the scrim: colour identity survives the art. */
+.card-scrim::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 34%;
+  background: linear-gradient(transparent, color-mix(in srgb, var(--sc) 42%, transparent));
+  mix-blend-mode: screen;
+  opacity: 0.5;
+}
+.card-foot {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 2px 2px 4px;
+}
+/* Death desaturates the plate rather than hiding it — you can still see who
+   fell. Applied once on death, never inside the attack loop. */
+.stack[data-dead='true'] .card-art .plate {
+  filter: grayscale(1) brightness(0.45);
+}
+.card-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: #ffd9c8;
+  opacity: 0;
+  animation: hitFlash 0.3s ease;
 }
 .stack[data-tier='4'] {
   box-shadow: inset 0 0 0 1px #c9c9d8;
@@ -426,41 +498,64 @@ h3 {
 }
 .count-badge {
   position: absolute;
+  z-index: 3;
   top: 2px;
   right: 2px;
   min-width: 19px;
   height: 17px;
   padding: 0 3px;
   border-radius: 9px;
-  background: #0d0f18e8;
+  background: rgba(11, 17, 29, 0.8);
   border: 1px solid var(--sc);
   font-size: 11px;
   font-weight: 800;
   display: grid;
   place-items: center;
+  text-shadow: 0 1px 2px #000;
 }
 /* Row eligibility, on every card, opposite the count badge (§1.4). */
 .row-glyph {
   position: absolute;
+  z-index: 3;
   font-size: 9px;
   line-height: 1;
   color: var(--ink-dim);
   opacity: 0.7;
   pointer-events: none;
 }
+/* Over a plate the glyph needs its own backing to stay readable. */
 .stack > .row-glyph {
-  top: 3px;
-  left: 4px;
+  top: 2px;
+  left: 2px;
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  background: rgba(11, 17, 29, 0.8);
+  border: 1px solid color-mix(in srgb, var(--sc) 60%, transparent);
+  color: #d8dcec;
+  opacity: 1;
 }
 .offer-card > .row-glyph {
+  z-index: 3;
   top: 3px;
   right: 4px;
+  text-shadow: 0 1px 3px #000;
 }
 .chips {
   display: flex;
+  align-items: center;
   gap: 3px;
   font-size: 10px;
   font-weight: 800;
+  text-shadow: 0 1px 2px #000, 0 0 4px #000;
+}
+.stack .chips {
+  padding: 1px 5px;
+  border-radius: 7px;
+  background: rgba(11, 17, 29, 0.8);
+  border: 1px solid color-mix(in srgb, var(--sc) 55%, transparent);
 }
 .chip-atk {
   color: #ffb46b;
@@ -473,6 +568,7 @@ h3 {
 }
 .hpbar {
   position: absolute;
+  z-index: 3;
   left: 0;
   right: 0;
   bottom: 0;
@@ -497,14 +593,32 @@ h3 {
   border-radius: var(--fx-radius);
   border: 1px solid var(--sc, var(--line));
   background: linear-gradient(165deg, color-mix(in srgb, var(--sc) 26%, var(--panel-2)), var(--panel));
-  padding: 6px 3px 5px;
+  padding: 0 0 5px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  min-height: 88px;
   position: relative;
+  overflow: hidden;
   transition: transform 0.1s ease;
+}
+/* The plate leads the card, the numbers sit under it. */
+.offer-art {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  background: #0b111d;
+  margin-bottom: 2px;
+}
+.offer-art::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(transparent 55%, rgba(6, 10, 18, 0.92));
+}
+.offer-card .stack-name {
+  padding: 0 3px;
 }
 .offer-card:active {
   transform: scale(0.96);
@@ -519,8 +633,10 @@ h3 {
 }
 .tier-pip {
   position: absolute;
+  z-index: 3;
   top: 3px;
   left: 4px;
+  text-shadow: 0 1px 3px #000;
   font-size: 9px;
   font-weight: 800;
   color: var(--ink-dim);
@@ -655,6 +771,7 @@ h3 {
 
 .float {
   position: absolute;
+  z-index: 4;
   top: 6px;
   left: 50%;
   transform: translateX(-50%);
@@ -708,6 +825,7 @@ h3 {
    chevron for Veteran, two gold for Honored. */
 .rank-pips {
   position: absolute;
+  z-index: 3;
   top: 2px;
   right: 24px;
   height: 17px;
@@ -806,6 +924,14 @@ h3 {
   to {
     opacity: 0;
     transform: scale(0.7) rotate(9deg);
+  }
+}
+@keyframes hitFlash {
+  0% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0;
   }
 }
 @keyframes floatUp {

@@ -1,6 +1,8 @@
+import { UNIT_ART } from '../data/art'
 import { FACTION_BY_ID, unit } from '../data/index'
 import type { RowPref, UnitDef } from '../data/types'
 import type { StackSnap } from '../engine/battle'
+import { Plate } from './Plate'
 import { Sigil } from './Sigil'
 
 export function unitColor(def: UnitDef): string {
@@ -47,6 +49,10 @@ interface Props {
   state?: 'hit' | 'act' | 'dead' | null
   onClick?: () => void
   float?: { text: string; kind: 'dmg' | 'heal' | 'buff' | 'soak' } | null
+  /** on screen this frame (board, battle) — load the plate immediately */
+  eager?: boolean
+  /** jump the fetch queue (the visible camp offers) */
+  priority?: boolean
 }
 
 export function StackCard({
@@ -63,6 +69,8 @@ export function StackCard({
   state,
   onClick,
   float,
+  eager,
+  priority,
 }: Props) {
   const def = unit(unitId)
   const color = unitColor(def)
@@ -81,19 +89,28 @@ export function StackCard({
       type={onClick ? 'button' : undefined}
       aria-label={`${def.name}, ${count} units, ${atk} attack, ${hp} health, ${rowWord(def.row)} row${rank > 0 ? `, ${rankWord(rank)}` : ''}`}
     >
+      <span className="card-art">
+        <Plate src={UNIT_ART[unitId]} eager={eager} priority={priority} fallback={<Sigil id={def.sigil} size={26} />} />
+      </span>
+      {/* Name sits on the scrim, so it stays legible over any plate. */}
+      <span className="card-scrim" aria-hidden="true" />
+      {/* Hit flash is an overlay, never a filter on the image — a filter
+          forces a re-decode mid-battle on Safari. */}
+      {state === 'hit' && <span className="card-flash" aria-hidden="true" />}
       {float && <span className={`float float-${float.kind}`}>{float.text}</span>}
       <span className="row-glyph" aria-hidden="true">
         {rowGlyph(def.row)}
       </span>
       <RankPips rank={rank} flash={rankFlash} />
       <span className="count-badge">{count}</span>
-      <Sigil id={def.sigil} size={20} />
-      <span className="stack-name">{def.name}</span>
-      <span className="chips">
-        <span className="chip-atk">{atk}</span>
-        <span className="dim">/</span>
-        <span className="chip-hp">{hp}</span>
-        {bulwark > 0 && <span className="chip-bul">◈{bulwark}</span>}
+      <span className="card-foot">
+        <span className="stack-name">{def.name}</span>
+        <span className="chips">
+          <span className="chip-atk">{atk}</span>
+          <span className="dim">/</span>
+          <span className="chip-hp">{hp}</span>
+          {bulwark > 0 && <span className="chip-bul">◈{bulwark}</span>}
+        </span>
       </span>
       {health !== undefined && (
         <span className="hpbar">
@@ -130,6 +147,7 @@ export function SnapCard({
       state={state}
       float={float}
       onClick={onClick}
+      eager
     />
   )
 }

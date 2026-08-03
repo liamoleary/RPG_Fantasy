@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { UNIT_ART } from '../data/art'
 import { BOON_BY_ID, FACTION_BY_ID, HERO_BY_ID, unit } from '../data/index'
 import type { BoonDef, Row } from '../data/types'
 import { FRONT_SLOTS, spellPower, type BoardStack } from '../engine/battle'
@@ -17,6 +18,7 @@ import { heroLevel } from '../engine/boons'
 import { heroState, opponentOf, player, type RunState } from '../engine/run'
 import { useGame } from '../state/store'
 import { InspectSheet, RankProgress } from './InspectSheet'
+import { Plate } from './Plate'
 import { Ladder, WarlordSheet } from './Ladder'
 import { Sigil } from './Sigil'
 import { StackCard, rowGlyph, unitColor } from './StackCard'
@@ -374,11 +376,13 @@ function OfferCard({
   // Recruit button. Unaffordable cards still open — reading is free.
   return (
     <button className="offer-card" style={{ ['--sc' as string]: unitColor(def) }} onClick={onInspect}>
+      <span className="offer-art">
+        <Plate src={UNIT_ART[unitId]} fallback={<Sigil id={def.sigil} size={20} />} />
+      </span>
       <span className="tier-pip">T{def.tier}</span>
       <span className="row-glyph" aria-hidden="true">
         {rowGlyph(def.row)}
       </span>
-      <Sigil id={def.sigil} size={20} />
       <span className="stack-name">{def.name}</span>
       <span className="chips">
         <span className="chip-atk">{def.atk}</span>

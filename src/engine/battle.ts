@@ -6,7 +6,7 @@
  * Every event that changes the board carries a `snap` of the affected stacks,
  * so the renderer stays a dumb projector of the log.
  */
-import { UNIT_BY_ID } from '../data/index'
+import { BOON_BY_ID, UNIT_BY_ID } from '../data/index'
 import type { AbilityEffect, FactionId, HeroDef, HeroMods, KeywordId, Row, UnitDef } from '../data/types'
 import { rankDefOf } from './ranks'
 import { makeRng, type RNG } from './rng'
@@ -208,11 +208,81 @@ function kw(def: UnitDef, k: string): number | undefined {
 
 // ── setup ──────────────────────────────────────────────────────────────────
 
+/** One named contributor to a stack's ATK/HP (Design Notes 03 §2.1). */
+export interface StatPart {
+  label: string
+  atk: number
+  hp: number
+}
+
+export interface StatBreakdown {
+  atk: number
+  hp: number
+  /** in the order the player earned them: base, Growth, rank, then boons */
+  parts: StatPart[]
+}
+
+export const rowOfSlot = (slot: number): Row => (slot < FRONT_SLOTS ? 'front' : 'back')
+
+/**
+ * A stack's effective ATK/HP, itemised.
+ *
+ * The Muster board used to print base + Growth and quietly drop everything a
+ * boon had done, so "+2 ATK to back-row units" changed nothing the player could
+ * see (§2). This is the one place the sum lives: `buildStack` takes its numbers
+ * from here, so the card, the sheet and the simulator can never disagree.
+ *
+ * `boonsTaken` is only used to *name* the contributions — the totals always come
+ * from `m`, and any difference lands in a single unnamed remainder.
+ */
+export function stackStats(bs: BoardStack, row: Row, m: HeroMods, boonsTaken: readonly string[] = []): StatBreakdown {
+  const def = UNIT_BY_ID.get(bs.unitId)
+  if (!def) throw new Error(`unknown unit ${bs.unitId}`)
+  const rank = bs.rank ?? 0
+  const rdef = rankDefOf(bs.unitId)
+  const honored = rank >= 2 && rdef ? rdef.honored : null
+  const granted = honored && honored.type === 'keyword' ? honored : null
+  const volley = kw(def, 'volley') !== undefined || (granted?.k === 'volley' && (granted.x ?? 1) > 0)
+
+  const parts: StatPart[] = [{ label: 'base', atk: def.atk, hp: def.hp }]
+  if (bs.bonusAtk !== 0 || bs.bonusHp !== 0) parts.push({ label: 'Growth', atk: bs.bonusAtk, hp: bs.bonusHp })
+  if (rank >= 1 && rdef && ((rdef.veteran.atk ?? 0) !== 0 || (rdef.veteran.hp ?? 0) !== 0)) {
+    parts.push({ label: 'Veteran', atk: rdef.veteran.atk ?? 0, hp: rdef.veteran.hp ?? 0 })
+  }
+  if (honored && honored.type === 'statPerUnit' && ((honored.atk ?? 0) !== 0 || (honored.hp ?? 0) !== 0)) {
+    parts.push({ label: 'Honored', atk: honored.atk ?? 0, hp: honored.hp ?? 0 })
+  }
+
+  // What the boons are worth in total, and who to credit it to.
+  const modAtk = m.allAtk + (row === 'front' ? m.frontAtk : m.backAtk) + (volley ? m.volleyAtk : 0)
+  const modHp = m.allHp
+  let namedAtk = 0
+  let namedHp = 0
+  for (const id of boonsTaken) {
+    const b = BOON_BY_ID.get(id)
+    if (!b) continue
+    const a =
+      (b.mods.allAtk ?? 0) + (row === 'front' ? (b.mods.frontAtk ?? 0) : (b.mods.backAtk ?? 0)) + (volley ? (b.mods.volleyAtk ?? 0) : 0)
+    const h = b.mods.allHp ?? 0
+    if (a === 0 && h === 0) continue
+    namedAtk += a
+    namedHp += h
+    parts.push({ label: b.name, atk: a, hp: h })
+  }
+  if (modAtk - namedAtk !== 0 || modHp - namedHp !== 0) {
+    parts.push({ label: 'boons', atk: modAtk - namedAtk, hp: modHp - namedHp })
+  }
+
+  const atk = parts.reduce((n, pt) => n + pt.atk, 0)
+  const hp = parts.reduce((n, pt) => n + pt.hp, 0)
+  return { atk: Math.max(0, atk), hp: Math.max(1, hp), parts }
+}
+
 function buildStack(bs: BoardStack, side: Side, hero: HeroState, heroDef: HeroDef, rng: RNG): RStack {
   const def = UNIT_BY_ID.get(bs.unitId)
   if (!def) throw new Error(`unknown unit ${bs.unitId}`)
   const m = hero.mods
-  const row: Row = bs.slot < FRONT_SLOTS ? 'front' : 'back'
+  const row: Row = rowOfSlot(bs.slot)
 
   // Banner Ranks are data-driven stack modifiers on the same pipeline as
   // keywords (§3.1): they fold into the reads below, never into new branches
@@ -225,18 +295,10 @@ function buildStack(bs: BoardStack, side: Side, hero: HeroState, heroDef: HeroDe
   const has = (k: KeywordId): boolean => kw(def, k) !== undefined || extraKw(k) > 0
 
   const volley = has('volley')
-  let atk = def.atk + bs.bonusAtk + m.allAtk + (row === 'front' ? m.frontAtk : m.backAtk)
-  if (volley) atk += m.volleyAtk
-  let hp = def.hp + bs.bonusHp + m.allHp
-  if (rank >= 1 && rdef) {
-    atk += rdef.veteran.atk ?? 0
-    hp += rdef.veteran.hp ?? 0
-  }
-  if (honored && honored.type === 'statPerUnit') {
-    atk += honored.atk ?? 0
-    hp += honored.hp ?? 0
-  }
-  const maxHp = Math.max(1, hp)
+  // Stats come from the shared breakdown so the board and the battle agree.
+  const stats = stackStats(bs, row, m)
+  const atk = stats.atk
+  const maxHp = stats.hp
 
   let bulwark = (kw(def, 'bulwark') ?? 0) + extraKw('bulwark')
   if (row === 'front') bulwark += m.frontBulwark
@@ -248,7 +310,7 @@ function buildStack(bs: BoardStack, side: Side, hero: HeroState, heroDef: HeroDe
     def,
     slot: bs.slot,
     row,
-    atk: Math.max(0, atk),
+    atk,
     maxHp,
     count: bs.count,
     startCount: bs.count,
@@ -664,6 +726,26 @@ const SPELL_POWER_SCALE: Record<string, number> = {
   root: 0.2,
   chainLightning: 1.6,
   extraAttack: 0.25,
+}
+
+/**
+ * How many times this hero's spell will fire in a battle. Read-only, for the
+ * Magic boon preview — the schedule itself stays private to the simulator.
+ */
+export function spellCasts(heroDef: HeroDef, hero: HeroState): number {
+  return castSchedule(heroDef, hero).length
+}
+
+/** Exchanges between casts — the other half of what a Magic boon buys. */
+export function spellCadence(heroDef: HeroDef, hero: HeroState): number {
+  return Math.max(2, heroDef.spell.everyN - hero.mods.spellCadenceReduction)
+}
+
+/** How many stacks a cast touches, or null for the spells that hit everyone. */
+export function spellTargets(heroDef: HeroDef, hero: HeroState): number | null {
+  const id = heroDef.spell.id
+  if (id === 'rallyAtk') return null
+  return (id === 'chainLightning' ? 3 : 1) + hero.mods.spellSplash
 }
 
 function castSchedule(heroDef: HeroDef, hero: HeroState): number[] {

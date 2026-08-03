@@ -57,6 +57,9 @@ interface Props {
   rank?: number
   /** stamp the chevron in — set for one action after a rank-up */
   rankFlash?: boolean
+  /** these numbers are above the unit's printed base — light them up (§2.1) */
+  atkBuffed?: boolean
+  hpBuffed?: boolean
   /** 0–1 pooled-HP fraction; omit outside battle */
   health?: number
   selected?: boolean
@@ -87,6 +90,8 @@ export function StackCard({
   bulwark = 0,
   rank = 0,
   rankFlash,
+  atkBuffed,
+  hpBuffed,
   health,
   selected,
   illegal,
@@ -143,9 +148,13 @@ export function StackCard({
       <span className="card-foot">
         <span className="stack-name">{def.name}</span>
         <span className="chips">
-          <span className="chip-atk">{atk}</span>
+          <span className="chip-atk" data-buff={atkBuffed ? 'true' : undefined}>
+            {atk}
+          </span>
           <span className="dim">/</span>
-          <span className="chip-hp">{hp}</span>
+          <span className="chip-hp" data-buff={hpBuffed ? 'true' : undefined}>
+            {hp}
+          </span>
           {bulwark > 0 && <span className="chip-bul">◈{bulwark}</span>}
         </span>
       </span>

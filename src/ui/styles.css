@@ -13,6 +13,8 @@
   --ink: #e8e6f0;
   --ink-dim: #9a9ab5;
   --gold: #e8c05a;
+  /* One colour for "this number is bigger than the card says" (DN03 §2.1). */
+  --buff: #ffe08a;
   --danger: #d9534f;
   --good: #5cb87f;
 
@@ -616,6 +618,11 @@ h3 {
 .chip-bul {
   color: #9ecbff;
 }
+.chip-atk[data-buff='true'],
+.chip-hp[data-buff='true'] {
+  color: var(--buff);
+  text-shadow: 0 1px 2px #000, 0 0 6px color-mix(in srgb, var(--buff) 70%, transparent);
+}
 .hpbar {
   position: absolute;
   z-index: 3;
@@ -1078,6 +1085,56 @@ h3 {
 .boon:active {
   transform: scale(0.985);
 }
+/* The before → after a Magic boon is actually buying (DN03 §2.4). */
+.boon-preview {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--bc);
+  background: color-mix(in srgb, var(--bc) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bc) 40%, transparent);
+  border-radius: 6px;
+  padding: 3px 7px;
+  align-self: flex-start;
+}
+
+/* The run's accumulated identity, kept on screen (DN03 §2.3). */
+.boon-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 3px 0 0;
+  min-height: 18px;
+}
+.boon-strip > i {
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  font-style: normal;
+  color: var(--bc);
+  background: color-mix(in srgb, var(--bc) 20%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bc) 50%, transparent);
+}
+
+/* A boon with nothing on the board to touch floats over what it did change. */
+.camp-float {
+  top: 6px;
+  z-index: 8;
+  font-size: 14px;
+}
+
+.stat-breakdown {
+  display: grid;
+  gap: 2px;
+  line-height: 1.4;
+}
+.stat-sum {
+  color: var(--buff);
+  font-weight: 800;
+}
+
 .boon-branch {
   font-size: 10px;
   letter-spacing: 0.14em;

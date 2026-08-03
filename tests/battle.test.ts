@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { simulateBattle, type BattleEvent, type BoardStack, type HeroState } from '../src/engine/battle'
-import { HERO_BY_ID } from '../src/data/index'
+import { simulateBattle, stackStats, type BattleEvent, type BoardStack, type HeroState } from '../src/engine/battle'
+import { HERO_BY_ID, unit } from '../src/data/index'
 import { ZERO_MODS } from '../src/data/types'
 
 const berrik = HERO_BY_ID.get('h_berrik')!
@@ -216,5 +216,49 @@ describe('hero damage', () => {
     const res = simulateBattle(a, b, berrik, berrik, 81, { round: 2 })
     expect(res.winner).toBe('tie')
     expect(res.exchanges).toBeLessThanOrEqual(200)
+  })
+})
+
+/**
+ * The Muster board and the simulator print the same numbers because they read
+ * the same function (Design Notes 03 §2.1) — these pin that, and pin that the
+ * itemised parts actually add up to the total the card shows.
+ */
+describe('stackStats — the one place effective ATK/HP is worked out', () => {
+  const back = stack('vg_arbalest', 3, 4)
+
+  it('names the boons behind a buffed number, and the parts sum to the total', () => {
+    const mods = { ...ZERO_MODS, backAtk: 2, allHp: 3 }
+    const st = stackStats(back, 'back', mods, ['b_marksmen', 'b_unbroken_line'])
+    const def = unit('vg_arbalest')
+    expect(st.atk).toBe(def.atk + 2)
+    expect(st.hp).toBe(def.hp + 3)
+    expect(st.parts.reduce((n, p) => n + p.atk, 0)).toBe(st.atk)
+    expect(st.parts.reduce((n, p) => n + p.hp, 0)).toBe(st.hp)
+    expect(st.parts.map((p) => p.label)).toEqual(['base', 'Marksmen', 'The Unbroken Line'])
+  })
+
+  it('gives the row its own boons — the same stack scores differently up front', () => {
+    const mods = { ...ZERO_MODS, frontAtk: 2 }
+    expect(stackStats(back, 'front', mods).atk).toBe(unit('vg_arbalest').atk + 2)
+    expect(stackStats(back, 'back', mods).atk).toBe(unit('vg_arbalest').atk)
+  })
+
+  it('credits an unattributable mod to a plain "boons" remainder rather than losing it', () => {
+    const st = stackStats(back, 'back', { ...ZERO_MODS, allAtk: 1 }, [])
+    expect(st.atk).toBe(unit('vg_arbalest').atk + 1)
+    expect(st.parts.at(-1)).toEqual({ label: 'boons', atk: 1, hp: 0 })
+  })
+
+  it('agrees with what the simulator fights with', () => {
+    const mods = { ...ZERO_MODS, backAtk: 2, allHp: 3 }
+    const a = { board: [back], hero: hero('h_sylvaen', 1, mods) }
+    const b = { board: [stack('vg_militia', 20, 0)], hero: hero('h_sylvaen') }
+    const res = simulateBattle(a, b, sylvaen, sylvaen, 1, { round: 1 })
+    const start = res.events.find((e) => e.t === 'battleStart') as Extract<BattleEvent, { t: 'battleStart' }>
+    const snap = start.a[0]
+    const st = stackStats(back, 'back', mods, [])
+    expect(snap.atk).toBe(st.atk)
+    expect(snap.maxHp).toBe(st.hp)
   })
 })

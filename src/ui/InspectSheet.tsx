@@ -8,6 +8,7 @@ import type { ReactNode } from 'react'
 import { UNIT_ART } from '../data/art'
 import { unit } from '../data/index'
 import { ZERO_MODS, type HeroMods, type UnitDef } from '../data/types'
+import type { StatBreakdown } from '../engine/battle'
 import { lineOf, promoteCost } from '../engine/camp'
 import { RANK_NAMES, lineRootOf, rankDefOf, rankForCount, thresholdsOf, veteranText } from '../engine/ranks'
 import { Plate } from './Plate'
@@ -48,6 +49,33 @@ export interface StackContext {
   count: number
   bonusAtk?: number
   bonusHp?: number
+  /** itemised effective stats — renders the "why is this number big" line (§2.1) */
+  stats?: StatBreakdown
+}
+
+/** `ATK 5 = 3 base + 1 Growth + 1 Overwatch` — one tap answers the whole Might branch. */
+function Breakdown({ stats }: { stats: StatBreakdown }) {
+  const line = (key: 'atk' | 'hp', total: number) => {
+    const parts = stats.parts.filter((pt) => pt[key] !== 0)
+    if (parts.length <= 1) return null
+    return (
+      <div>
+        <span className="stat-sum">
+          {key.toUpperCase()} {total}
+        </span>{' '}
+        = {parts.map((pt, i) => `${i > 0 && pt[key] > 0 ? '+ ' : i > 0 ? '- ' : ''}${i > 0 ? Math.abs(pt[key]) : pt[key]} ${pt.label}`).join(' ')}
+      </div>
+    )
+  }
+  const atk = line('atk', stats.atk)
+  const hp = line('hp', stats.hp)
+  if (!atk && !hp) return null
+  return (
+    <div className="tiny dim stat-breakdown">
+      {atk}
+      {hp}
+    </div>
+  )
 }
 
 export function InspectSheet({
@@ -74,8 +102,8 @@ export function InspectSheet({
   onClose: () => void
 }) {
   const def = unit(unitId)
-  const atk = def.atk + (context?.bonusAtk ?? 0)
-  const hp = def.hp + (context?.bonusHp ?? 0)
+  const atk = context?.stats ? context.stats.atk : def.atk + (context?.bonusAtk ?? 0)
+  const hp = context?.stats ? context.stats.hp : def.hp + (context?.bonusHp ?? 0)
   const forms = lineFormsOf(unitId)
   const currentIndex = forms.findIndex((f) => f.id === unitId)
   const tierLocked = (tier: number) => campTier !== undefined && tier > campTier
@@ -103,13 +131,15 @@ export function InspectSheet({
         </div>
 
         <div className="stat-grid">
-          <Stat label="ATK" value={atk} className="chip-atk" />
-          <Stat label="HP" value={hp} className="chip-hp" />
+          <Stat label="ATK" value={atk} className="chip-atk" buffed={atk > def.atk} />
+          <Stat label="HP" value={hp} className="chip-hp" buffed={hp > def.hp} />
           <Stat label="Init" value={def.init} />
           <Stat label="Per buy" value={`+${def.musterSize}`} />
           <Stat label="Tier" value={def.tier} />
           {context && <Stat label="Count" value={context.count} />}
         </div>
+
+        {context?.stats && <Breakdown stats={context.stats} />}
 
         {context && (
           <div className="tiny dim">
@@ -274,11 +304,22 @@ export function RankProgress({
   )
 }
 
-function Stat({ label, value, className }: { label: string; value: number | string; className?: string }) {
+function Stat({
+  label,
+  value,
+  className,
+  buffed,
+}: {
+  label: string
+  value: number | string
+  className?: string
+  /** above the printed base — same buff colour the board uses (§2.1) */
+  buffed?: boolean
+}) {
   return (
     <span className="center">
       <span className="eyebrow">{label}</span>
-      <div className={className} style={{ fontSize: 19, fontWeight: 800 }}>
+      <div className={className} data-buff={buffed ? 'true' : undefined} style={{ fontSize: 19, fontWeight: 800 }}>
         {value}
       </div>
     </span>

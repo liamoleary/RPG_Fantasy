@@ -1,8 +1,18 @@
 import { useState } from 'react'
 import { UNIT_ART } from '../data/art'
-import { FACTION_BY_ID, HERO_BY_ID, unit } from '../data/index'
-import type { BoonDef, Row } from '../data/types'
-import { FRONT_SLOTS, type BoardStack } from '../engine/battle'
+import { BOON_BY_ID, FACTION_BY_ID, HERO_BY_ID, unit } from '../data/index'
+import { addMods, type BoonBranch, type BoonDef, type FactionId, type HeroDef, type HeroMods, type Row } from '../data/types'
+import {
+  FRONT_SLOTS,
+  rowOfSlot,
+  spellCadence,
+  spellCasts,
+  spellPower,
+  spellTargets,
+  stackStats,
+  type BoardStack,
+  type HeroState,
+} from '../engine/battle'
 import {
   canPromote,
   firstOpenSlot,
@@ -69,6 +79,9 @@ export function MusterScreen({ run }: { run: RunState }) {
   const [rowInfo, setRowInfo] = useState<Row | null>(null)
   const [offerIndex, setOfferIndex] = useState<number | null>(null)
   const [stackUid, setStackUid] = useState<string | null>(null)
+  /** the one-second beat after a boon lands: what it visibly changed (§2.2) */
+  const [boonFx, setBoonFx] = useState<Record<string, string>>({})
+  const [campFx, setCampFx] = useState<string | null>(null)
   const foeId = opponentOf(run, p.id)
   const foe = foeId ? run.warlords.find((w) => w.id === foeId) : null
   const rCost = rerollCost(p.camp, p.mods)
@@ -83,16 +96,54 @@ export function MusterScreen({ run }: { run: RunState }) {
   // Promotion is the easiest thing to miss on this screen — surface it on the
   // card instead of making the player open every stack to go looking.
   // Out of battle the pips show what the stack will START each battle with.
-  const coverOf = (stack: BoardStack): number => {
+  const coverWith = (stack: BoardStack, mods: HeroMods): number => {
     if (stack.slot >= FRONT_SLOTS) return 0
     const k = unit(stack.unitId).keywords.find((x) => x.k === 'cover')
-    return (k ? (k.x ?? 1) : 0) + p.mods.frontCover
+    return (k ? (k.x ?? 1) : 0) + mods.frontCover
   }
+  const coverOf = (stack: BoardStack): number => coverWith(stack, p.mods)
 
   const promoteStateOf = (stack: BoardStack): PromoteState => {
     const target = canPromote(stack, p.camp)
     if (!target) return null
     return p.gold >= promoteCost(target, p.mods) ? 'ready' : 'soon'
+  }
+
+  /**
+   * Pick a boon and *show* it. The deltas are worked out from the boon's own
+   * mods rather than by re-reading the store, so the floats are on screen in
+   * the same frame the modal closes — the rule is that every pick visibly
+   * touches the thing it changed within a second (§2.2).
+   */
+  const pickBoon = (id: string) => {
+    const boon = BOON_BY_ID.get(id)
+    const fx: Record<string, string> = {}
+    if (boon) {
+      const after = addMods(p.mods, boon.mods)
+      const taken = [...p.boonsTaken, id]
+      for (const st of p.board) {
+        const row = rowOfSlot(st.slot)
+        const b0 = stackStats(st, row, p.mods, p.boonsTaken)
+        const b1 = stackStats(st, row, after, taken)
+        const bits: string[] = []
+        if (b1.atk !== b0.atk) bits.push(`${b1.atk > b0.atk ? '+' : ''}${b1.atk - b0.atk} ATK`)
+        if (b1.hp !== b0.hp) bits.push(`${b1.hp > b0.hp ? '+' : ''}${b1.hp - b0.hp} HP`)
+        // Cover is a number on the card too, so Overwatch has to land on the
+        // front line rather than falling through to the War Camp.
+        const dc = coverWith(st, after) - coverWith(st, p.mods)
+        if (dc !== 0) bits.push(`${dc > 0 ? '+' : ''}${dc} Cover`)
+        if (bits.length > 0) fx[st.uid] = bits.join(' ')
+      }
+    }
+    store.chooseBoon(id)
+    // A boon that changes what you can *buy* has nothing on the board to touch,
+    // so it floats over the War Camp — the thing it actually changed.
+    setBoonFx(fx)
+    setCampFx(Object.keys(fx).length === 0 && boon ? boon.name : null)
+    window.setTimeout(() => {
+      setBoonFx({})
+      setCampFx(null)
+    }, 1100)
   }
 
   const selectedStack = store.selected ? p.board.find((s) => s.uid === store.selected) : null
@@ -136,6 +187,7 @@ export function MusterScreen({ run }: { run: RunState }) {
               ?
             </button>
           </div>
+          <BoonStrip ids={p.boonsTaken} onOpen={() => setHeroOpen(true)} />
         </div>
         {foe && (
           <button className="btn btn-sm" onClick={() => store.setScouting(true)}>
@@ -163,6 +215,8 @@ export function MusterScreen({ run }: { run: RunState }) {
           rankFlash={store.rankFlash}
           promoteStateOf={promoteStateOf}
           coverOf={coverOf}
+          owner={p}
+          boonFx={boonFx}
           onRowInfo={setRowInfo}
           onStack={(uid) => (store.selected === uid ? store.select(null) : setStackUid(uid))}
           onSlot={(slot) => store.place(slot)}
@@ -170,7 +224,8 @@ export function MusterScreen({ run }: { run: RunState }) {
       </div>
 
       {/* ── war camp: bottom-anchored, within thumb reach ── */}
-      <div className="panel" style={{ display: 'grid', gap: 8, marginTop: 'auto' }}>
+      <div className="panel" style={{ display: 'grid', gap: 8, marginTop: 'auto', position: 'relative' }}>
+        {campFx && <span className="float float-buff camp-float">{campFx}</span>}
         <div className="row spread">
           <span className="eyebrow">War Camp · Tier {p.camp.tier}</span>
           <span className="gold">{p.gold} gold</span>
@@ -247,7 +302,10 @@ export function MusterScreen({ run }: { run: RunState }) {
           mods={p.mods}
           campTier={p.camp.tier}
           gold={p.gold}
-          context={{ count: inspectedStack.count, bonusAtk: inspectedStack.bonusAtk, bonusHp: inspectedStack.bonusHp }}
+          context={{
+            count: inspectedStack.count,
+            stats: stackStats(inspectedStack, rowOfSlot(inspectedStack.slot), p.mods, p.boonsTaken),
+          }}
           extra={<RankProgress unitId={inspectedStack.unitId} count={inspectedStack.count} rank={inspectedStack.rank} />}
           onClose={() => setStackUid(null)}
           actions={
@@ -294,7 +352,7 @@ export function MusterScreen({ run }: { run: RunState }) {
       {heroOpen && <HeroSheet warlord={p} round={run.round} onClose={() => setHeroOpen(false)} />}
       {glossary && <GlossarySheet onClose={() => setGlossary(false)} />}
       {run.phase === 'levelup' && run.boonOffer.length > 0 && (
-        <BoonModal offers={run.boonOffer} level={level} onPick={store.chooseBoon} />
+        <BoonModal offers={run.boonOffer} level={level} hero={hero} mods={p.mods} round={run.round} onPick={pickBoon} />
       )}
     </div>
   )
@@ -314,6 +372,8 @@ export function Board({
   rankFlash,
   promoteStateOf,
   coverOf,
+  owner,
+  boonFx,
 }: {
   board: BoardStack[]
   selected?: string | null
@@ -330,6 +390,10 @@ export function Board({
   promoteStateOf?: (stack: BoardStack) => PromoteState
   /** Muster only: Cover charges this stack starts each battle with */
   coverOf?: (stack: BoardStack) => number
+  /** whose army this is — without it the cards print base stats only (§2.1) */
+  owner?: { mods: HeroMods; boonsTaken: string[] }
+  /** uid → float text, for the beat right after a boon lands (§2.2) */
+  boonFx?: Record<string, string>
 }) {
   const bySlot = new Map(board.map((s) => [s.slot, s]))
   const holding = selected !== undefined && selected !== null
@@ -369,6 +433,9 @@ export function Board({
               </div>
             )
           }
+          // The slot decides the row, not the unit's preference: a Row-any unit
+          // standing in the back gets the back-row boons, exactly as in battle.
+          const stats = owner ? stackStats(st, rowOfSlot(slot), owner.mods, owner.boonsTaken) : null
           const def = unit(st.unitId)
           const held = selected === st.uid
           // While a stack is held, an occupied slot either swaps (legal) or is
@@ -387,8 +454,11 @@ export function Board({
               key={slot}
               unitId={st.unitId}
               count={st.count}
-              atk={def.atk + st.bonusAtk}
-              hp={def.hp + st.bonusHp}
+              atk={stats ? stats.atk : def.atk + st.bonusAtk}
+              hp={stats ? stats.hp : def.hp + st.bonusHp}
+              atkBuffed={(stats ? stats.atk : def.atk + st.bonusAtk) > def.atk}
+              hpBuffed={(stats ? stats.hp : def.hp + st.bonusHp) > def.hp}
+              float={boonFx?.[st.uid] ? { text: boonFx[st.uid], kind: 'buff' } : null}
               rank={st.rank}
               rankFlash={rankFlash === st.uid}
               promote={promoteStateOf?.(st) ?? null}
@@ -518,7 +588,7 @@ function ScoutSheet({ run, foeId, onClose }: { run: RunState; foeId: string; onC
           </div>
           <RangedThreat board={foe.board} />
           <div className="eyebrow">Their board right now — tap a stack to inspect</div>
-          <Board board={foe.board} compact labels="tag" onStack={setPeek} />
+          <Board board={foe.board} compact labels="tag" owner={foe} onStack={setPeek} />
           <button className="btn btn-primary" onClick={onClose}>
             Close
           </button>
@@ -527,7 +597,7 @@ function ScoutSheet({ run, foeId, onClose }: { run: RunState; foeId: string; onC
       {peeked && (
         <InspectSheet
           unitId={peeked.unitId}
-          context={{ count: peeked.count, bonusAtk: peeked.bonusAtk, bonusHp: peeked.bonusHp }}
+          context={{ count: peeked.count, stats: stackStats(peeked, rowOfSlot(peeked.slot), foe.mods, foe.boonsTaken) }}
           extra={<RankProgress unitId={peeked.unitId} count={peeked.count} rank={peeked.rank} />}
           onClose={() => setPeek(null)}
         />
@@ -577,7 +647,78 @@ function RangedThreat({ board }: { board: BoardStack[] }) {
   )
 }
 
-function BoonModal({ offers, level, onPick }: { offers: BoonDef[]; level: number; onPick: (id: string) => void }) {
+/**
+ * Boons the run has accumulated, kept on screen instead of buried in a sheet
+ * nobody opens (§2.3). One dot per boon, coloured by branch; tap for the sheet.
+ */
+function BoonStrip({ ids, onOpen }: { ids: string[]; onOpen: () => void }) {
+  if (ids.length === 0) return null
+  return (
+    <button className="boon-strip" onClick={onOpen} aria-label={`${ids.length} boons taken — open hero sheet`}>
+      {ids.map((id, i) => {
+        const b = BOON_BY_ID.get(id)
+        if (!b) return null
+        return (
+          <i key={`${id}${i}`} style={{ ['--bc' as string]: branchColor(b.branch) }} title={`${b.name} — ${b.text}`}>
+            {BRANCH_GLYPH[b.branch]}
+          </i>
+        )
+      })}
+    </button>
+  )
+}
+
+const BRANCH_GLYPH: Record<BoonBranch, string> = { might: '\u2694', magic: '\u2726', command: '\u25c8' }
+
+/** How each spell's X reads in a preview line (§2.4). */
+const SPELL_VERB: Record<string, string> = {
+  shieldLowest: 'shields',
+  rallyAtk: 'grants',
+  healMostWounded: 'heals',
+  root: 'roots for',
+  chainLightning: 'deals',
+  extraAttack: 'strikes',
+}
+
+/**
+ * Magic boons buff a spell the player has never seen a number for, so the card
+ * shows the before → after it is buying (§2.4). Same numbers the battle banner
+ * then proves — pick, preview, proof.
+ */
+function MagicPreview({ hero, mods, round, boon }: { hero: HeroDef; mods: HeroMods; round: number; boon: BoonDef }) {
+  const base: HeroState = { heroId: hero.id, name: hero.name, factionId: hero.faction as FactionId, level: heroLevel(round), mods }
+  const next: HeroState = { ...base, mods: addMods(mods, boon.mods) }
+  const bits: string[] = []
+  const pair = <T,>(a: T, b: T, text: (a: T, b: T) => string) => {
+    if (a !== b) bits.push(text(a, b))
+  }
+  pair(spellPower(hero, base), spellPower(hero, next), (a, b) => `${SPELL_VERB[hero.spell.id] ?? 'is'} ${a} \u2192 ${b}`)
+  pair(spellCasts(hero, base), spellCasts(hero, next), (a, b) => `casts ${a}\u00d7 \u2192 ${b}\u00d7`)
+  pair(spellCadence(hero, base), spellCadence(hero, next), (a, b) => `every ${a} \u2192 ${b} exchanges`)
+  pair(spellTargets(hero, base), spellTargets(hero, next), (a, b) => `${a} \u2192 ${b} targets`)
+  if (bits.length === 0) return null
+  return (
+    <span className="boon-preview">
+      {hero.spell.name}: {bits.join(', ')}
+    </span>
+  )
+}
+
+function BoonModal({
+  offers,
+  level,
+  hero,
+  mods,
+  round,
+  onPick,
+}: {
+  offers: BoonDef[]
+  level: number
+  hero: HeroDef
+  mods: HeroMods
+  round: number
+  onPick: (id: string) => void
+}) {
   return (
     <div className="scrim">
       <div className="sheet">
@@ -589,10 +730,11 @@ function BoonModal({ offers, level, onPick }: { offers: BoonDef[]; level: number
           <button key={b.id} className="boon" style={{ ['--bc' as string]: branchColor(b.branch) }} onClick={() => onPick(b.id)}>
             <span className="boon-branch">
               {b.branch}
-              {b.capstone ? ' · capstone' : ''}
+              {b.capstone ? ' \u00b7 capstone' : ''}
             </span>
             <strong>{b.name}</strong>
             <span className="small dim">{b.text}</span>
+            {b.branch === 'magic' && <MagicPreview hero={hero} mods={mods} round={round} boon={b} />}
           </button>
         ))}
         <div className="center tiny dim">Boons are permanent for this run.</div>

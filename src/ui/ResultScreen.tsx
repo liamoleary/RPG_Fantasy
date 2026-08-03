@@ -1,11 +1,40 @@
 import { HERO_ART_2X, UNIT_ART } from '../data/art'
 import { FACTION_BY_ID, HERO_BY_ID, unit } from '../data/index'
+import type { BattleEvent, Side, SpellOutcome } from '../engine/battle'
 import { RENOWN_BY_PLACEMENT, ordinal, player, type RunState } from '../engine/run'
 import { useGame } from '../state/store'
 import { Ladder } from './Ladder'
 import { Plate } from './Plate'
 import { Sigil } from './Sigil'
 import { unitColor } from './StackCard'
+
+/** How a spell's tally reads on the receipt (Design Notes 03 §2.6). */
+const OUTCOME_WORD: Record<SpellOutcome, string> = {
+  heal: 'healing',
+  damage: 'damage',
+  shield: 'Bulwark granted',
+  atk: 'ATK granted',
+  root: 'exchanges rooted',
+  strikes: 'extra strikes',
+}
+
+/**
+ * "Your spells: 42 healing, 2 casts" — the Magic branch was the one investment
+ * a run could never audit, because its whole effect happened inside a battle.
+ */
+function spellReceipt(events: BattleEvent[], side: Side): string | null {
+  let casts = 0
+  const totals = new Map<SpellOutcome, number>()
+  for (const e of events) {
+    if (e.t !== 'spellCast' || e.side !== side) continue
+    casts += 1
+    totals.set(e.kind, (totals.get(e.kind) ?? 0) + e.amount)
+  }
+  if (casts === 0) return null
+  const bits = [...totals].filter(([, n]) => n > 0).map(([k, n]) => `${n} ${OUTCOME_WORD[k]}`)
+  bits.push(`${casts} cast${casts === 1 ? '' : 's'}`)
+  return bits.join(', ')
+}
 
 export function ResultScreen({ run }: { run: RunState }) {
   const store = useGame()
@@ -27,6 +56,9 @@ export function ResultScreen({ run }: { run: RunState }) {
         ? report.result.survivorsB
         : mySurvivors
     : []
+
+  const mine = report ? spellReceipt(report.result.events, playerIsA ? 'a' : 'b') : null
+  const theirs = report ? spellReceipt(report.result.events, playerIsA ? 'b' : 'a') : null
 
   const eliminated = !p.alive
   const headline = tie ? 'Standstill' : won ? 'Victory' : 'Defeat'
@@ -76,6 +108,14 @@ export function ResultScreen({ run }: { run: RunState }) {
         <div className="small dim center">
           Hero damage is <strong>⌈round ÷ 2⌉ + the tiers of your surviving stacks</strong> — the bigger your board
           finishes, the harder they fall.
+        </div>
+      )}
+
+      {report && (mine || theirs) && (
+        <div className="panel tiny" style={{ display: 'grid', gap: 2 }}>
+          <div className="eyebrow">Spells</div>
+          {mine && <div>Yours: {mine}</div>}
+          {theirs && <div className="dim">{foe?.name ?? 'Theirs'}: {theirs}</div>}
         </div>
       )}
 

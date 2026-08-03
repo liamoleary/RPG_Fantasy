@@ -1,19 +1,47 @@
 import { useState } from 'react'
 import { BOON_BY_ID, FACTION_BY_ID, HERO_BY_ID, unit } from '../data/index'
-import type { BoonDef } from '../data/types'
-import { FRONT_SLOTS, type BoardStack } from '../engine/battle'
-import { canPromote, musterCount, promoteCost, rerollCost, RECRUIT_COST, sellValue, tierUpCost } from '../engine/camp'
+import type { BoonDef, Row } from '../data/types'
+import { FRONT_SLOTS, spellPower, type BoardStack } from '../engine/battle'
+import {
+  canPromote,
+  firstOpenSlot,
+  musterCount,
+  promoteCost,
+  rerollCost,
+  stackOfUnit,
+  RECRUIT_COST,
+  sellValue,
+  tierUpCost,
+} from '../engine/camp'
 import { heroLevel } from '../engine/boons'
-import { opponentOf, player, type RunState } from '../engine/run'
+import { heroState, opponentOf, player, type RunState } from '../engine/run'
 import { useGame } from '../state/store'
+import { InspectSheet } from './InspectSheet'
 import { Ladder, WarlordSheet } from './Ladder'
 import { Sigil } from './Sigil'
-import { StackCard, unitColor } from './StackCard'
+import { StackCard, rowGlyph, unitColor } from './StackCard'
+
+/** The one place the two rows are explained in full (§1.2 row info tap). */
+export const ROW_INFO: Record<Row, { label: string; clause: string; text: string }> = {
+  front: {
+    label: 'FRONT LINE',
+    clause: 'melee, takes the hits',
+    text: 'Four slots. Enemy melee always strikes your front line first, so these stacks absorb the battle. Put your tough, high-count units here — they buy your back line the time it needs.',
+  },
+  back: {
+    label: 'BACK LINE',
+    clause: 'ranged, protected',
+    text: 'Three slots. Enemy melee cannot reach your back line until your front line is empty. It is not immune, though: Volley and Siege units, and hero spells, reach it at any time. Put ranged and support stacks here.',
+  },
+}
 
 export function MusterScreen({ run }: { run: RunState }) {
   const store = useGame()
   const p = player(run)
-  const [detail, setDetail] = useState<string | null>(null)
+  const [heroOpen, setHeroOpen] = useState(false)
+  const [rowInfo, setRowInfo] = useState<Row | null>(null)
+  const [offerIndex, setOfferIndex] = useState<number | null>(null)
+  const [stackUid, setStackUid] = useState<string | null>(null)
   const foeId = opponentOf(run, p.id)
   const foe = foeId ? run.warlords.find((w) => w.id === foeId) : null
   const rCost = rerollCost(p.camp, p.mods)
@@ -38,6 +66,20 @@ export function MusterScreen({ run }: { run: RunState }) {
     return true
   }
 
+  const offerUnitId = offerIndex !== null ? p.camp.offer[offerIndex] : null
+  // Recruiting also needs somewhere to put them: an existing stack of the same
+  // line, or an open slot in a row this unit may stand in.
+  const offerBlock = ((): { ok: boolean; reason?: string } => {
+    if (!offerUnitId) return { ok: false }
+    if (p.gold < RECRUIT_COST) return { ok: false, reason: `You have ${p.gold} gold.` }
+    const def = unit(offerUnitId)
+    if (stackOfUnit(p.board, offerUnitId) || firstOpenSlot(p.board, def) !== null) return { ok: true }
+    return { ok: false, reason: `No open ${def.row === 'any' ? '' : `${def.row} `}slot — sell or move something first.` }
+  })()
+  const inspectedStack = stackUid ? p.board.find((s) => s.uid === stackUid) : null
+  const promoteTarget = inspectedStack ? canPromote(inspectedStack, p.camp) : null
+  const pCost = promoteTarget ? promoteCost(promoteTarget, p.mods) : null
+
   return (
     <div className="screen">
       <Ladder run={run} onInspect={(id) => store.inspect(id)} />
@@ -48,7 +90,7 @@ export function MusterScreen({ run }: { run: RunState }) {
           <div className="row" style={{ gap: 6 }}>
             <span style={{ fontWeight: 800 }}>{hero.name}</span>
             <span className="kw">Lv {level}</span>
-            <button className="btn btn-sm btn-ghost" onClick={() => setDetail('hero')}>
+            <button className="btn btn-sm btn-ghost" onClick={() => setHeroOpen(true)}>
               ⓘ
             </button>
           </div>
@@ -64,7 +106,9 @@ export function MusterScreen({ run }: { run: RunState }) {
       {/* ── your board ── */}
       <div>
         <div className="row spread" style={{ marginBottom: 5 }}>
-          <span className="eyebrow">Your warband{selectedStack ? ' — tap a slot to place' : ''}</span>
+          <span className="eyebrow">
+            {selectedStack ? 'Tap a glowing slot — or the raised card to cancel' : 'Your warband — tap a stack to inspect'}
+          </span>
           <button className="btn btn-sm btn-ghost" onClick={store.autoArrange}>
             Auto-arrange
           </button>
@@ -73,12 +117,12 @@ export function MusterScreen({ run }: { run: RunState }) {
           board={p.board}
           selected={store.selected}
           canDropAt={canDropAt}
-          onStack={(uid) => (store.selected === uid ? setDetail(uid) : store.select(uid))}
+          labels="full"
+          onRowInfo={setRowInfo}
+          onStack={(uid) => (store.selected === uid ? store.select(null) : setStackUid(uid))}
           onSlot={(slot) => store.place(slot)}
         />
       </div>
-
-      {selectedStack && <StackActions run={run} stack={selectedStack} onDetail={() => setDetail(selectedStack.uid)} />}
 
       {/* ── war camp: bottom-anchored, within thumb reach ── */}
       <div className="panel" style={{ display: 'grid', gap: 8, marginTop: 'auto' }}>
@@ -94,7 +138,7 @@ export function MusterScreen({ run }: { run: RunState }) {
               unitId={unitId}
               affordable={p.gold >= RECRUIT_COST}
               bonusCount={unitId ? musterCount(unit(unitId), p.mods) : 0}
-              onBuy={() => store.buy(i)}
+              onInspect={() => setOfferIndex(i)}
             />
           ))}
         </div>
@@ -116,12 +160,77 @@ export function MusterScreen({ run }: { run: RunState }) {
         {p.board.length === 0 ? 'Fight with an empty board' : 'Ready — Fight!'}
       </button>
 
+      {/* ── sheets ── */}
+      {offerUnitId && (
+        <InspectSheet
+          unitId={offerUnitId}
+          mods={p.mods}
+          onClose={() => setOfferIndex(null)}
+          actions={
+            <>
+              <button
+                className="btn btn-gold grow"
+                disabled={!offerBlock.ok}
+                onClick={() => {
+                  store.buy(offerIndex!)
+                  setOfferIndex(null)
+                }}
+              >
+                Recruit — {RECRUIT_COST}g
+              </button>
+              {offerBlock.reason && <div className="tiny dim center grow">{offerBlock.reason}</div>}
+            </>
+          }
+        />
+      )}
+
+      {inspectedStack && (
+        <InspectSheet
+          unitId={inspectedStack.unitId}
+          mods={p.mods}
+          context={{ count: inspectedStack.count, bonusAtk: inspectedStack.bonusAtk, bonusHp: inspectedStack.bonusHp }}
+          onClose={() => setStackUid(null)}
+          actions={
+            <>
+              <button
+                className="btn btn-sm grow"
+                onClick={() => {
+                  setStackUid(null)
+                  store.select(inspectedStack.uid)
+                }}
+              >
+                Move
+              </button>
+              {promoteTarget && pCost !== null && (
+                <button
+                  className="btn btn-sm btn-gold grow"
+                  disabled={p.gold < pCost}
+                  onClick={() => {
+                    store.promote(inspectedStack.uid)
+                    setStackUid(null)
+                  }}
+                >
+                  Promote → {promoteTarget.name} · {pCost}g
+                </button>
+              )}
+              <button
+                className="btn btn-sm btn-danger"
+                onClick={() => {
+                  store.sell(inspectedStack.uid)
+                  setStackUid(null)
+                }}
+              >
+                Sell +{sellValue(inspectedStack, p.mods)}g
+              </button>
+            </>
+          }
+        />
+      )}
+
+      {rowInfo && <RowInfoSheet row={rowInfo} onClose={() => setRowInfo(null)} />}
       {store.scouting && foe && <ScoutSheet run={run} foeId={foe.id} onClose={() => store.setScouting(false)} />}
       {store.inspecting && <WarlordSheet run={run} id={store.inspecting} onClose={() => store.inspect(null)} />}
-      {detail === 'hero' && <HeroSheet run={run} onClose={() => setDetail(null)} />}
-      {detail && detail !== 'hero' && (
-        <UnitSheet uid={detail} run={run} onClose={() => setDetail(null)} />
-      )}
+      {heroOpen && <HeroSheet run={run} onClose={() => setHeroOpen(false)} />}
       {run.phase === 'levelup' && run.boonOffer.length > 0 && (
         <BoonModal offers={run.boonOffer} level={level} onPick={store.chooseBoon} />
       )}
@@ -138,6 +247,8 @@ export function Board({
   onStack,
   onSlot,
   compact,
+  labels = 'none',
+  onRowInfo,
 }: {
   board: BoardStack[]
   selected?: string | null
@@ -145,49 +256,85 @@ export function Board({
   onStack?: (uid: string) => void
   onSlot?: (slot: number) => void
   compact?: boolean
+  /** 'full' = tappable eyebrow labels (Muster), 'tag' = faint corner word */
+  labels?: 'full' | 'tag' | 'none'
+  onRowInfo?: (row: Row) => void
 }) {
   const bySlot = new Map(board.map((s) => [s.slot, s]))
-  const render = (slots: number[], row: 'front' | 'back') => (
-    <div className="board-row" data-row={row}>
-      {slots.map((slot) => {
-        const st = bySlot.get(slot)
-        const droppable = canDropAt?.(slot) ?? false
-        if (!st) {
+  const holding = selected !== undefined && selected !== null
+  const render = (slots: number[], row: Row) => (
+    <div className="board-line" key={row}>
+      {labels === 'full' && (
+        <button className="row-label" onClick={() => onRowInfo?.(row)}>
+          <span className="row-label-name">
+            {rowGlyph(row)} {ROW_INFO[row].label}
+          </span>
+          <span className="row-label-clause"> — {ROW_INFO[row].clause}</span>
+          <span className="row-label-info">ⓘ</span>
+        </button>
+      )}
+      <div className="board-row" data-row={row} data-tag={labels === 'tag' ? 'true' : undefined}>
+        {labels === 'tag' && <span className="row-tag">{row}</span>}
+        {slots.map((slot) => {
+          const st = bySlot.get(slot)
+          const droppable = canDropAt?.(slot) ?? false
+          if (!st) {
+            return (
+              <div
+                key={slot}
+                className="slot"
+                data-drop={droppable ? 'true' : undefined}
+                data-illegal={holding && !droppable ? 'true' : undefined}
+                onClick={() => droppable && onSlot?.(slot)}
+              >
+                {droppable ? (
+                  '↓'
+                ) : (
+                  <span className="slot-hint">
+                    <Sigil id={row === 'front' ? 'shield' : 'bow'} size={16} />
+                    <span>{row}</span>
+                  </span>
+                )}
+              </div>
+            )
+          }
+          const def = unit(st.unitId)
+          const held = selected === st.uid
+          // While a stack is held, an occupied slot either swaps (legal) or is
+          // inert (illegal) — tapping the held stack itself puts it back down.
+          const handle = held
+            ? () => onStack?.(st.uid)
+            : holding
+              ? droppable
+                ? () => onSlot?.(slot)
+                : undefined
+              : onStack
+                ? () => onStack(st.uid)
+                : undefined
           return (
-            <div
+            <StackCard
               key={slot}
-              className="slot"
-              data-drop={droppable ? 'true' : undefined}
-              onClick={() => droppable && onSlot?.(slot)}
-            >
-              {droppable ? '↓' : ''}
-            </div>
+              unitId={st.unitId}
+              count={st.count}
+              atk={def.atk + st.bonusAtk}
+              hp={def.hp + st.bonusHp}
+              selected={held}
+              illegal={holding && !held && !droppable}
+              onClick={handle}
+            />
           )
-        }
-        const def = unit(st.unitId)
-        // With a stack held, tapping an occupied slot swaps the two;
-        // otherwise it picks this stack up (or opens it, if already held).
-        const swap = droppable && selected !== undefined && selected !== null && selected !== st.uid
-        const handle = swap ? () => onSlot?.(slot) : onStack ? () => onStack(st.uid) : undefined
-        return (
-          <StackCard
-            key={slot}
-            unitId={st.unitId}
-            count={st.count}
-            atk={def.atk + st.bonusAtk}
-            hp={def.hp + st.bonusHp}
-            selected={selected === st.uid}
-            onClick={handle}
-          />
-        )
-      })}
+        })}
+      </div>
     </div>
   )
   return (
-    // Front row on top, matching the battle view: your line faces the enemy.
+    // Back line on top, front line on the bottom — everywhere in the game
+    // (Design Notes 01 §1.3). Your front line sits nearest your thumb, and the
+    // enemy's front line sits against the divider, bearing down on you: one
+    // reading of the board that transfers straight from Muster to Battle.
     <div className="board" style={compact ? { opacity: 0.95 } : undefined}>
-      {render([0, 1, 2, 3], 'front')}
       {render([4, 5, 6], 'back')}
+      {render([0, 1, 2, 3], 'front')}
     </div>
   )
 }
@@ -198,18 +345,23 @@ function OfferCard({
   unitId,
   affordable,
   bonusCount,
-  onBuy,
+  onInspect,
 }: {
   unitId: string | null
   affordable: boolean
   bonusCount: number
-  onBuy: () => void
+  onInspect: () => void
 }) {
   if (!unitId) return <div className="offer-card" data-empty="true" />
   const def = unit(unitId)
+  // Tap is always safe (§2.2): this opens the Inspect sheet, which owns the
+  // Recruit button. Unaffordable cards still open — reading is free.
   return (
-    <button className="offer-card" style={{ ['--sc' as string]: unitColor(def) }} disabled={!affordable} onClick={onBuy}>
+    <button className="offer-card" style={{ ['--sc' as string]: unitColor(def) }} onClick={onInspect}>
       <span className="tier-pip">T{def.tier}</span>
+      <span className="row-glyph" aria-hidden="true">
+        {rowGlyph(def.row)}
+      </span>
       <Sigil id={def.sigil} size={20} />
       <span className="stack-name">{def.name}</span>
       <span className="chips">
@@ -217,111 +369,28 @@ function OfferCard({
         <span className="dim">/</span>
         <span className="chip-hp">{def.hp}</span>
       </span>
-      <span className="tiny gold">+{bonusCount} · 3g</span>
-    </button>
-  )
-}
-
-// ── selected stack actions ───────────────────────────────────────────────
-
-function StackActions({ run, stack, onDetail }: { run: RunState; stack: BoardStack; onDetail: () => void }) {
-  const store = useGame()
-  const p = player(run)
-  const def = unit(stack.unitId)
-  const target = canPromote(stack, p.camp)
-  const pCost = target ? promoteCost(target, p.mods) : null
-  return (
-    <div className="panel row wrap" style={{ gap: 6, padding: 8 }}>
-      <span className="grow small">
-        <strong>{def.name}</strong> ×{stack.count}
+      <span className={`tiny ${affordable ? 'gold' : 'dim'}`}>
+        +{bonusCount} · {RECRUIT_COST}g
       </span>
-      <button className="btn btn-sm" onClick={onDetail}>
-        Details
-      </button>
-      {target && pCost !== null && (
-        <button className="btn btn-sm btn-gold" disabled={p.gold < pCost} onClick={() => store.promote(stack.uid)}>
-          Promote → {target.name} · {pCost}g
-        </button>
-      )}
-      <button className="btn btn-sm btn-danger" onClick={() => store.sell(stack.uid)}>
-        Sell +{sellValue(stack, p.mods)}g
-      </button>
-      <button className="btn btn-sm btn-ghost" onClick={() => store.select(null)}>
-        Cancel
-      </button>
-    </div>
+    </button>
   )
 }
 
 // ── sheets ───────────────────────────────────────────────────────────────
 
-function keywordText(k: { k: string; x?: number }): string {
-  const map: Record<string, string> = {
-    bulwark: 'Bulwark — soaks damage from each attack, then wears down by 1.',
-    charge: 'Charge — acts first on the opening cycle.',
-    volley: 'Volley — ranged; never provokes retaliation.',
-    siege: 'Siege — ignores Bulwark entirely.',
-    guard: 'Guard — grants Bulwark to the adjacent stack.',
-    cleave: 'Cleave — overkill damage spills into an adjacent stack.',
-    venom: 'Venom — the target loses units when it next acts.',
-    lifesteal: 'Lifesteal — heals this stack for half the damage dealt.',
-    deathcry: 'Deathcry — triggers an effect on death.',
-    growth: 'Growth — permanent stats every Muster this stack survives.',
-    frenzy: 'Frenzy — gains ATK whenever it takes casualties and survives.',
-    summon: 'Summon — adds a stack mid-battle.',
-  }
-  return `${k.k[0].toUpperCase()}${k.k.slice(1)}${k.x ? ` ${k.x}` : ''} · ${map[k.k] ?? ''}`
-}
-
-function UnitSheet({ uid, run, onClose }: { uid: string; run: RunState; onClose: () => void }) {
-  const p = player(run)
-  const stack = p.board.find((s) => s.uid === uid)
-  if (!stack) return null
-  const def = unit(stack.unitId)
+function RowInfoSheet({ row, onClose }: { row: Row; onClose: () => void }) {
+  const info = ROW_INFO[row]
   return (
     <div className="scrim" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="row">
-          <span className="faction-icon" style={{ ['--fc' as string]: unitColor(def) }}>
-            <Sigil id={def.sigil} size={22} />
-          </span>
-          <div className="grow">
-            <h2>{def.name}</h2>
-            <div className="small dim">
-              Tier {def.tier} · {def.row} row · Initiative {def.init} · +{def.musterSize} per purchase
-            </div>
-          </div>
+        <h2>
+          {rowGlyph(row)} {info.label}
+        </h2>
+        <div className="small dim">{info.clause}</div>
+        <div className="panel small">{info.text}</div>
+        <div className="tiny dim">
+          Cards carry the same glyphs: ⚔ front only, ➶ back only, ◈ either row.
         </div>
-        <div className="row" style={{ gap: 14 }}>
-          <span>
-            <span className="eyebrow">ATK</span>
-            <div className="chip-atk" style={{ fontSize: 22, fontWeight: 800 }}>
-              {def.atk + stack.bonusAtk}
-            </div>
-          </span>
-          <span>
-            <span className="eyebrow">HP</span>
-            <div className="chip-hp" style={{ fontSize: 22, fontWeight: 800 }}>
-              {def.hp + stack.bonusHp}
-            </div>
-          </span>
-          <span>
-            <span className="eyebrow">Count</span>
-            <div style={{ fontSize: 22, fontWeight: 800 }}>{stack.count}</div>
-          </span>
-          <span className="grow">
-            <span className="eyebrow">Stack damage</span>
-            <div style={{ fontSize: 22, fontWeight: 800 }}>{(def.atk + stack.bonusAtk) * stack.count}</div>
-          </span>
-        </div>
-        {def.keywords.length > 0 && (
-          <div className="panel small" style={{ display: 'grid', gap: 5 }}>
-            {def.keywords.map((k) => (
-              <div key={k.k}>{keywordText(k)}</div>
-            ))}
-          </div>
-        )}
-        {def.ability && <div className="panel small">{def.ability.text}</div>}
         <button className="btn btn-primary" onClick={onClose}>
           Close
         </button>
@@ -334,6 +403,7 @@ function HeroSheet({ run, onClose }: { run: RunState; onClose: () => void }) {
   const p = player(run)
   const hero = HERO_BY_ID.get(p.heroId)!
   const f = FACTION_BY_ID.get(p.factionId)!
+  const x = spellPower(hero, heroState(p, run.round))
   return (
     <div className="scrim" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
@@ -356,7 +426,8 @@ function HeroSheet({ run, onClose }: { run: RunState; onClose: () => void }) {
           <div className="eyebrow" style={{ marginTop: 8 }}>
             {hero.spell.name}
           </div>
-          <div>{hero.spell.text}</div>
+          <div>{hero.spell.text.replace(/\bX\b/g, String(x))}</div>
+          <div className="tiny dim">Currently X = {x}.</div>
         </div>
         <div className="eyebrow">Boons taken ({p.boonsTaken.length})</div>
         {p.boonsTaken.length === 0 && <div className="small dim">None yet — your first choice comes on round 2.</div>}
@@ -384,30 +455,43 @@ function ScoutSheet({ run, foeId, onClose }: { run: RunState; foeId: string; onC
   const foe = run.warlords.find((w) => w.id === foeId)!
   const hero = HERO_BY_ID.get(foe.heroId)!
   const f = FACTION_BY_ID.get(foe.factionId)!
+  const [peek, setPeek] = useState<string | null>(null)
+  const peeked = peek ? foe.board.find((s) => s.uid === peek) : null
   return (
-    <div className="scrim" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="row">
-          <span className="faction-icon" style={{ ['--fc' as string]: f.colors.primary }}>
-            <Sigil id={hero.sigil} size={22} />
-          </span>
-          <div className="grow">
-            <h2>{foe.name}</h2>
-            <div className="small dim">
-              {f.name} · {foe.hp} HP · Camp Tier {foe.camp.tier}
+    // The inspect sheet is a sibling, not a child: nesting it inside this
+    // sheet would let one tap close both.
+    <>
+      <div className="scrim" onClick={onClose}>
+        <div className="sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="row">
+            <span className="faction-icon" style={{ ['--fc' as string]: f.colors.primary }}>
+              <Sigil id={hero.sigil} size={22} />
+            </span>
+            <div className="grow">
+              <h2>{foe.name}</h2>
+              <div className="small dim">
+                {f.name} · {foe.hp} HP · Camp Tier {foe.camp.tier}
+              </div>
             </div>
           </div>
+          <div className="small dim">
+            {hero.name} — {hero.passive.text}
+          </div>
+          <div className="eyebrow">Their board right now — tap a stack to inspect</div>
+          <Board board={foe.board} compact labels="tag" onStack={setPeek} />
+          <button className="btn btn-primary" onClick={onClose}>
+            Close
+          </button>
         </div>
-        <div className="small dim">
-          {hero.name} — {hero.passive.text}
-        </div>
-        <div className="eyebrow">Their board right now</div>
-        <Board board={foe.board} compact />
-        <button className="btn btn-primary" onClick={onClose}>
-          Close
-        </button>
       </div>
-    </div>
+      {peeked && (
+        <InspectSheet
+          unitId={peeked.unitId}
+          context={{ count: peeked.count, bonusAtk: peeked.bonusAtk, bonusHp: peeked.bonusHp }}
+          onClose={() => setPeek(null)}
+        />
+      )}
+    </>
   )
 }
 

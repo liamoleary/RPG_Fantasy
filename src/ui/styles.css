@@ -271,20 +271,86 @@ h3 {
   flex-direction: column;
   gap: 6px;
 }
-.board-row {
-  display: grid;
-  gap: 6px;
+.board-line {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
-.board-row[data-row='front'] {
-  grid-template-columns: repeat(4, 1fr);
+/* Every cell — front or back — is one quarter of the row, so the two lines
+   read as one board and the size difference carries no accidental meaning
+   (Design Notes 01 §1.1). The back line's 3 cells centre under the 4. */
+.board-row {
+  display: flex;
+  gap: 6px;
+  position: relative;
+}
+.board-row > .stack,
+.board-row > .slot {
+  flex: 0 0 calc((100% - 18px) / 4);
+  width: auto;
+  min-width: 0;
 }
 .board-row[data-row='back'] {
-  grid-template-columns: repeat(3, 1fr);
+  justify-content: center;
+}
+.board-row[data-tag='true'] {
+  padding-top: 10px;
+}
+
+/* subtle FRONT / BACK word for boards with no room for the full label */
+.row-tag {
+  position: absolute;
+  top: 0;
+  left: 3px;
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: var(--ink-dim);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* full, tappable row label on the Muster board */
+.row-label {
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+  width: 100%;
+  /* Below the 44px norm on purpose: this is a secondary read-more affordance
+     sitting directly above its row, and a full-height bar would push the War
+     Camp out of thumb reach. */
+  min-height: 28px;
+  padding: 4px 0;
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+  color: var(--ink-dim);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.row-label-name {
+  flex: none;
+  color: var(--ink);
+}
+.row-label-clause {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.row-label-info {
+  flex: none;
+  padding-left: 6px;
+  letter-spacing: 0;
+  opacity: 0.7;
 }
 
 .slot {
-  /* Fixed height, not aspect-ratio: the front row has 4 columns and the back
-     row 3, so a ratio would make the two rows different heights. */
+  /* Fixed height so both lines match; the flex basis above fixes the width. */
   height: 74px;
   border-radius: var(--fx-radius);
   border: 1px dashed color-mix(in srgb, var(--line) 80%, transparent);
@@ -299,6 +365,22 @@ h3 {
   border-style: solid;
   background: color-mix(in srgb, var(--gold) 12%, transparent);
   animation: pulse 1.1s ease-in-out infinite;
+}
+/* Placement mode: illegal targets must be readable as illegal before the tap. */
+.slot[data-illegal='true'],
+.stack[data-illegal='true'] {
+  opacity: 0.35;
+  filter: grayscale(1);
+  pointer-events: none;
+}
+.slot-hint {
+  display: grid;
+  place-items: center;
+  gap: 1px;
+  opacity: 0.34;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .stack {
@@ -356,6 +438,23 @@ h3 {
   font-weight: 800;
   display: grid;
   place-items: center;
+}
+/* Row eligibility, on every card, opposite the count badge (§1.4). */
+.row-glyph {
+  position: absolute;
+  font-size: 9px;
+  line-height: 1;
+  color: var(--ink-dim);
+  opacity: 0.7;
+  pointer-events: none;
+}
+.stack > .row-glyph {
+  top: 3px;
+  left: 4px;
+}
+.offer-card > .row-glyph {
+  top: 3px;
+  right: 4px;
 }
 .chips {
   display: flex;
@@ -468,6 +567,43 @@ h3 {
   flex-direction: column;
   gap: 12px;
   animation: rise 0.2s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+/* ── inspect sheet ──────────────────────────────────────────────────────── */
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(58px, 1fr));
+  gap: 6px;
+}
+.row-tag-inline {
+  color: var(--ink);
+}
+.line-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--fx-radius);
+  border: 1px solid var(--line);
+  background: #ffffff06;
+}
+.line-form[data-now='true'] {
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 10%, transparent);
+}
+.line-form-icon {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--fc) 30%, #000);
+  color: var(--fc);
+}
+.sheet-actions {
+  gap: 6px;
 }
 
 .boon {

@@ -1,5 +1,6 @@
-import { FACTION_BY_ID, HERO_BY_ID } from '../data/index'
-import { START_HP, opponentOf, type RunState, type Warlord } from '../engine/run'
+import { BOON_BY_ID, FACTION_BY_ID, HERO_BY_ID } from '../data/index'
+import { spellPower } from '../engine/battle'
+import { START_HP, heroState, opponentOf, type RunState, type Warlord } from '../engine/run'
 import { Sigil } from './Sigil'
 
 export function Ladder({ run, onInspect }: { run: RunState; onInspect: (id: string) => void }) {
@@ -71,9 +72,21 @@ export function WarlordSheet({ run, id, onClose }: { run: RunState; id: string; 
             <div className="eyebrow" style={{ marginTop: 8 }}>
               {hero.spell.name}
             </div>
-            <div>{hero.spell.text}</div>
+            {/* Spell copy carries a literal X — show what it resolves to now. */}
+            <div>{hero.spell.text.replace(/\bX\b/g, String(spellPower(hero, heroState(w, run.round))))}</div>
           </div>
         )}
+        <div className="eyebrow">Boons taken ({w.boonsTaken.length})</div>
+        {w.boonsTaken.length === 0 && <div className="small dim">None yet.</div>}
+        {w.boonsTaken.map((id) => {
+          const b = BOON_BY_ID.get(id)
+          return b ? (
+            <div key={id} className="panel small">
+              <strong style={{ display: 'block' }}>{b.name}</strong>
+              <span className="dim">{b.text}</span>
+            </div>
+          ) : null
+        })}
         <button className="btn btn-primary" onClick={onClose}>
           Close
         </button>

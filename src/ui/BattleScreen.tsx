@@ -3,6 +3,7 @@ import { FACTION_BY_ID, unit } from '../data/index'
 import type { BattleEvent, BattleResult, StackSnap } from '../engine/battle'
 import { player, type RunState } from '../engine/run'
 import { useGame } from '../state/store'
+import { InspectSheet } from './InspectSheet'
 import { Ladder } from './Ladder'
 import { SnapCard } from './StackCard'
 
@@ -138,11 +139,14 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
   const frames = useMemo(() => (result ? buildFrames(result, playerIsA) : []), [result, playerIsA])
   const [i, setI] = useState(0)
   const [done, setDone] = useState(false)
+  /** the snapshot the player tapped; inspecting holds the replay (§2.1) */
+  const [peek, setPeek] = useState<StackSnap | null>(null)
   const timer = useRef<number | null>(null)
 
   useEffect(() => {
     setI(0)
     setDone(false)
+    setPeek(null)
   }, [result])
 
   useEffect(() => {
@@ -151,12 +155,14 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
       setDone(true)
       return
     }
+    // An open Inspect sheet pauses playback rather than racing it.
+    if (peek) return
     const ms = BASE_MS / store.speed
     timer.current = window.setTimeout(() => setI((n) => n + 1), ms)
     return () => {
       if (timer.current) window.clearTimeout(timer.current)
     }
-  }, [i, frames.length, done, store.speed])
+  }, [i, frames.length, done, store.speed, peek])
 
   if (!result || frames.length === 0) {
     return (
@@ -203,12 +209,12 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
             {frame.banner}
           </div>
         )}
-        <SnapBoard snaps={theirs} fx={frame.fx} flip />
+        <SnapBoard snaps={theirs} fx={frame.fx} onPeek={setPeek} />
         <div className="center dim tiny">— — —</div>
-        <SnapBoard snaps={mine} fx={frame.fx} />
+        <SnapBoard snaps={mine} fx={frame.fx} onPeek={setPeek} />
       </div>
 
-      <div className="log center small">{frame.line}</div>
+      <div className="log center small">{peek ? 'Paused — close to resume.' : frame.line}</div>
 
       <div className="row" style={{ gap: 8 }}>
         <button className="btn btn-sm grow" onClick={() => store.setSpeed(store.speed === 1 ? 2 : 1)}>
@@ -222,11 +228,19 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
       <button className="btn btn-primary" disabled={!done} onClick={store.finishBattle}>
         {done ? 'Continue' : 'Fighting…'}
       </button>
+
+      {peek && (
+        <InspectSheet
+          unitId={peek.unitId}
+          context={{ count: peek.count, bonusAtk: peek.atk - unit(peek.unitId).atk, bonusHp: peek.maxHp - unit(peek.unitId).hp }}
+          onClose={() => setPeek(null)}
+        />
+      )}
     </div>
   )
 }
 
-function SnapBoard({ snaps, fx, flip }: { snaps: StackSnap[]; fx: Frame['fx']; flip?: boolean }) {
+function SnapBoard({ snaps, fx, onPeek }: { snaps: StackSnap[]; fx: Frame['fx']; onPeek: (s: StackSnap) => void }) {
   const bySlot = new Map(snaps.map((s) => [s.slot, s]))
   const visible = (slot: number) => {
     const s = bySlot.get(slot)
@@ -236,24 +250,27 @@ function SnapBoard({ snaps, fx, flip }: { snaps: StackSnap[]; fx: Frame['fx']; f
     // A row nobody occupies is dead space on a phone — drop it entirely.
     if (!slots.some(visible)) return null
     return (
-      <div className="board-row" data-row={name}>
+      <div className="board-row" data-row={name} data-tag="true">
+        <span className="row-tag">{name}</span>
         {slots.map((slot) => {
           const s = bySlot.get(slot)
           if (!s || !visible(slot)) return <div key={slot} className="slot" />
           const f = fx[s.uid]
-          return <SnapCard key={slot} snap={s} state={f?.state ?? null} float={f?.float ?? null} />
+          return (
+            <SnapCard key={slot} snap={s} state={f?.state ?? null} float={f?.float ?? null} onClick={() => onPeek(s)} />
+          )
         })}
       </div>
     )
   }
-  const front = row([0, 1, 2, 3], 'front')
-  const back = row([4, 5, 6], 'back')
-  // Front rows meet at the divider: the enemy block is back-then-front, yours
-  // is front-then-back.
+  // Back on top, front on the bottom — for BOTH sides, matching the Muster
+  // board exactly (Design Notes 01 §1.3). The enemy's front line therefore
+  // sits against the divider, bearing down on yours, and there is only ever
+  // one way to read a board in this game.
   return (
     <div className="board">
-      {flip ? back : front}
-      {flip ? front : back}
+      {row([4, 5, 6], 'back')}
+      {row([0, 1, 2, 3], 'front')}
     </div>
   )
 }

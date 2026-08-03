@@ -492,6 +492,14 @@ function spellMagnitude(heroDef: HeroDef, hero: HeroState): number {
   return Math.max(1, Math.round(raw))
 }
 
+/**
+ * The X a hero's spell would apply right now. Read-only: UI sheets substitute
+ * it into the spell's text so the player sees the real number, not a letter.
+ */
+export function spellPower(heroDef: HeroDef, hero: HeroState): number {
+  return spellMagnitude(heroDef, hero)
+}
+
 /** How strongly a point of spellPower moves each spell — keeps buffs and nukes on the same currency. */
 const SPELL_POWER_SCALE: Record<string, number> = {
   shieldLowest: 0.55,

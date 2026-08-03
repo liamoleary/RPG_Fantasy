@@ -3,6 +3,7 @@ import { FACTIONS, HEROES } from '../data/index'
 import type { FactionId } from '../data/types'
 import type { Difficulty } from '../engine/rivals'
 import { useGame } from '../state/store'
+import { KEYWORD_GLOSSARY } from './keywords'
 import { Sigil } from './Sigil'
 
 const DIFFICULTIES: { id: Difficulty; name: string; text: string }[] = [
@@ -17,6 +18,7 @@ export function HomeScreen() {
   const [heroId, setHeroId] = useState('h_berrik')
   const [difficulty, setDifficulty] = useState<Difficulty>(save.settings.difficulty)
   const [showSettings, setShowSettings] = useState(false)
+  const [showKeywords, setShowKeywords] = useState(false)
 
   const heroes = HEROES.filter((h) => h.faction === factionId)
   const heroUnlocked = (renown: number) => renown === 0 || save.renown >= renown
@@ -164,8 +166,32 @@ export function HomeScreen() {
                 onChange={(e) => useGame.getState().setSpeed(e.target.checked ? 2 : 1)}
               />
             </label>
+            <div className="eyebrow">Help</div>
+            <button className="btn" onClick={() => setShowKeywords(true)}>
+              Keywords — what every ability word means
+            </button>
             <button className="btn btn-primary" onClick={() => setShowSettings(false)}>
               Done
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showKeywords && (
+        <div className="scrim" onClick={() => setShowKeywords(false)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <h2>Keywords</h2>
+            <div className="small dim">
+              Every unit card shows these with its own numbers filled in — tap any card to read it there.
+            </div>
+            {KEYWORD_GLOSSARY.map((k) => (
+              <div key={k.id} className="panel small">
+                <strong style={{ display: 'block' }}>{k.name}</strong>
+                <span className="dim">{k.text}</span>
+              </div>
+            ))}
+            <button className="btn btn-primary" onClick={() => setShowKeywords(false)}>
+              Close
             </button>
           </div>
         </div>

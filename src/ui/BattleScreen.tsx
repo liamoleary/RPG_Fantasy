@@ -211,7 +211,7 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
         )}
         <SnapBoard snaps={theirs} fx={frame.fx} onPeek={setPeek} />
         <div className="center dim tiny">— — —</div>
-        <SnapBoard snaps={mine} fx={frame.fx} onPeek={setPeek} />
+        <SnapBoard snaps={mine} fx={frame.fx} mine onPeek={setPeek} />
       </div>
 
       <div className="log center small">{peek ? 'Paused — close to resume.' : frame.line}</div>
@@ -241,7 +241,18 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
   )
 }
 
-function SnapBoard({ snaps, fx, onPeek }: { snaps: StackSnap[]; fx: Frame['fx']; onPeek: (s: StackSnap) => void }) {
+function SnapBoard({
+  snaps,
+  fx,
+  mine,
+  onPeek,
+}: {
+  snaps: StackSnap[]
+  fx: Frame['fx']
+  /** your own block — mirror it so your front line faces the enemy */
+  mine?: boolean
+  onPeek: (s: StackSnap) => void
+}) {
   const bySlot = new Map(snaps.map((s) => [s.slot, s]))
   const visible = (slot: number) => {
     const s = bySlot.get(slot)
@@ -264,14 +275,14 @@ function SnapBoard({ snaps, fx, onPeek }: { snaps: StackSnap[]; fx: Frame['fx'];
       </div>
     )
   }
-  // Back on top, front on the bottom — for BOTH sides, matching the Muster
-  // board exactly (Design Notes 01 §1.3). The enemy's front line therefore
-  // sits against the divider, bearing down on yours, and there is only ever
-  // one way to read a board in this game.
+  // The two armies face each other, so your block mirrors: both front lines
+  // meet at the divider with the back lines behind them. Design Notes 01 §1.3
+  // asked for one universal order, but in a fight it reads as your spearmen
+  // hiding behind your archers — playtest disagreed, and the fight wins.
   return (
     <div className="board">
-      {row([4, 5, 6], 'back')}
-      {row([0, 1, 2, 3], 'front')}
+      {mine ? row([0, 1, 2, 3], 'front') : row([4, 5, 6], 'back')}
+      {mine ? row([4, 5, 6], 'back') : row([0, 1, 2, 3], 'front')}
     </div>
   )
 }

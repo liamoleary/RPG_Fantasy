@@ -632,6 +632,40 @@ h3 {
   transition: width 0.22s ease;
 }
 
+/* A stack you can promote right now says so on the card, rather than making
+   the player open all seven to find out. 'soon' means eligible but short on
+   gold — visible, but not shouting. */
+.promote-flag {
+  position: absolute;
+  z-index: 3;
+  /* Top bar, just right of the row glyph: the card foot belongs to the name,
+     and a badge there clips it. */
+  left: 21px;
+  top: 2px;
+  width: 17px;
+  height: 17px;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+  background: rgba(11, 17, 29, 0.85);
+  border: 1px solid var(--gold);
+  color: var(--gold);
+  pointer-events: none;
+}
+.promote-flag[data-state='soon'] {
+  border-color: color-mix(in srgb, var(--gold) 40%, var(--line));
+  color: color-mix(in srgb, var(--gold) 55%, var(--ink-dim));
+  opacity: 0.7;
+}
+.stack[data-promote='ready'] {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold), 0 0 14px -4px var(--gold);
+  animation: promoteReady 2s ease-in-out infinite;
+}
+
 /* ── camp ───────────────────────────────────────────────────────────────── */
 
 .offer {
@@ -670,11 +704,51 @@ h3 {
 .offer-card .stack-name {
   padding: 0 3px;
 }
-.offer-card:active {
+.offer-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  padding-bottom: 3px;
+  color: inherit;
+}
+.offer-body:active {
+  transform: scale(0.97);
+}
+/* Recruiting is its own button: tapping the card only ever inspects, so a
+   mis-tap costs nothing, and buying no longer needs a trip through a sheet. */
+.offer-buy {
+  width: calc(100% - 8px);
+  min-height: 30px;
+  margin: 0 4px 1px;
+  border-radius: var(--fx-radius);
+  background: linear-gradient(180deg, var(--gold), #a8802c);
+  border: 1px solid #f0d68d;
+  color: #23180a;
+  font-size: 11px;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+}
+.offer-buy:active {
   transform: scale(0.96);
 }
-.offer-card:disabled {
-  opacity: 0.4;
+.offer-buy:disabled {
+  background: none;
+  border-color: var(--line);
+  color: var(--ink-dim);
+  cursor: default;
+}
+/* Can't afford it (or nowhere to put it): say so at a glance. Still tappable
+   for inspect — reading is always free. */
+.offer-card[data-blocked] .offer-art .plate,
+.offer-card[data-blocked] .offer-body {
+  filter: grayscale(0.85);
+  opacity: 0.5;
+}
+.offer-card[data-blocked] {
+  border-color: var(--line);
 }
 .offer-card[data-empty='true'] {
   border-style: dashed;
@@ -1057,6 +1131,11 @@ h3 {
   to {
     opacity: 0.3;
     transform: scale(0.82) rotate(6deg);
+  }
+}
+@keyframes promoteReady {
+  50% {
+    box-shadow: 0 0 0 1px var(--gold), 0 0 20px -3px var(--gold);
   }
 }
 @keyframes hitFlash {

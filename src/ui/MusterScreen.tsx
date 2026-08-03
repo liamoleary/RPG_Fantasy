@@ -38,6 +38,27 @@ export const ROW_INFO: Record<Row, { label: string; clause: string; text: string
   },
 }
 
+export type PromoteState = 'ready' | 'soon' | null
+
+export interface RecruitBlock {
+  ok: boolean
+  reason?: string
+}
+
+/**
+ * One gate for "can I buy this", used by the offer card, its Recruit button
+ * and the Inspect sheet, so a greyed card and a disabled button can never
+ * disagree. Gold is not the only blocker: the recruits need somewhere to
+ * stand — an existing stack of the same line, or an open slot in a legal row.
+ */
+export function canRecruit(unitId: string | null, board: BoardStack[], gold: number): RecruitBlock {
+  if (!unitId) return { ok: false }
+  if (gold < RECRUIT_COST) return { ok: false, reason: `Costs ${RECRUIT_COST}g — you have ${gold}.` }
+  const def = unit(unitId)
+  if (stackOfUnit(board, unitId) || firstOpenSlot(board, def) !== null) return { ok: true }
+  return { ok: false, reason: `No open ${def.row === 'any' ? '' : `${def.row} `}slot — sell or move something first.` }
+}
+
 export function MusterScreen({ run }: { run: RunState }) {
   const store = useGame()
   const p = player(run)
@@ -55,6 +76,14 @@ export function MusterScreen({ run }: { run: RunState }) {
   // Your board and the board you are about to fight, fetched while the player
   // reads the camp — the battle must never open on a blank frame (§4).
   usePreloadArt(unitArtFor([...p.board.map((s) => s.unitId), ...(foe?.board ?? []).map((s) => s.unitId)]))
+
+  // Promotion is the easiest thing to miss on this screen — surface it on the
+  // card instead of making the player open every stack to go looking.
+  const promoteStateOf = (stack: BoardStack): PromoteState => {
+    const target = canPromote(stack, p.camp)
+    if (!target) return null
+    return p.gold >= promoteCost(target, p.mods) ? 'ready' : 'soon'
+  }
 
   const selectedStack = store.selected ? p.board.find((s) => s.uid === store.selected) : null
   const occupied = new Map(p.board.map((s) => [s.slot, s]))
@@ -74,15 +103,8 @@ export function MusterScreen({ run }: { run: RunState }) {
   }
 
   const offerUnitId = offerIndex !== null ? p.camp.offer[offerIndex] : null
-  // Recruiting also needs somewhere to put them: an existing stack of the same
-  // line, or an open slot in a row this unit may stand in.
-  const offerBlock = ((): { ok: boolean; reason?: string } => {
-    if (!offerUnitId) return { ok: false }
-    if (p.gold < RECRUIT_COST) return { ok: false, reason: `You have ${p.gold} gold.` }
-    const def = unit(offerUnitId)
-    if (stackOfUnit(p.board, offerUnitId) || firstOpenSlot(p.board, def) !== null) return { ok: true }
-    return { ok: false, reason: `No open ${def.row === 'any' ? '' : `${def.row} `}slot — sell or move something first.` }
-  })()
+  const recruitBlock = (unitId: string | null) => canRecruit(unitId, p.board, p.gold)
+  const offerBlock = recruitBlock(offerUnitId)
   const offerStack = offerUnitId ? stackOfUnit(p.board, offerUnitId) : undefined
   const inspectedStack = stackUid ? p.board.find((s) => s.uid === stackUid) : null
   const promoteTarget = inspectedStack ? canPromote(inspectedStack, p.camp) : null
@@ -127,6 +149,7 @@ export function MusterScreen({ run }: { run: RunState }) {
           canDropAt={canDropAt}
           labels="full"
           rankFlash={store.rankFlash}
+          promoteStateOf={promoteStateOf}
           onRowInfo={setRowInfo}
           onStack={(uid) => (store.selected === uid ? store.select(null) : setStackUid(uid))}
           onSlot={(slot) => store.place(slot)}
@@ -145,10 +168,11 @@ export function MusterScreen({ run }: { run: RunState }) {
             <OfferCard
               key={i}
               unitId={unitId}
-              affordable={p.gold >= RECRUIT_COST}
+              block={recruitBlock(unitId)}
               bonusCount={unitId ? musterCount(unit(unitId), p.mods) : 0}
               priority={i < 3}
               onInspect={() => setOfferIndex(i)}
+              onRecruit={() => store.buy(i)}
             />
           ))}
         </div>
@@ -269,6 +293,7 @@ export function Board({
   labels = 'none',
   onRowInfo,
   rankFlash,
+  promoteStateOf,
 }: {
   board: BoardStack[]
   selected?: string | null
@@ -281,6 +306,8 @@ export function Board({
   onRowInfo?: (row: Row) => void
   /** uid of a stack that just ranked up, for the chevron stamp (§3.3) */
   rankFlash?: string | null
+  /** Muster only: flags stacks that can be promoted right now */
+  promoteStateOf?: (stack: BoardStack) => PromoteState
 }) {
   const bySlot = new Map(board.map((s) => [s.slot, s]))
   const holding = selected !== undefined && selected !== null
@@ -342,6 +369,7 @@ export function Board({
               hp={def.hp + st.bonusHp}
               rank={st.rank}
               rankFlash={rankFlash === st.uid}
+              promote={promoteStateOf?.(st) ?? null}
               selected={held}
               illegal={holding && !held && !droppable}
               onClick={handle}
@@ -367,41 +395,52 @@ export function Board({
 
 function OfferCard({
   unitId,
-  affordable,
+  block,
   bonusCount,
   priority,
   onInspect,
+  onRecruit,
 }: {
   unitId: string | null
-  affordable: boolean
+  block: RecruitBlock
   bonusCount: number
   /** the offers visible without scrolling on a small phone */
   priority?: boolean
   onInspect: () => void
+  onRecruit: () => void
 }) {
   if (!unitId) return <div className="offer-card" data-empty="true" />
   const def = unit(unitId)
-  // Tap is always safe (§2.2): this opens the Inspect sheet, which owns the
-  // Recruit button. Unaffordable cards still open — reading is free.
+  // Tapping the card still only ever opens the Inspect sheet — reading is free
+  // and never costs gold. Recruiting is its own explicit button so the common
+  // case does not need a round trip through the sheet.
   return (
-    <button className="offer-card" style={{ ['--sc' as string]: unitColor(def) }} onClick={onInspect}>
-      <span className="offer-art">
-        <Plate src={UNIT_ART[unitId]} priority={priority} fallback={<Sigil id={def.sigil} size={20} />} />
-      </span>
-      <span className="tier-pip">T{def.tier}</span>
-      <span className="row-glyph" aria-hidden="true">
-        {rowGlyph(def.row)}
-      </span>
-      <span className="stack-name">{def.name}</span>
-      <span className="chips">
-        <span className="chip-atk">{def.atk}</span>
-        <span className="dim">/</span>
-        <span className="chip-hp">{def.hp}</span>
-      </span>
-      <span className={`tiny ${affordable ? 'gold' : 'dim'}`}>
+    <div className="offer-card" style={{ ['--sc' as string]: unitColor(def) }} data-blocked={!block.ok || undefined}>
+      <button className="offer-body" onClick={onInspect} aria-label={`Inspect ${def.name}`}>
+        <span className="offer-art">
+          <Plate src={UNIT_ART[unitId]} priority={priority} fallback={<Sigil id={def.sigil} size={20} />} />
+        </span>
+        <span className="tier-pip">T{def.tier}</span>
+        <span className="row-glyph" aria-hidden="true">
+          {rowGlyph(def.row)}
+        </span>
+        <span className="stack-name">{def.name}</span>
+        <span className="chips">
+          <span className="chip-atk">{def.atk}</span>
+          <span className="dim">/</span>
+          <span className="chip-hp">{def.hp}</span>
+        </span>
+      </button>
+      <button
+        className="offer-buy"
+        disabled={!block.ok}
+        onClick={onRecruit}
+        title={block.reason}
+        aria-label={`Recruit ${def.name} for ${RECRUIT_COST} gold`}
+      >
         +{bonusCount} · {RECRUIT_COST}g
-      </span>
-    </button>
+      </button>
+    </div>
   )
 }
 

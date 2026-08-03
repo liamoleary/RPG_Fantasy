@@ -49,6 +49,8 @@ interface Props {
   state?: 'hit' | 'act' | 'dead' | null
   onClick?: () => void
   float?: { text: string; kind: 'dmg' | 'heal' | 'buff' | 'soak' } | null
+  /** Muster: 'ready' = affordable promotion waiting, 'soon' = needs more gold */
+  promote?: 'ready' | 'soon' | null
   /** on screen this frame (board, battle) — load the plate immediately */
   eager?: boolean
   /** jump the fetch queue (the visible camp offers) */
@@ -69,6 +71,7 @@ export function StackCard({
   state,
   onClick,
   float,
+  promote,
   eager,
   priority,
 }: Props) {
@@ -82,12 +85,13 @@ export function StackCard({
       data-tier={def.tier}
       data-sel={selected ? 'true' : 'false'}
       data-illegal={illegal ? 'true' : undefined}
+      data-promote={promote ?? undefined}
       data-hit={state === 'hit' ? 'true' : undefined}
       data-act={state === 'act' ? 'true' : undefined}
       data-dead={state === 'dead' ? 'true' : undefined}
       onClick={onClick}
       type={onClick ? 'button' : undefined}
-      aria-label={`${def.name}, ${count} units, ${atk} attack, ${hp} health, ${rowWord(def.row)} row${rank > 0 ? `, ${rankWord(rank)}` : ''}`}
+      aria-label={`${def.name}, ${count} units, ${atk} attack, ${hp} health, ${rowWord(def.row)} row${rank > 0 ? `, ${rankWord(rank)}` : ''}${promote === 'ready' ? ', promotion available' : ''}`}
     >
       <span className="card-art">
         <Plate src={UNIT_ART[unitId]} eager={eager} priority={priority} fallback={<Sigil id={def.sigil} size={26} />} />
@@ -97,6 +101,11 @@ export function StackCard({
       {/* Hit flash is an overlay, never a filter on the image — a filter
           forces a re-decode mid-battle on Safari. */}
       {state === 'hit' && <span className="card-flash" aria-hidden="true" />}
+      {promote && (
+        <span className="promote-flag" data-state={promote} aria-hidden="true">
+          ▲
+        </span>
+      )}
       {float && <span className={`float float-${float.kind}`}>{float.text}</span>}
       <span className="row-glyph" aria-hidden="true">
         {rowGlyph(def.row)}

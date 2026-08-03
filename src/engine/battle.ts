@@ -18,6 +18,15 @@ export const TOTAL_SLOTS = FRONT_SLOTS + BACK_SLOTS
 
 export type Side = 'a' | 'b'
 
+/**
+ * Hero passives that are in force from the first exchange, so the battle screen
+ * can pulse them off the caster's plaque before a blow lands (§1.4).
+ */
+const BATTLE_START_PASSIVES = new Set(['frontBulwark3', 'lastStand', 'extraCast'])
+
+/** How to read a spellCast's `amount` (Design Notes 03 §1.2 / §2.6). */
+export type SpellOutcome = 'heal' | 'damage' | 'shield' | 'atk' | 'root' | 'strikes'
+
 /** A stack as it lives in run state between battles. */
 export interface BoardStack {
   uid: string
@@ -69,7 +78,8 @@ export interface StackSnap {
 
 export type BattleEvent =
   | { t: 'battleStart'; a: StackSnap[]; b: StackSnap[] }
-  | { t: 'passive'; side: Side; text: string }
+  /** a battle-scoped hero passive announcing itself at battle start (§1.4) */
+  | { t: 'passive'; side: Side; name: string; text: string }
   | { t: 'attack'; src: string; dst: string; side: Side; dmg: number; absorbed: number; killed: number; retaliation: boolean; snap: StackSnap[] }
   | { t: 'cleave'; src: string; dst: string; dmg: number; killed: number; snap: StackSnap[] }
   | { t: 'venom'; uid: string; units: number; snap: StackSnap[] }
@@ -78,7 +88,17 @@ export type BattleEvent =
   | { t: 'heal'; uid: string; amount: number; revived: number; snap: StackSnap[] }
   | { t: 'frenzy'; uid: string; atk: number; snap: StackSnap[] }
   | { t: 'lastStand'; uid: string; snap: StackSnap[] }
-  | { t: 'spellCast'; side: Side; name: string; text: string; targets: string[]; snap: StackSnap[] }
+  | {
+      t: 'spellCast'
+      side: Side
+      name: string
+      text: string
+      targets: string[]
+      /** what the cast actually did, for the banner and the run receipt */
+      amount: number
+      kind: SpellOutcome
+      snap: StackSnap[]
+    }
   | { t: 'root'; uid: string; exchanges: number; snap: StackSnap[] }
   | { t: 'summon'; snap: StackSnap[]; uid: string }
   | { t: 'death'; uid: string; snap: StackSnap[] }
@@ -671,18 +691,24 @@ function castSpell(ctx: Ctx, side: Side) {
   if (allies.length === 0) return
   const touched: RStack[] = []
   const targets: string[] = []
+  let amount = 0
+  let kind: SpellOutcome = 'atk'
 
   switch (sp.id) {
     case 'shieldLowest': {
       const sorted = allies.slice().sort((p, q) => pool(p) / maxPool(p) - pool(q) / maxPool(q))
+      kind = 'shield'
       for (const t of sorted.slice(0, 1 + extraTargets)) {
         t.bulwark += x
+        amount += x
         touched.push(t)
         targets.push(t.uid)
       }
       break
     }
     case 'rallyAtk': {
+      kind = 'atk'
+      amount = x
       for (const t of allies) {
         t.atk += x
         touched.push(t)
@@ -693,8 +719,9 @@ function castSpell(ctx: Ctx, side: Side) {
     case 'healMostWounded': {
       const wounded = allies.filter((a) => pool(a) < maxPool(a))
       const sorted = wounded.sort((p, q) => pool(p) / maxPool(p) - pool(q) / maxPool(q))
+      kind = 'heal'
       for (const t of sorted.slice(0, 1 + extraTargets)) {
-        healStack(ctx, t, x)
+        amount += healStack(ctx, t, x).healed
         touched.push(t)
         targets.push(t.uid)
       }
@@ -703,6 +730,8 @@ function castSpell(ctx: Ctx, side: Side) {
     case 'root': {
       if (foes.length === 0) break
       const sorted = foes.slice().sort((p, q) => q.atk * q.count - p.atk * p.count)
+      kind = 'root'
+      amount = x
       for (const t of sorted.slice(0, 1 + extraTargets)) {
         t.rootedUntil = ctx.exchange + x
         touched.push(t)
@@ -716,8 +745,10 @@ function castSpell(ctx: Ctx, side: Side) {
       const sorted = foes.slice().sort((p, q) => q.count * q.maxHp - p.count * p.maxHp)
       const hit = sorted.slice(0, 3 + extraTargets)
       const each = Math.max(1, Math.floor(x / hit.length))
+      kind = 'damage'
       for (const t of hit) {
         const res = applyDamage(ctx, t, each, { siege: true })
+        amount += res.dealt
         touched.push(t)
         targets.push(t.uid)
         if (res.died) onDeath(ctx, t)
@@ -728,10 +759,14 @@ function castSpell(ctx: Ctx, side: Side) {
     case 'extraAttack': {
       const pickable = allies.filter((a) => a.atk > 0)
       if (pickable.length === 0) break
+      kind = 'strikes'
       for (let i = 0; i < 1 + extraTargets; i++) {
         const t = ctx.rng.pick(pickable)
         targets.push(t.uid)
-        for (let k = 0; k < x; k++) performAttack(ctx, t, true)
+        for (let k = 0; k < x; k++) {
+          performAttack(ctx, t, true)
+          amount += 1
+        }
         touched.push(t)
       }
       break
@@ -744,6 +779,8 @@ function castSpell(ctx: Ctx, side: Side) {
     name: sp.name,
     text: sp.text.replace('X', String(x)),
     targets,
+    amount,
+    kind,
     snap: snaps(...touched),
   })
 }
@@ -792,9 +829,12 @@ export function simulateBattle(a: BattleSide, b: BattleSide, heroA: HeroDef, her
         first.bulwark += bonus
       }
     }
+    // Only the passives that are already true when the horns sound get a pulse
+    // (§1.4). The conditional ones — Growth bonuses, first-Frenzy ATK — announce
+    // themselves later, on the event that actually triggers them.
     const heroDef = ctx.heroDefs[side]
-    if (heroDef.passive.id === 'frontBulwark3' || heroDef.passive.id === 'lastStand') {
-      ctx.events.push({ t: 'passive', side, text: heroDef.passive.text })
+    if (BATTLE_START_PASSIVES.has(heroDef.passive.id)) {
+      ctx.events.push({ t: 'passive', side, name: heroDef.name, text: heroDef.passive.text })
     }
   }
   for (const s of ctx.stacks.slice()) fireAbility(ctx, s, 'battleStart')

@@ -1,10 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { FACTION_BY_ID, unit } from '../data/index'
-import type { BattleEvent, BattleResult, StackSnap } from '../engine/battle'
-import { player, type RunState } from '../engine/run'
+import { HERO_ART } from '../data/art'
+import { FACTION_BY_ID, HERO_BY_ID, unit } from '../data/index'
+import type { BattleEvent, BattleResult, Side, SpellOutcome, StackSnap } from '../engine/battle'
+import { player, type RunState, type Warlord } from '../engine/run'
 import { useGame } from '../state/store'
+import { HeroSheet } from './HeroSheet'
 import { InspectSheet, RankProgress } from './InspectSheet'
 import { Ladder } from './Ladder'
+import { Plate } from './Plate'
+import { Sigil } from './Sigil'
 import { SnapCard } from './StackCard'
 
 /**
@@ -23,6 +27,36 @@ interface Frame {
   arc: { from: string; to: string; covered: boolean } | null
   /** the back-row stack a coverer just saved — it glows rather than dies */
   saved: string | null
+  /** a hero spell resolving this frame: flares the plaque and beams the targets */
+  cast: { side: Side; targets: string[] } | null
+  /** a battle-start passive announcing itself off its hero's plaque */
+  pulse: { side: Side; text: string } | null
+  /** casts each hero has spent by this frame, for the plaque pips */
+  spent: Record<Side, number>
+}
+
+/**
+ * The banner has to say what the spell *did*, not what it says on the tin
+ * (§1.2) — the numbers are rolled in the engine and ride on the event.
+ */
+function spellSummary(name: string, amount: number, kind: SpellOutcome, targets: number): string {
+  if (targets === 0) return `${name} — no target`
+  const across = targets > 1 ? ` across ${targets} stacks` : ''
+  const stacks = `${targets} stack${targets === 1 ? '' : 's'}`
+  switch (kind) {
+    case 'heal':
+      return `${name} — ${amount} healed${across}`
+    case 'damage':
+      return `${name} — ${amount} damage${across}`
+    case 'shield':
+      return `${name} — +${amount} Bulwark${across}`
+    case 'atk':
+      return `${name} — +${amount} ATK to ${stacks}`
+    case 'root':
+      return `${name} — ${stacks} rooted for ${amount} exchanges`
+    case 'strikes':
+      return `${name} — ${amount} extra strike${amount === 1 ? '' : 's'}`
+  }
 }
 
 /** Volley is a unit property, so the log does not need to repeat it. */
@@ -32,6 +66,8 @@ function isVolley(unitId: string | undefined): boolean {
 }
 
 const BASE_MS = 620
+/** A spell banner must be readable even at 2× (§1.2). */
+const SPELL_MIN_MS = 600
 
 function describe(e: BattleEvent, playerIsA: boolean): string {
   const side = (s: 'a' | 'b') => (s === 'a') === playerIsA
@@ -52,7 +88,7 @@ function describe(e: BattleEvent, playerIsA: boolean): string {
       return `${src} ${verb} ${dst} for ${e.dmg}${e.killed > 0 ? `, ${e.killed} slain` : ''}.`
     }
     case 'spellCast':
-      return `${side(e.side) ? 'Your' : 'Enemy'} hero casts ${e.name}`
+      return `${side(e.side) ? 'Your' : 'Enemy'} hero casts ${spellSummary(e.name, e.amount, e.kind, e.targets.length)}`
     case 'frenzy':
       return 'Frenzy! +ATK'
     case 'lastStand':
@@ -86,12 +122,15 @@ function describe(e: BattleEvent, playerIsA: boolean): string {
 function buildFrames(result: BattleResult, playerIsA: boolean): Frame[] {
   const boards: Record<string, StackSnap> = {}
   const frames: Frame[] = []
+  const spent: Record<Side, number> = { a: 0, b: 0 }
 
   for (const e of result.events) {
     const fx: Frame['fx'] = {}
     let banner: string | null = null
     let arc: Frame['arc'] = null
     let saved: string | null = null
+    let cast: Frame['cast'] = null
+    let pulse: Frame['pulse'] = null
 
     if (e.t === 'battleStart') {
       for (const s of [...e.a, ...e.b]) boards[s.uid] = s
@@ -147,13 +186,28 @@ function buildFrames(result: BattleResult, playerIsA: boolean): Frame[] {
         fx[e.uid] = { state: 'dead' }
         break
       case 'spellCast':
-        banner = `${(e.side === 'a') === playerIsA ? '✦' : '✧'} ${e.name}\n${e.text}`
+        spent[e.side] += 1
+        cast = { side: e.side, targets: e.targets }
+        banner = `${(e.side === 'a') === playerIsA ? '✦' : '✧'} ${spellSummary(e.name, e.amount, e.kind, e.targets.length)}`
+        break
+      case 'passive':
+        pulse = { side: e.side, text: e.text }
         break
       default:
         break
     }
 
-    frames.push({ boards: { ...boards }, fx, banner, line: describe(e, playerIsA), arc, saved })
+    frames.push({
+      boards: { ...boards },
+      fx,
+      banner,
+      line: describe(e, playerIsA),
+      arc,
+      saved,
+      cast,
+      pulse,
+      spent: { ...spent },
+    })
   }
   return frames
 }
@@ -168,14 +222,20 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
   const [done, setDone] = useState(false)
   /** the snapshot the player tapped; inspecting holds the replay (§2.1) */
   const [peek, setPeek] = useState<StackSnap | null>(null)
+  /** the hero whose plaque was tapped — pauses the replay and shows their kit */
+  const [heroPeek, setHeroPeek] = useState<Warlord | null>(null)
+  const [paused, setPaused] = useState(false)
   const timer = useRef<number | null>(null)
   const fieldRef = useRef<HTMLDivElement | null>(null)
   const [shot, setShot] = useState<{ x1: number; y1: number; x2: number; y2: number; covered: boolean; key: number } | null>(null)
+  const [beams, setBeams] = useState<{ x1: number; y1: number; len: number; rot: number; key: number }[]>([])
 
   useEffect(() => {
     setI(0)
     setDone(false)
     setPeek(null)
+    setHeroPeek(null)
+    setPaused(false)
   }, [result])
 
   /**
@@ -184,16 +244,11 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
    * positioned in the same paint as the frame it belongs to.
    */
   useLayoutEffect(() => {
-    const arc = frames[i]?.arc
+    const frame = frames[i]
     const field = fieldRef.current
-    if (!arc || !field) {
+    if (!frame || !field) {
       setShot(null)
-      return
-    }
-    const from = field.querySelector(`[data-uid="${CSS.escape(arc.from)}"]`)
-    const to = field.querySelector(`[data-uid="${CSS.escape(arc.to)}"]`)
-    if (!from || !to) {
-      setShot(null)
+      setBeams([])
       return
     }
     const box = field.getBoundingClientRect()
@@ -201,9 +256,38 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
       const r = el.getBoundingClientRect()
       return { x: r.left - box.left + r.width / 2, y: r.top - box.top + r.height / 2 }
     }
-    const a = centre(from)
-    const b = centre(to)
-    setShot({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, covered: arc.covered, key: i })
+    const card = (uid: string) => field.querySelector(`[data-uid="${CSS.escape(uid)}"]`)
+
+    const arc = frame.arc
+    const from = arc && card(arc.from)
+    const to = arc && card(arc.to)
+    if (arc && from && to) {
+      const a = centre(from)
+      const b = centre(to)
+      setShot({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, covered: arc.covered, key: i })
+    } else {
+      setShot(null)
+    }
+
+    // The beam is the attribution — it has to leave the plaque of the hero who
+    // paid for the cast, so measure the plaque rather than assuming a corner.
+    const plaque = frame.cast && field.querySelector(`[data-plaque="${frame.cast.side}"]`)
+    if (frame.cast && plaque) {
+      const o = centre(plaque)
+      setBeams(
+        frame.cast.targets
+          .map((uid) => card(uid))
+          .filter((el): el is Element => Boolean(el))
+          .map((el, n) => {
+            const t = centre(el)
+            const dx = t.x - o.x
+            const dy = t.y - o.y
+            return { x1: o.x, y1: o.y, len: Math.hypot(dx, dy), rot: (Math.atan2(dy, dx) * 180) / Math.PI, key: i * 100 + n }
+          }),
+      )
+    } else {
+      setBeams([])
+    }
   }, [i, frames])
 
   useEffect(() => {
@@ -212,14 +296,16 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
       setDone(true)
       return
     }
-    // An open Inspect sheet pauses playback rather than racing it.
-    if (peek) return
-    const ms = BASE_MS / store.speed
+    // An open sheet — stack or hero — pauses playback rather than racing it.
+    if (peek || heroPeek || paused) return
+    // A spell banner has to survive 2× speed, so it holds the frame for at
+    // least ~600ms of real time (§1.2). Everything else follows the speed knob.
+    const ms = frames[i]?.cast ? Math.max(SPELL_MIN_MS, BASE_MS / store.speed) : BASE_MS / store.speed
     timer.current = window.setTimeout(() => setI((n) => n + 1), ms)
     return () => {
       if (timer.current) window.clearTimeout(timer.current)
     }
-  }, [i, frames.length, done, store.speed, peek])
+  }, [i, frames, done, store.speed, peek, heroPeek, paused])
 
   if (!result || frames.length === 0) {
     return (
@@ -237,6 +323,11 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
   const theirs = Object.values(frame.boards).filter((s) => (s.side === 'a') !== playerIsA)
   const foe = report ? run.warlords.find((w) => w.id === (playerIsA ? report.bId : report.aId)) : null
   const foeFaction = foe ? FACTION_BY_ID.get(foe.factionId) : null
+  const mySide: Side = playerIsA ? 'a' : 'b'
+  const foeSide: Side = playerIsA ? 'b' : 'a'
+  // Pips count the casts this battle actually contains — the replay can only
+  // promise what the log proves, and a wiped side never gets its last cast.
+  const totals = frames[frames.length - 1].spent
 
   return (
     <div className="screen">
@@ -282,24 +373,65 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
             <i />
           </span>
         )}
+        {beams.map((b) => (
+          <span
+            key={b.key}
+            className="cast-beam"
+            style={
+              {
+                '--x1': `${b.x1}px`,
+                '--y1': `${b.y1}px`,
+                '--len': `${b.len}px`,
+                '--rot': `${b.rot}deg`,
+                '--fc': (frame.cast?.side === mySide ? FACTION_BY_ID.get(p.factionId) : foeFaction)?.colors.accent,
+                '--ms': `${Math.round(420 / store.speed)}ms`,
+              } as React.CSSProperties
+            }
+            aria-hidden="true"
+          />
+        ))}
         {frame.banner && (
           <div className="spell-banner" style={{ whiteSpace: 'pre-line' }} key={`${i}-banner`}>
             {frame.banner}
           </div>
         )}
+        {foe && (
+          <HeroPlaque
+            warlord={foe}
+            side={foeSide}
+            casts={totals[foeSide]}
+            spent={frame.spent[foeSide]}
+            flare={frame.cast?.side === foeSide}
+            pulse={frame.pulse?.side === foeSide ? frame.pulse.text : null}
+            onTap={() => setHeroPeek(foe)}
+          />
+        )}
         <SnapBoard snaps={theirs} fx={frame.fx} saved={frame.saved} onPeek={setPeek} />
         <div className="center dim tiny">— — —</div>
         <SnapBoard snaps={mine} fx={frame.fx} saved={frame.saved} mine onPeek={setPeek} />
+        <HeroPlaque
+          warlord={p}
+          side={mySide}
+          mine
+          casts={totals[mySide]}
+          spent={frame.spent[mySide]}
+          flare={frame.cast?.side === mySide}
+          pulse={frame.pulse?.side === mySide ? frame.pulse.text : null}
+          onTap={() => setHeroPeek(p)}
+        />
       </div>
 
-      <div className="log center small">{peek ? 'Paused — close to resume.' : frame.line}</div>
+      <div className="log center small">{peek || heroPeek ? 'Paused — close to resume.' : frame.line}</div>
 
       <div className="row" style={{ gap: 8 }}>
+        <button className="btn btn-sm grow" onClick={() => setPaused((v) => !v)} disabled={done}>
+          {paused ? '▶ Resume' : '❚❚ Pause'}
+        </button>
         <button className="btn btn-sm grow" onClick={() => store.setSpeed(store.speed === 1 ? 2 : 1)}>
           {store.speed}× speed
         </button>
         <button className="btn btn-sm grow" onClick={() => setI(frames.length - 1)} disabled={done}>
-          Skip to result
+          Skip
         </button>
       </div>
 
@@ -315,6 +447,55 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
           onClose={() => setPeek(null)}
         />
       )}
+
+      {heroPeek && <HeroSheet warlord={heroPeek} round={run.round} onClose={() => setHeroPeek(null)} />}
+    </div>
+  )
+}
+
+/**
+ * A hero on the battlefield: portrait, name, and one pip per cast this battle
+ * holds — spent pips hollow out as the fight runs (§1.1). Tapping it pauses the
+ * replay and opens their sheet (§1.3), which is also the screen's pause button.
+ */
+function HeroPlaque({
+  warlord,
+  side,
+  mine,
+  casts,
+  spent,
+  flare,
+  pulse,
+  onTap,
+}: {
+  warlord: Warlord
+  side: Side
+  /** yours sits bottom-left under your board; the enemy's top-right over theirs */
+  mine?: boolean
+  casts: number
+  spent: number
+  flare?: boolean
+  pulse?: string | null
+  onTap: () => void
+}) {
+  const hero = HERO_BY_ID.get(warlord.heroId)
+  const faction = FACTION_BY_ID.get(warlord.factionId)
+  return (
+    <div className="plaque-row" data-mine={mine ? 'true' : undefined} style={{ ['--fc' as string]: faction?.colors.accent }}>
+      <button className="hero-plaque" data-plaque={side} data-flare={flare ? 'true' : undefined} onClick={onTap}>
+        <span className="plaque-art">
+          <Plate src={HERO_ART[warlord.heroId]} eager fallback={<Sigil id={hero?.sigil ?? 'shield'} size={16} />} />
+        </span>
+        <span className="plaque-body">
+          <span className="plaque-name">{hero?.name ?? warlord.name}</span>
+          <span className="plaque-pips" aria-label={`${Math.max(0, casts - spent)} of ${casts} casts left`}>
+            {Array.from({ length: casts }, (_, k) => (
+              <i key={k} data-spent={k < spent ? 'true' : undefined} />
+            ))}
+          </span>
+        </span>
+      </button>
+      {pulse && <span className="plaque-pulse">{pulse}</span>}
     </div>
   )
 }

@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { UNIT_ART } from '../data/art'
-import { BOON_BY_ID, FACTION_BY_ID, HERO_BY_ID, unit } from '../data/index'
+import { FACTION_BY_ID, HERO_BY_ID, unit } from '../data/index'
 import type { BoonDef, Row } from '../data/types'
-import { FRONT_SLOTS, spellPower, type BoardStack } from '../engine/battle'
+import { FRONT_SLOTS, type BoardStack } from '../engine/battle'
 import {
   canPromote,
   firstOpenSlot,
@@ -15,10 +15,11 @@ import {
   tierUpCost,
 } from '../engine/camp'
 import { heroLevel } from '../engine/boons'
-import { heroState, opponentOf, player, type RunState } from '../engine/run'
+import { opponentOf, player, type RunState } from '../engine/run'
 import { useGame } from '../state/store'
 import { InspectSheet, RankProgress, promoteBlock } from './InspectSheet'
 import { GlossarySheet } from './Glossary'
+import { HeroSheet, branchColor } from './HeroSheet'
 import { Plate } from './Plate'
 import { unitArtFor, usePreloadArt } from './preload'
 import { Ladder, WarlordSheet } from './Ladder'
@@ -290,7 +291,7 @@ export function MusterScreen({ run }: { run: RunState }) {
       {rowInfo && <RowInfoSheet row={rowInfo} onClose={() => setRowInfo(null)} />}
       {store.scouting && foe && <ScoutSheet run={run} foeId={foe.id} onClose={() => store.setScouting(false)} />}
       {store.inspecting && <WarlordSheet run={run} id={store.inspecting} onClose={() => store.inspect(null)} />}
-      {heroOpen && <HeroSheet run={run} onClose={() => setHeroOpen(false)} />}
+      {heroOpen && <HeroSheet warlord={p} round={run.round} onClose={() => setHeroOpen(false)} />}
       {glossary && <GlossarySheet onClose={() => setGlossary(false)} />}
       {run.phase === 'levelup' && run.boonOffer.length > 0 && (
         <BoonModal offers={run.boonOffer} level={level} onPick={store.chooseBoon} />
@@ -489,58 +490,6 @@ function RowInfoSheet({ row, onClose }: { row: Row; onClose: () => void }) {
   )
 }
 
-function HeroSheet({ run, onClose }: { run: RunState; onClose: () => void }) {
-  const p = player(run)
-  const hero = HERO_BY_ID.get(p.heroId)!
-  const f = FACTION_BY_ID.get(p.factionId)!
-  const x = spellPower(hero, heroState(p, run.round))
-  return (
-    <div className="scrim" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="row">
-          <span className="faction-icon" style={{ ['--fc' as string]: f.colors.primary }}>
-            <Sigil id={hero.sigil} size={22} />
-          </span>
-          <div className="grow">
-            <h2>
-              {hero.name} {hero.title}
-            </h2>
-            <div className="small dim">
-              {f.name} · Level {heroLevel(run.round)}
-            </div>
-          </div>
-        </div>
-        <div className="panel small">
-          <div className="eyebrow">Passive</div>
-          <div>{hero.passive.text}</div>
-          <div className="eyebrow" style={{ marginTop: 8 }}>
-            {hero.spell.name}
-          </div>
-          <div>{hero.spell.text.replace(/\bX\b/g, String(x))}</div>
-          <div className="tiny dim">Currently X = {x}.</div>
-        </div>
-        <div className="eyebrow">Boons taken ({p.boonsTaken.length})</div>
-        {p.boonsTaken.length === 0 && <div className="small dim">None yet — your first choice comes on round 2.</div>}
-        {p.boonsTaken.map((id) => {
-          const b = BOON_BY_ID.get(id)
-          return b ? (
-            <div key={id} className="panel small">
-              <span className="boon-branch" style={{ ['--bc' as string]: branchColor(b.branch) }}>
-                {b.branch}
-              </span>
-              <strong style={{ display: 'block' }}>{b.name}</strong>
-              <span className="dim">{b.text}</span>
-            </div>
-          ) : null
-        })}
-        <button className="btn btn-primary" onClick={onClose}>
-          Close
-        </button>
-      </div>
-    </div>
-  )
-}
-
 function ScoutSheet({ run, foeId, onClose }: { run: RunState; foeId: string; onClose: () => void }) {
   const foe = run.warlords.find((w) => w.id === foeId)!
   const hero = HERO_BY_ID.get(foe.heroId)!
@@ -626,10 +575,6 @@ function RangedThreat({ board }: { board: BoardStack[] }) {
       )}
     </div>
   )
-}
-
-function branchColor(b: string): string {
-  return b === 'might' ? '#e08a5a' : b === 'magic' ? '#9a7ae0' : '#5ab0a0'
 }
 
 function BoonModal({ offers, level, onPick }: { offers: BoonDef[]; level: number; onPick: (id: string) => void }) {

@@ -881,6 +881,39 @@ h3 {
   box-shadow: 0 0 6px 1px #ffcf7a99;
   animation: volleyY var(--ms) ease-in forwards;
 }
+/* One class per flavour (DN03 §4) — shape and tint only, no particles. The
+   melee lunge stays untouched, so the two never read as the same thing. */
+.volley-arc[data-shot='bolt'] > i {
+  width: 8px;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #ffe6b0);
+  box-shadow: 0 0 6px 1px #ffcf7a99;
+}
+.volley-arc[data-shot='arrow'] > i {
+  width: 13px;
+  height: 2px;
+  margin-top: -1px;
+  background: linear-gradient(90deg, transparent, #cdeaa6);
+  box-shadow: 0 0 6px 1px #a9d98899;
+}
+.volley-arc[data-shot='spark'] > i {
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffffff 0%, #8fd9ff 55%, transparent 70%);
+  box-shadow: 0 0 10px 3px #6cc9ffaa;
+}
+.volley-arc[data-shot='harpoon'] > i {
+  width: 16px;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 1px 3px 3px 1px;
+  background: linear-gradient(90deg, transparent 10%, #6fd7c8 55%, #eafcff);
+  box-shadow: 0 0 8px 2px #57c9bd99;
+}
+
+/* Interception outranks flavour: a saved shot must read as saved. */
 .volley-arc[data-covered='true'] > i {
   background: linear-gradient(90deg, transparent, #9ecbff);
   box-shadow: 0 0 7px 2px #9ecbffaa;

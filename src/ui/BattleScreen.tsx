@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { HERO_ART } from '../data/art'
 import { FACTION_BY_ID, HERO_BY_ID, unit } from '../data/index'
+import type { Projectile } from '../data/types'
 import type { BattleEvent, BattleResult, Side, SpellOutcome, StackSnap } from '../engine/battle'
 import { player, type RunState, type Warlord } from '../engine/run'
 import { useGame } from '../state/store'
@@ -9,7 +10,7 @@ import { InspectSheet, RankProgress } from './InspectSheet'
 import { Ladder } from './Ladder'
 import { Plate } from './Plate'
 import { Sigil } from './Sigil'
-import { SnapCard } from './StackCard'
+import { projectileOf, SnapCard } from './StackCard'
 
 /**
  * The renderer is a projector over `result.events` — it never computes an
@@ -24,7 +25,7 @@ interface Frame {
   banner: string | null
   line: string
   /** a shot to draw arcing over the front line, from one card to another */
-  arc: { from: string; to: string; covered: boolean } | null
+  arc: { from: string; to: string; covered: boolean; shot: Projectile } | null
   /** the back-row stack a coverer just saved — it glows rather than dies */
   saved: string | null
   /** a hero spell resolving this frame: flares the plaque and beams the targets */
@@ -142,7 +143,9 @@ function buildFrames(result: BattleResult, playerIsA: boolean): Frame[] {
       case 'attack': {
         fx[e.src] = { state: 'act' }
         // A volley must read as a shot, not a shove (§3.1).
-        if (!e.retaliation && isVolley(boards[e.src]?.unitId)) arc = { from: e.src, to: e.dst, covered: false }
+        if (!e.retaliation && isVolley(boards[e.src]?.unitId)) {
+          arc = { from: e.src, to: e.dst, covered: false, shot: projectileOf(unit(boards[e.src].unitId)) }
+        }
         fx[e.dst] = {
           state: 'hit',
           float:
@@ -169,7 +172,7 @@ function buildFrames(result: BattleResult, playerIsA: boolean): Frame[] {
       case 'cover':
         // The save is the whole point of the feature — make it unmissable.
         fx[e.by] = { float: { text: 'Covered!', kind: 'soak' } }
-        arc = { from: e.src, to: e.by, covered: true }
+        arc = { from: e.src, to: e.by, covered: true, shot: projectileOf(unit(boards[e.src].unitId)) }
         saved = e.saved
         break
       case 'buff':
@@ -227,7 +230,15 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
   const [paused, setPaused] = useState(false)
   const timer = useRef<number | null>(null)
   const fieldRef = useRef<HTMLDivElement | null>(null)
-  const [shot, setShot] = useState<{ x1: number; y1: number; x2: number; y2: number; covered: boolean; key: number } | null>(null)
+  const [shot, setShot] = useState<{
+    x1: number
+    y1: number
+    x2: number
+    y2: number
+    covered: boolean
+    kind: Projectile
+    key: number
+  } | null>(null)
   const [beams, setBeams] = useState<{ x1: number; y1: number; len: number; rot: number; key: number }[]>([])
 
   useEffect(() => {
@@ -264,7 +275,7 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
     if (arc && from && to) {
       const a = centre(from)
       const b = centre(to)
-      setShot({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, covered: arc.covered, key: i })
+      setShot({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, covered: arc.covered, kind: arc.shot, key: i })
     } else {
       setShot(null)
     }
@@ -356,6 +367,7 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
           <span
             key={shot.key}
             className="volley-arc"
+            data-shot={shot.kind}
             data-covered={shot.covered ? 'true' : undefined}
             style={
               {

@@ -2,7 +2,8 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { HERO_ART, HERO_ART_2X, UNIT_ART } from '../src/data/art'
-import { ALL_UNITS, HEROES } from '../src/data/index'
+import { ALL_UNITS, HEROES, unit } from '../src/data/index'
+import { projectileOf } from '../src/ui/StackCard'
 
 /**
  * Art and data must never drift. A unit added later without a plate should
@@ -34,5 +35,31 @@ describe('card art manifest', () => {
     const all = [...Object.values(UNIT_ART), ...Object.values(HERO_ART), ...Object.values(HERO_ART_2X)]
     const absent = all.filter((url) => !existsSync(join(PUBLIC, url)))
     expect(absent, `manifest paths with no file: ${absent.join(', ')}`).toEqual([])
+  })
+})
+
+/**
+ * Volley flavour (Design Notes 03 §4): every Volley unit resolves a projectile,
+ * and the faction defaults are the ones the brief names.
+ */
+describe('projectile flavour', () => {
+  const volley = ALL_UNITS.filter((u) => u.keywords.some((k) => k.k === 'volley'))
+
+  it('every Volley unit gets a flavour, and only Volley units declare one', () => {
+    expect(volley.length).toBeGreaterThan(0)
+    for (const u of volley) expect(['bolt', 'arrow', 'spark', 'harpoon']).toContain(projectileOf(u))
+    for (const u of ALL_UNITS) {
+      if (!u.projectile) continue
+      expect(u.keywords.some((k) => k.k === 'volley'), `${u.id} declares a projectile but has no Volley`).toBe(true)
+    }
+  })
+
+  it('falls back to the faction default, and data overrides it', () => {
+    expect(projectileOf(unit('vg_crossbow'))).toBe('bolt')
+    expect(projectileOf(unit('vd_dryad'))).toBe('arrow')
+    expect(projectileOf(unit('st_slinger'))).toBe('spark')
+    expect(projectileOf(unit('mc_bowman'))).toBe('arrow')
+    expect(projectileOf(unit('st_harpooner'))).toBe('harpoon')
+    expect(projectileOf(unit('st_stormspear'))).toBe('harpoon')
   })
 })

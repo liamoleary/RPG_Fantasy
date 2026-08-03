@@ -1,6 +1,6 @@
 import { UNIT_ART } from '../data/art'
 import { FACTION_BY_ID, unit } from '../data/index'
-import type { RowPref, UnitDef } from '../data/types'
+import type { Projectile, RowPref, UnitDef } from '../data/types'
 import type { StackSnap } from '../engine/battle'
 import { Plate } from './Plate'
 import { Sigil } from './Sigil'
@@ -8,6 +8,16 @@ import { Sigil } from './Sigil'
 export function unitColor(def: UnitDef): string {
   if (def.pool === 'merc') return '#8a8fa6'
   return FACTION_BY_ID.get(def.pool)?.colors.primary ?? '#8a8fa6'
+}
+
+/**
+ * What this unit's volley looks like in flight (Design Notes 03 §4). Data wins;
+ * otherwise the faction decides — Vanguard bolts, Verdant arrows, Stormtide
+ * sparks, mercenaries plain arrows.
+ */
+export function projectileOf(def: UnitDef): Projectile {
+  if (def.projectile) return def.projectile
+  return def.pool === 'vanguard' ? 'bolt' : def.pool === 'verdant' ? 'arrow' : def.pool === 'stormtide' ? 'spark' : 'arrow'
 }
 
 /** Row eligibility, in one character. Shared by every card and sheet (§1.4). */

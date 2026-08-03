@@ -105,6 +105,13 @@ export type SigilId =
   | 'dragon'
   | 'skull'
 
+/**
+ * What a Volley stack throws (Design Notes 03 §4). Purely cosmetic — one CSS
+ * class on the arc — but it is what makes a barrage read as *whose* barrage.
+ * Left unset, a unit takes its faction's default.
+ */
+export type Projectile = 'bolt' | 'arrow' | 'spark' | 'harpoon'
+
 export interface UnitDef {
   id: string
   name: string
@@ -122,6 +129,8 @@ export interface UnitDef {
    *  inherits them, so a promoted Footman still fights as Militia veterans. */
   rank?: RankDef
   sigil: SigilId
+  /** overrides the faction's default volley flavour (§4) */
+  projectile?: Projectile
   /** synergy tags used by rival scoring and by the player's own sorting */
   tags?: string[]
 }

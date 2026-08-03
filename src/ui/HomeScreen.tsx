@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { HERO_ART, HERO_ART_2X } from '../data/art'
+import { InstallCard } from './InstallCard'
 import { FACTIONS, HEROES } from '../data/index'
 import type { FactionId } from '../data/types'
 import type { Difficulty } from '../engine/rivals'
@@ -39,6 +40,8 @@ export function HomeScreen() {
       <div className="center small dim" style={{ marginTop: -8 }}>
         Draft a warband. Outlast seven rival warlords.
       </div>
+
+      <InstallCard runsFinished={save.stats.runs} />
 
       <div className="row spread panel" style={{ padding: '8px 12px' }}>
         <div>

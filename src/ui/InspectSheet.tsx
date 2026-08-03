@@ -14,7 +14,7 @@ import { RANK_NAMES, lineRootOf, rankDefOf, rankForCount, thresholdsOf, veteranT
 import { Plate } from './Plate'
 import { Sigil } from './Sigil'
 import { keywordName, keywordText } from './keywords'
-import { RankPips, rowGlyph, rowWord, unitColor } from './StackCard'
+import { ApexMeter, RankPips, rowGlyph, rowWord, unitColor } from './StackCard'
 
 export function lineFormsOf(unitId: string): UnitDef[] {
   return lineOf(lineRootOf(unitId)).map(unit)
@@ -51,6 +51,8 @@ export interface StackContext {
   bonusHp?: number
   /** itemised effective stats — renders the "why is this number big" line (§2.1) */
   stats?: StatBreakdown
+  /** mid-battle only: how full this stack's Apex meter is right now */
+  apexCharge?: number
 }
 
 /** `ATK 5 = 3 base + 1 Growth + 1 Overwatch` — one tap answers the whole Might branch. */
@@ -158,6 +160,19 @@ export function InspectSheet({
           <div className="panel small">
             <div className="eyebrow">Ability</div>
             {def.ability.text}
+          </div>
+        )}
+        {/* Buyers should see what finishing the line is building toward (DN04 §3). */}
+        {def.apex && (
+          <div className="panel small apex-panel" style={{ ['--sc' as string]: unitColor(def) }}>
+            <div className="row spread">
+              <span className="eyebrow">Apex — {def.apex.name}</span>
+              <ApexMeter charge={context?.apexCharge ?? 0} max={def.apex.charge} />
+            </div>
+            <div>{def.apex.text}</div>
+            <div className="tiny dim">
+              Charges once when this stack attacks and once when it survives casualties; fires at {def.apex.charge}.
+            </div>
           </div>
         )}
 

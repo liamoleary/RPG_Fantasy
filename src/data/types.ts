@@ -112,6 +112,23 @@ export type SigilId =
  */
 export type Projectile = 'bolt' | 'arrow' | 'spark' | 'harpoon'
 
+/**
+ * Apex abilities (Design Notes 04 §3) — the reward for finishing a promotion
+ * line, and only that: the six line-top forms, no T5s, no mercenaries. The
+ * meter charges in battle and the ultimate fires in place of an attack.
+ */
+export type ApexId = 'sunburstVerdict' | 'sunlance' | 'rootquake' | 'moonfall' | 'bloodcall' | 'ninthWave'
+
+export interface ApexDef {
+  id: ApexId
+  name: string
+  text: string
+  /** charges needed before it fires; the meter has this many segments */
+  charge: number
+  /** the ultimate's magnitude knob — what it means is per-ability */
+  x: number
+}
+
 export interface UnitDef {
   id: string
   name: string
@@ -129,8 +146,10 @@ export interface UnitDef {
    *  inherits them, so a promoted Footman still fights as Militia veterans. */
   rank?: RankDef
   sigil: SigilId
-  /** overrides the faction's default volley flavour (§4) */
+  /** overrides the faction's default volley flavour (DN03 §4) */
   projectile?: Projectile
+  /** line-top forms only: the ultimate this form charges toward (DN04 §3) */
+  apex?: ApexDef
   /** synergy tags used by rival scoring and by the player's own sorting */
   tags?: string[]
 }

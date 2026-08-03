@@ -57,6 +57,22 @@ export function CoverPips({ charges }: { charges: number }) {
   )
 }
 
+/**
+ * The Apex meter (Design Notes 04 §3): one segment per charge, filling as the
+ * stack fights. Deliberately a bar, not pips — rank chevrons and Cover dots
+ * already own that language, and a meter has to read as *progress*.
+ */
+export function ApexMeter({ charge, max, ready }: { charge: number; max: number; ready?: boolean }) {
+  if (max <= 0) return null
+  return (
+    <span className="apex-meter" data-ready={ready ? 'true' : undefined} aria-label={`Apex ${charge} of ${max}`}>
+      {Array.from({ length: max }, (_, i) => (
+        <i key={i} data-on={i < charge ? 'true' : undefined} />
+      ))}
+    </span>
+  )
+}
+
 interface Props {
   unitId: string
   count: number
@@ -82,6 +98,11 @@ interface Props {
   promote?: 'ready' | 'soon' | null
   /** Cover charges available — one shield dot each (Design Notes 02 §3.3) */
   cover?: number
+  /** Apex meter (DN04 §3) — omit for the forms that have no ultimate */
+  apexCharge?: number
+  apexMax?: number
+  /** this stack is unleashing its ultimate this frame */
+  apexFiring?: boolean
   /** this stack was just saved by a coverer — brief glow */
   savedByCover?: boolean
   /** measured by the battle screen to draw volley arcs */
@@ -110,6 +131,9 @@ export function StackCard({
   float,
   promote,
   cover = 0,
+  apexCharge = 0,
+  apexMax = 0,
+  apexFiring,
   savedByCover,
   domId,
   eager,
@@ -128,12 +152,14 @@ export function StackCard({
       data-promote={promote ?? undefined}
       data-uid={domId}
       data-saved={savedByCover ? 'true' : undefined}
+      data-apex={apexMax > 0 && apexCharge >= apexMax ? 'ready' : undefined}
+      data-apex-firing={apexFiring ? 'true' : undefined}
       data-hit={state === 'hit' ? 'true' : undefined}
       data-act={state === 'act' ? 'true' : undefined}
       data-dead={state === 'dead' ? 'true' : undefined}
       onClick={onClick}
       type={onClick ? 'button' : undefined}
-      aria-label={`${def.name}, ${count} units, ${atk} attack, ${hp} health, ${rowWord(def.row)} row${rank > 0 ? `, ${rankWord(rank)}` : ''}${promote === 'ready' ? ', promotion available' : ''}${cover > 0 ? `, Cover ${cover}` : ''}`}
+      aria-label={`${def.name}, ${count} units, ${atk} attack, ${hp} health, ${rowWord(def.row)} row${rank > 0 ? `, ${rankWord(rank)}` : ''}${promote === 'ready' ? ', promotion available' : ''}${cover > 0 ? `, Cover ${cover}` : ''}${apexMax > 0 ? `, Apex ${apexCharge} of ${apexMax}` : ''}`}
     >
       <span className="card-art">
         <Plate src={UNIT_ART[unitId]} eager={eager} priority={priority} fallback={<Sigil id={def.sigil} size={26} />} />
@@ -154,6 +180,7 @@ export function StackCard({
       </span>
       <RankPips rank={rank} flash={rankFlash} />
       <CoverPips charges={cover} />
+      <ApexMeter charge={apexCharge} max={apexMax} ready={apexCharge >= apexMax && apexMax > 0} />
       <span className="count-badge">{count}</span>
       <span className="card-foot">
         <span className="stack-name">{def.name}</span>
@@ -184,12 +211,14 @@ export function SnapCard({
   float,
   onClick,
   savedByCover,
+  apexFiring,
 }: {
   snap: StackSnap
   state?: 'hit' | 'act' | 'dead' | null
   float?: Props['float']
   onClick?: () => void
   savedByCover?: boolean
+  apexFiring?: boolean
 }) {
   const total = snap.startCount * snap.maxHp
   const cur = snap.count * snap.maxHp - snap.wound
@@ -206,6 +235,9 @@ export function SnapCard({
       float={float}
       onClick={onClick}
       cover={snap.cover}
+      apexCharge={snap.apexCharge}
+      apexMax={snap.apexMax}
+      apexFiring={apexFiring}
       savedByCover={savedByCover}
       domId={snap.uid}
       eager

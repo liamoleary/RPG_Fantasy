@@ -7,7 +7,7 @@
  * so the renderer stays a dumb projector of the log.
  */
 import { BOON_BY_ID, UNIT_BY_ID } from '../data/index'
-import type { AbilityEffect, FactionId, HeroDef, HeroMods, KeywordId, Row, UnitDef } from '../data/types'
+import type { AbilityEffect, ApexDef, FactionId, HeroDef, HeroMods, KeywordId, Row, UnitDef } from '../data/types'
 import { rankDefOf } from './ranks'
 import { makeRng, type RNG } from './rng'
 
@@ -74,6 +74,9 @@ export interface StackSnap {
   rank: number
   /** Cover charges still available this battle (§3.3 pips) */
   cover: number
+  /** Apex meter — 0/0 for the forms that have no ultimate (DN04 §3) */
+  apexCharge: number
+  apexMax: number
 }
 
 export type BattleEvent =
@@ -95,6 +98,18 @@ export type BattleEvent =
       text: string
       targets: string[]
       /** what the cast actually did, for the banner and the run receipt */
+      amount: number
+      kind: SpellOutcome
+      snap: StackSnap[]
+    }
+  /** a line-top form unleashing its ultimate (Design Notes 04 §3) */
+  | {
+      t: 'apex'
+      uid: string
+      side: Side
+      name: string
+      text: string
+      targets: string[]
       amount: number
       kind: SpellOutcome
       snap: StackSnap[]
@@ -163,6 +178,9 @@ interface RStack {
   frenzyPlus: number
   /** Cover charges left this battle (front row only) */
   coverLeft: number
+  /** the ultimate this stack charges toward, if its form has one (§3) */
+  apex: ApexDef | null
+  apexCharge: number
 }
 
 interface Ctx {
@@ -173,6 +191,8 @@ interface Ctx {
   heroDefs: Record<Side, HeroDef>
   lastStandUsed: Record<Side, boolean>
   exchange: number
+  /** Frenzy triggers per side this battle — Bloodcall reads it (§3) */
+  frenzyCount: Record<Side, number>
 }
 
 const pool = (s: RStack): number => s.count * s.maxHp - s.wound
@@ -194,6 +214,8 @@ function snap(s: RStack): StackSnap {
     rooted: false,
     rank: s.rank,
     cover: s.coverLeft,
+    apexCharge: s.apex ? s.apexCharge : 0,
+    apexMax: s.apex ? s.apex.charge : 0,
   }
 }
 
@@ -336,6 +358,10 @@ function buildStack(bs: BoardStack, side: Side, hero: HeroState, heroDef: HeroDe
     firstShotDouble: honored ? honored.type === 'firstShotDouble' : false,
     abilityEcho: honored ? honored.type === 'abilityEcho' : false,
     frenzyPlus: honored && honored.type === 'frenzyPlus' ? honored.x : 0,
+    // Apex is the reward for finishing a line: only the top form carries one,
+    // and it starts every battle at zero (§3).
+    apex: def.apex ?? null,
+    apexCharge: 0,
     // Cover is a front-line job: a back-row stack cannot shield anything.
     coverLeft: row === 'front' ? (kw(def, 'cover') ?? 0) + extraKw('cover') + m.frontCover : 0,
   }
@@ -501,12 +527,16 @@ function adjacentEnemyOf(ctx: Ctx, target: RStack): RStack | undefined {
 
 function onCasualties(ctx: Ctx, s: RStack, killed: number) {
   if (killed <= 0 || !s.alive) return
+  // Apex charges on taking the hit and holding (§3): bleeding for the line is
+  // half of how the final form earns its moment.
+  gainApex(s)
   if (s.frenzy > 0) {
     const heroDef = ctx.heroDefs[s.side]
     let gain = s.frenzy + ctx.heroes[s.side].mods.frenzyAtk + s.frenzyPlus
     if (!s.frenzied && heroDef.passive.id === 'frenzyPermanentAtk') gain += heroDef.passive.x ?? 1
     s.frenzied = true
     s.atk += gain
+    ctx.frenzyCount[s.side] += 1
     ctx.events.push({ t: 'frenzy', uid: s.uid, atk: gain, snap: snaps(s) })
   }
   fireAbility(ctx, s, 'onCasualty')
@@ -602,6 +632,152 @@ function applyAbilityEffect(ctx: Ctx, s: RStack, e: AbilityEffect) {
 }
 
 // ── attacking ──────────────────────────────────────────────────────────────
+
+
+// ── Apex abilities (Design Notes 04 §3) ────────────────────────────────────
+
+/**
+ * One charge, from acting or from surviving casualties. Charging is capped at
+ * the requirement so the meter can never read past full, which would make the
+ * card lie about how close the moment is.
+ */
+function gainApex(s: RStack) {
+  if (!s.apex || !s.alive) return
+  if (s.apexCharge < s.apex.charge) s.apexCharge += 1
+}
+
+const apexReady = (s: RStack): boolean => s.apex !== null && s.apexCharge >= s.apex.charge
+
+/** The stack directly behind a front-row target, for Sunlance. */
+function behindOf(ctx: Ctx, target: RStack): RStack | undefined {
+  if (target.row !== 'front') return undefined
+  // coveringSlotsFor(b) = [b, b+1]: back slot b stands behind front b and b+1,
+  // so the stack behind front slot f is back slot f or f-1.
+  const slots = [target.slot + FRONT_SLOTS, target.slot - 1 + FRONT_SLOTS]
+  return ctx.stacks.find((x) => x.side === target.side && x.alive && slots.includes(x.slot))
+}
+
+/**
+ * Fire the ultimate in place of this stack's attack, then reset the meter.
+ * Every branch reports what it actually did, the same way a hero spell does,
+ * so the banner and the log never have to guess.
+ */
+function fireApex(ctx: Ctx, s: RStack, cycle: number) {
+  const apex = s.apex
+  if (!apex) return
+  s.apexCharge = 0
+  const foes = enemiesOf(ctx, s)
+  const allies = aliveOn(ctx, s.side)
+  const touched: RStack[] = [s]
+  const targets: string[] = []
+  let amount = 0
+  let kind: SpellOutcome = 'damage'
+
+  const strike = (t: RStack, raw: number, opts: { siege?: boolean } = {}) => {
+    const res = applyDamage(ctx, t, raw, opts)
+    amount += res.dealt
+    touched.push(t)
+    targets.push(t.uid)
+    if (res.died) onDeath(ctx, t)
+    else onCasualties(ctx, t, res.killed)
+    return res
+  }
+
+  switch (apex.id) {
+    case 'sunburstVerdict': {
+      const t = chooseTarget(ctx, s)
+      if (t) strike(t, s.atk * s.count * apex.x, { siege: true })
+      // The verdict shields the line it fights for.
+      const front = allies.filter((a) => a.row === 'front')
+      for (const a of front) a.bulwark += 1
+      if (front.length > 0) {
+        touched.push(...front)
+        ctx.events.push({ t: 'buff', uids: front.map((a) => a.uid), text: '+1 Bulwark', snap: snaps(...front) })
+      }
+      break
+    }
+    case 'sunlance': {
+      const t = chooseTarget(ctx, s)
+      if (t) {
+        const raw = s.atk * s.count * (1 + apex.x)
+        strike(t, raw)
+        const behind = behindOf(ctx, t)
+        if (behind) strike(behind, raw)
+      }
+      break
+    }
+    case 'rootquake': {
+      kind = 'root'
+      const front = foes.filter((f) => f.row === 'front')
+      for (const f of front) {
+        f.rootedUntil = ctx.exchange + apex.x
+        targets.push(f.uid)
+        touched.push(f)
+        ctx.events.push({ t: 'root', uid: f.uid, exchanges: apex.x, snap: snaps(f) })
+      }
+      amount = apex.x
+      healStack(ctx, s, Math.floor(maxPool(s) / 4))
+      break
+    }
+    case 'moonfall': {
+      const wounded = foes.slice().sort((p, q) => pool(p) / maxPool(p) - pool(q) / maxPool(q))
+      const raw = s.atk * s.count * (1 + apex.x)
+      let overflow = 0
+      for (const t of wounded.slice(0, 2)) {
+        const res = strike(t, raw)
+        overflow += res.overkill
+      }
+      // What the moon takes it gives back: kill overflow heals your worst-off.
+      const mine = aliveOn(ctx, s.side)
+      const hurt = mine.slice().sort((p, q) => pool(p) / maxPool(p) - pool(q) / maxPool(q))[0]
+      if (overflow > 0 && hurt) {
+        healStack(ctx, hurt, overflow)
+        touched.push(hurt)
+      }
+      break
+    }
+    case 'bloodcall': {
+      kind = 'strikes'
+      const gain = ctx.frenzyCount[s.side] * apex.x
+      if (gain > 0) {
+        s.atk += gain
+        ctx.events.push({ t: 'buff', uids: [s.uid], text: `+${gain} ATK`, snap: snaps(s) })
+      }
+      // The two swings run through the ordinary attack path, so retaliation,
+      // Cleave and Frenzy all behave exactly as they do on any other blow.
+      for (let i = 0; i < 2; i++) {
+        if (!s.alive) break
+        performAttack(ctx, s, true, cycle)
+        amount += 1
+      }
+      break
+    }
+    case 'ninthWave': {
+      const biggest = foes.slice().sort((p, q) => q.count - p.count)[0]
+      if (biggest) {
+        const raw = s.atk * s.count * (1 + apex.x)
+        strike(biggest, raw)
+        const neighbours = ctx.stacks.filter(
+          (x) => x.side === biggest.side && x.alive && x.row === biggest.row && Math.abs(x.slot - biggest.slot) === 1,
+        )
+        for (const n of neighbours) strike(n, Math.floor(raw / 2))
+      }
+      break
+    }
+  }
+
+  ctx.events.push({
+    t: 'apex',
+    uid: s.uid,
+    side: s.side,
+    name: apex.name,
+    text: apex.text,
+    targets,
+    amount,
+    kind,
+    snap: snaps(...touched.filter((t, i, all) => all.indexOf(t) === i)),
+  })
+}
 
 function performAttack(ctx: Ctx, attacker: RStack, isExtra = false, cycle = 0) {
   if (!attacker.alive || attacker.atk <= 0) return
@@ -883,6 +1059,7 @@ export function simulateBattle(a: BattleSide, b: BattleSide, heroA: HeroDef, her
     heroDefs: { a: heroA, b: heroB },
     lastStandUsed: { a: false, b: false },
     exchange: 0,
+    frenzyCount: { a: 0, b: 0 },
   }
 
   for (const bs of a.board) if (bs.count > 0) ctx.stacks.push(buildStack(bs, 'a', a.hero, heroA, rng))
@@ -982,7 +1159,16 @@ export function simulateBattle(a: BattleSide, b: BattleSide, heroA: HeroDef, her
       if (ab && ab.trigger === 'everyExchange' && ab.everyN && s.actions % ab.everyN === 0) {
         fireAbility(ctx, s, 'everyExchange')
       }
-      performAttack(ctx, s, false, cycle)
+      // A full meter spends itself instead of the stack's attack (§3). The
+      // charge for acting lands BEFORE the swing so the attack's own snapshot
+      // shows the meter filling — otherwise the card jumps from 4/5 straight
+      // to the ultimate and the player never sees it come to a boil.
+      if (apexReady(s)) {
+        fireApex(ctx, s, cycle)
+      } else {
+        gainApex(s)
+        performAttack(ctx, s, false, cycle)
+      }
 
       ctx.exchange++
       fireDueSpells()

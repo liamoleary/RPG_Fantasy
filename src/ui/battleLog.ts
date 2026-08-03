@@ -61,6 +61,8 @@ export function describe(e: BattleEvent, playerIsA: boolean): string {
     }
     case 'spellCast':
       return `${side(e.side) ? 'Your' : 'Enemy'} hero casts ${spellSummary(e.name, e.amount, e.kind, e.targets.length)}`
+    case 'apex':
+      return `${nameOf(e.snap.find((x) => x.uid === e.uid), 'A stack')} unleashes ${spellSummary(e.name, e.amount, e.kind, e.targets.length)}`
     case 'frenzy':
       return 'Frenzy! +ATK'
     case 'lastStand':

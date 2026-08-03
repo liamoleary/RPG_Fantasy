@@ -47,6 +47,8 @@ interface Frame {
   spent: Record<Side, number>
   /** a blow big enough to be an event with an author (§2.2) */
   heavy: { uid: string; frac: number } | null
+  /** a line-top form unleashing its ultimate: beams from the card (DN04 §3) */
+  apex: { uid: string; targets: string[] } | null
 }
 
 /**
@@ -73,6 +75,7 @@ function buildFrames(result: BattleResult, playerIsA: boolean): Frame[] {
     let saved: string | null = null
     let cast: Frame['cast'] = null
     let pulse: Frame['pulse'] = null
+    let apex: Frame['apex'] = null
 
     // The heavy-hit threshold is a share of what the victim had BEFORE the
     // blow, so read the board one step ahead of applying the snapshot.
@@ -140,6 +143,12 @@ function buildFrames(result: BattleResult, playerIsA: boolean): Frame[] {
       case 'passive':
         pulse = { side: e.side, text: e.text }
         break
+      case 'apex':
+        // Same grammar as a hero spell (§3): the card flares, beams reach the
+        // targets, and the banner is the receipt.
+        apex = { uid: e.uid, targets: e.targets }
+        banner = `⚔ ${spellSummary(e.name, e.amount, e.kind, e.targets.length)}`
+        break
       default:
         break
     }
@@ -155,6 +164,7 @@ function buildFrames(result: BattleResult, playerIsA: boolean): Frame[] {
       pulse,
       spent: { ...spent },
       heavy,
+      apex,
     })
   }
   return frames
@@ -225,13 +235,19 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
       setShot(null)
     }
 
-    // The beam is the attribution — it has to leave the plaque of the hero who
-    // paid for the cast, so measure the plaque rather than assuming a corner.
-    const plaque = frame.cast && field.querySelector(`[data-plaque="${frame.cast.side}"]`)
-    if (frame.cast && plaque) {
-      const o = centre(plaque)
+    // The beam is the attribution — it leaves the plaque of the hero who paid
+    // for the cast, or the card of the stack that spent its meter, so measure
+    // the real element rather than assuming a corner.
+    const origin = frame.cast
+      ? field.querySelector(`[data-plaque="${frame.cast.side}"]`)
+      : frame.apex
+        ? card(frame.apex.uid)
+        : null
+    const rays = frame.cast?.targets ?? frame.apex?.targets
+    if (origin && rays) {
+      const o = centre(origin)
       setBeams(
-        frame.cast.targets
+        rays
           .map((uid) => card(uid))
           .filter((el): el is Element => Boolean(el))
           .map((el, n) => {
@@ -281,6 +297,13 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
   const foeFaction = foe ? FACTION_BY_ID.get(foe.factionId) : null
   const mySide: Side = playerIsA ? 'a' : 'b'
   const foeSide: Side = playerIsA ? 'b' : 'a'
+  // A beam is tinted by whoever fired it — a hero by its side, an Apex by the
+  // side of the stack that spent its meter.
+  const beamSide: Side | null = frame.cast
+    ? frame.cast.side
+    : frame.apex
+      ? (frame.boards[frame.apex.uid]?.side ?? null)
+      : null
   // Pips count the casts this battle actually contains — the replay can only
   // promise what the log proves, and a wiped side never gets its last cast.
   const totals = frames[frames.length - 1].spent
@@ -340,7 +363,7 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
                 '--y1': `${b.y1}px`,
                 '--len': `${b.len}px`,
                 '--rot': `${b.rot}deg`,
-                '--fc': (frame.cast?.side === mySide ? FACTION_BY_ID.get(p.factionId) : foeFaction)?.colors.accent,
+                '--fc': (beamSide === mySide ? FACTION_BY_ID.get(p.factionId) : foeFaction)?.colors.accent,
                 '--ms': `${Math.round(420 / store.speed)}ms`,
               } as React.CSSProperties
             }
@@ -368,9 +391,9 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
             onTap={() => setHeroPeek(foe)}
           />
         )}
-        <SnapBoard snaps={theirs} fx={frame.fx} saved={frame.saved} onPeek={setPeek} />
+        <SnapBoard snaps={theirs} fx={frame.fx} saved={frame.saved} apexUid={frame.apex?.uid} onPeek={setPeek} />
         <div className="center dim tiny">— — —</div>
-        <SnapBoard snaps={mine} fx={frame.fx} saved={frame.saved} mine onPeek={setPeek} />
+        <SnapBoard snaps={mine} fx={frame.fx} saved={frame.saved} apexUid={frame.apex?.uid} mine onPeek={setPeek} />
         <HeroPlaque
           warlord={p}
           side={mySide}
@@ -404,7 +427,12 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
       {peek && (
         <InspectSheet
           unitId={peek.unitId}
-          context={{ count: peek.count, bonusAtk: peek.atk - unit(peek.unitId).atk, bonusHp: peek.maxHp - unit(peek.unitId).hp }}
+          context={{
+            count: peek.count,
+            bonusAtk: peek.atk - unit(peek.unitId).atk,
+            bonusHp: peek.maxHp - unit(peek.unitId).hp,
+            apexCharge: peek.apexCharge,
+          }}
           extra={<RankProgress unitId={peek.unitId} count={peek.startCount} rank={peek.rank} />}
           onClose={() => setPeek(null)}
         />
@@ -467,6 +495,7 @@ function SnapBoard({
   fx,
   mine,
   saved,
+  apexUid,
   onPeek,
 }: {
   snaps: StackSnap[]
@@ -475,6 +504,8 @@ function SnapBoard({
   mine?: boolean
   /** uid of a stack a coverer just saved this frame */
   saved?: string | null
+  /** uid of the stack unleashing its Apex this frame */
+  apexUid?: string | null
   onPeek: (s: StackSnap) => void
 }) {
   const bySlot = new Map(snaps.map((s) => [s.slot, s]))
@@ -499,6 +530,7 @@ function SnapBoard({
               state={f?.state ?? null}
               float={f?.float ?? null}
               savedByCover={saved === s.uid}
+              apexFiring={apexUid === s.uid}
               onClick={() => onPeek(s)}
             />
           )

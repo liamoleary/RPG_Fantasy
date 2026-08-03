@@ -30,12 +30,12 @@ export const ROW_INFO: Record<Row, { label: string; clause: string; text: string
   front: {
     label: 'FRONT LINE',
     clause: 'melee, takes the hits',
-    text: 'Four slots. Enemy melee always strikes your front line first, so these stacks absorb the battle. Put your tough, high-count units here — they buy your back line the time it needs.',
+    text: 'Four slots, shown at the top of your board — nearest the enemy. Enemy melee always strikes your front line first, so these stacks absorb the battle. Put your tough, high-count units here; they buy your back line the time it needs.',
   },
   back: {
     label: 'BACK LINE',
     clause: 'ranged, protected',
-    text: 'Three slots. Enemy melee cannot reach your back line until your front line is empty. It is not immune, though: Volley and Siege units, and hero spells, reach it at any time. Put ranged and support stacks here.',
+    text: 'Three slots, tucked behind your front line at the bottom of your board. Enemy melee cannot reach them until your front line is empty. They are not immune, though: Volley and Siege units, and hero spells, reach the back line at any time. Put ranged and support stacks here.',
   },
 }
 
@@ -402,13 +402,13 @@ export function Board({
     </div>
   )
   return (
-    // Back line on top, front line on the bottom — everywhere in the game
-    // (Design Notes 01 §1.3). Your front line sits nearest your thumb, and the
-    // enemy's front line sits against the divider, bearing down on you: one
-    // reading of the board that transfers straight from Muster to Battle.
+    // Front line on top, back line below it — mirroring your half of the
+    // battlefield exactly (Design Notes 03 §3, correcting DN01 §1.3). DN01 put
+    // the back line on top everywhere, which drew the enemy's front line
+    // bearing down on YOUR back line and implied the back row was the wall.
     <div className="board" style={compact ? { opacity: 0.95 } : undefined}>
-      {render([4, 5, 6], 'back')}
       {render([0, 1, 2, 3], 'front')}
+      {render([4, 5, 6], 'back')}
     </div>
   )
 }

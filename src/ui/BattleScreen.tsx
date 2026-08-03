@@ -363,10 +363,11 @@ function SnapBoard({
       </div>
     )
   }
-  // The two armies face each other, so your block mirrors: both front lines
-  // meet at the divider with the back lines behind them. Design Notes 01 §1.3
-  // asked for one universal order, but in a fight it reads as your spearmen
-  // hiding behind your archers — playtest disagreed, and the fight wins.
+  // The battlefield is one vertical axis (Design Notes 03 §3, which formally
+  // corrects DN01 §1.3): enemy back, enemy front, divider, your front, your
+  // back. The two front lines meet in the middle like a real battle line and
+  // your back row sits furthest from the enemy, nearest your thumb. Only your
+  // block mirrors; the Muster board shows your half in this same order.
   return (
     <div className="board">
       {mine ? row([0, 1, 2, 3], 'front') : row([4, 5, 6], 'back')}

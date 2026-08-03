@@ -131,7 +131,7 @@ Rule of thumb for Claude Code: boons must change *decisions*, not just numbers �
 2. **Thornqueen Maravel** — *Passive:* when a friendly stack survives a battle, it permanently gains +1 count (max once per stack per battle). *Spell:* **Bramble Coil** — root the enemy's highest-ATK stack for X exchanges (it cannot attack).
 
 **Stormtide Clans**
-1. **Warchief Grommash Tidebreaker** — *Passive:* your stacks' first Frenzy trigger each battle also grants +1 ATK permanently. *Spell:* **Chain Lightning** — deal X damage split across the 3 highest-count enemy stacks.
+1. **Warchief Gorrath Tidebreaker** — *Passive:* your stacks' first Frenzy trigger each battle also grants +1 ATK permanently. *Spell:* **Chain Lightning** — deal X damage split across the 3 highest-count enemy stacks.
 2. **Seeress Zhala of the Nine Winds** — *Passive:* battle spells cast one extra time per battle. *Spell:* **Ancestral Fury** — a random friendly stack immediately attacks twice.
 
 *(Unlock-faction heroes follow the same template; Claude Code designs them during Milestone 3 using the faction mechanic — e.g., Gravebound heroes key off Deathcry/Raise, Conclave heroes off Spellweave, Emberhorde heroes off Sacrifice.)*

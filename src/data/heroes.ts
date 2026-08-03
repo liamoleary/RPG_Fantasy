@@ -90,7 +90,8 @@ export const HEROES: HeroDef[] = [
   // ── Stormtide Clans ──────────────────────────────────────────────────────
   {
     id: 'h_grommash',
-    name: 'Warchief Grommash',
+    // Display name only — the id stays h_grommash so saves and art keep working.
+    name: 'Warchief Gorrath',
     title: 'Tidebreaker',
     faction: 'stormtide',
     unlockRenown: 0,

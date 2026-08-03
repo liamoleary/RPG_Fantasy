@@ -16,13 +16,13 @@ import {
 import {
   canPromote,
   firstOpenSlot,
-  musterCount,
   promoteCost,
+  recruitPlan,
   rerollCost,
-  stackOfUnit,
   RECRUIT_COST,
   sellValue,
   tierUpCost,
+  type RecruitPlan,
 } from '../engine/camp'
 import { heroLevel } from '../engine/boons'
 import { opponentOf, player, type RunState } from '../engine/run'
@@ -63,12 +63,25 @@ export interface RecruitBlock {
  * disagree. Gold is not the only blocker: the recruits need somewhere to
  * stand — an existing stack of the same line, or an open slot in a legal row.
  */
-export function canRecruit(unitId: string | null, board: BoardStack[], gold: number): RecruitBlock {
+export function canRecruit(unitId: string | null, board: BoardStack[], gold: number, mods: HeroMods): RecruitBlock {
   if (!unitId) return { ok: false }
   if (gold < RECRUIT_COST) return { ok: false, reason: `Costs ${RECRUIT_COST}g — you have ${gold}.` }
   const def = unit(unitId)
-  if (stackOfUnit(board, unitId) || firstOpenSlot(board, def) !== null) return { ok: true }
+  // The plan, not just "do I own this line": buying a form ahead of anything
+  // on the board starts its own stack, so it needs a slot (DN04 §1.2).
+  if (recruitPlan(board, unitId, mods).target || firstOpenSlot(board, def) !== null) return { ok: true }
   return { ok: false, reason: `No open ${def.row === 'any' ? '' : `${def.row} `}slot — sell or move something first.` }
+}
+
+/**
+ * What the buy button says out loud (§1.3). "+2 → Footmen" when the recruits
+ * train up into a stack you already field, "+4 NEW" when they start their own.
+ * No hidden math — the button is the tutorial.
+ */
+export function buyLabel(plan: RecruitPlan): { text: string; sub: string | null } {
+  if (!plan.target) return { text: `+${plan.added} NEW`, sub: null }
+  if (plan.stepsBehind === 0) return { text: `+${plan.added}`, sub: unit(plan.formId).name }
+  return { text: `+${plan.added} →`, sub: unit(plan.formId).name }
 }
 
 export function MusterScreen({ run }: { run: RunState }) {
@@ -164,9 +177,10 @@ export function MusterScreen({ run }: { run: RunState }) {
   }
 
   const offerUnitId = offerIndex !== null ? p.camp.offer[offerIndex] : null
-  const recruitBlock = (unitId: string | null) => canRecruit(unitId, p.board, p.gold)
+  const recruitBlock = (unitId: string | null) => canRecruit(unitId, p.board, p.gold, p.mods)
+  const planFor = (unitId: string | null) => (unitId ? recruitPlan(p.board, unitId, p.mods) : null)
   const offerBlock = recruitBlock(offerUnitId)
-  const offerStack = offerUnitId ? stackOfUnit(p.board, offerUnitId) : undefined
+  const offerPlan = planFor(offerUnitId)
   const inspectedStack = stackUid ? p.board.find((s) => s.uid === stackUid) : null
   const promo = inspectedStack ? promoteBlock(inspectedStack.unitId, p.camp.tier, p.gold, p.mods) : null
 
@@ -237,7 +251,7 @@ export function MusterScreen({ run }: { run: RunState }) {
               key={i}
               unitId={unitId}
               block={recruitBlock(unitId)}
-              bonusCount={unitId ? musterCount(unit(unitId), p.mods) : 0}
+              plan={planFor(unitId)}
               priority={i < 3}
               onInspect={() => setOfferIndex(i)}
               onRecruit={() => store.buy(i)}
@@ -271,10 +285,12 @@ export function MusterScreen({ run }: { run: RunState }) {
           gold={p.gold}
           extra={
             <RankProgress
-              unitId={offerUnitId}
-              count={offerStack?.count ?? 0}
-              rank={offerStack?.rank ?? 0}
-              projected={(offerStack?.count ?? 0) + musterCount(unit(offerUnitId), p.mods)}
+              // The rank bar has to project the CONVERTED intake, or the sheet
+              // promises a threshold the purchase will not reach (§1.3).
+              unitId={offerPlan?.formId ?? offerUnitId}
+              count={offerPlan?.target?.count ?? 0}
+              rank={offerPlan?.target?.rank ?? 0}
+              projected={(offerPlan?.target?.count ?? 0) + (offerPlan?.added ?? 0)}
             />
           }
           onClose={() => setOfferIndex(null)}
@@ -288,7 +304,9 @@ export function MusterScreen({ run }: { run: RunState }) {
                   setOfferIndex(null)
                 }}
               >
-                Recruit — {RECRUIT_COST}g
+                {offerPlan?.target
+                  ? `Recruit +${offerPlan.added} ${unit(offerPlan.formId).name} — ${RECRUIT_COST}g`
+                  : `Recruit +${offerPlan?.added ?? 0} new stack — ${RECRUIT_COST}g`}
               </button>
               {offerBlock.reason && <div className="tiny dim center grow">{offerBlock.reason}</div>}
             </>
@@ -489,21 +507,23 @@ export function Board({
 function OfferCard({
   unitId,
   block,
-  bonusCount,
+  plan,
   priority,
   onInspect,
   onRecruit,
 }: {
   unitId: string | null
   block: RecruitBlock
-  bonusCount: number
+  /** exactly what this purchase will do, straight from the engine */
+  plan: RecruitPlan | null
   /** the offers visible without scrolling on a small phone */
   priority?: boolean
   onInspect: () => void
   onRecruit: () => void
 }) {
-  if (!unitId) return <div className="offer-card" data-empty="true" />
+  if (!unitId || !plan) return <div className="offer-card" data-empty="true" />
   const def = unit(unitId)
+  const label = buyLabel(plan)
   // Tapping the card still only ever opens the Inspect sheet — reading is free
   // and never costs gold. Recruiting is its own explicit button so the common
   // case does not need a round trip through the sheet.
@@ -529,9 +549,16 @@ function OfferCard({
         disabled={!block.ok}
         onClick={onRecruit}
         title={block.reason}
-        aria-label={`Recruit ${def.name} for ${RECRUIT_COST} gold`}
+        aria-label={
+          plan.target
+            ? `Recruit: adds ${plan.added} to your ${unit(plan.formId).name} stack for ${RECRUIT_COST} gold`
+            : `Recruit ${def.name}: starts a new stack of ${plan.added} for ${RECRUIT_COST} gold`
+        }
       >
-        +{bonusCount} · {RECRUIT_COST}g
+        <span className="buy-main">
+          {label.text} · {RECRUIT_COST}g
+        </span>
+        {label.sub && <span className="buy-sub">{label.sub}</span>}
       </button>
     </div>
   )

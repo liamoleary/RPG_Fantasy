@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { HERO_ART } from '../data/art'
 import { FACTION_BY_ID, HERO_BY_ID, unit } from '../data/index'
 import type { Projectile } from '../data/types'
-import type { BattleEvent, BattleResult, Side, SpellOutcome, StackSnap } from '../engine/battle'
+import type { BattleResult, Side, StackSnap } from '../engine/battle'
 import { player, type RunState, type Warlord } from '../engine/run'
 import { useGame } from '../state/store'
 import { HeroSheet } from './HeroSheet'
@@ -10,7 +10,18 @@ import { InspectSheet, RankProgress } from './InspectSheet'
 import { Ladder } from './Ladder'
 import { Plate } from './Plate'
 import { Sigil } from './Sigil'
+import { describe, HEAVY_HIT_FRACTION, poolOf, spellSummary } from './battleLog'
 import { projectileOf, SnapCard } from './StackCard'
+
+/** Volley is a unit property, so the log does not need to repeat it. */
+function isVolley(unitId: string | undefined): boolean {
+  if (!unitId) return false
+  return unit(unitId).keywords.some((k) => k.k === 'volley')
+}
+
+const BASE_MS = 620
+/** A spell banner must be readable even at 2× (DN03 §1.2). */
+const SPELL_MIN_MS = 600
 
 /**
  * The renderer is a projector over `result.events` — it never computes an
@@ -34,90 +45,20 @@ interface Frame {
   pulse: { side: Side; text: string } | null
   /** casts each hero has spent by this frame, for the plaque pips */
   spent: Record<Side, number>
+  /** a blow big enough to be an event with an author (§2.2) */
+  heavy: { uid: string; frac: number } | null
 }
 
 /**
- * The banner has to say what the spell *did*, not what it says on the tin
- * (§1.2) — the numbers are rolled in the engine and ride on the event.
+ * Armour that decays silently is why "unkillable" flips to "one-shot" with no
+ * warning (§2.1) — when Bulwark eats part of a blow, the float shows the whole
+ * sum, not just what got through.
  */
-function spellSummary(name: string, amount: number, kind: SpellOutcome, targets: number): string {
-  if (targets === 0) return `${name} — no target`
-  const across = targets > 1 ? ` across ${targets} stacks` : ''
-  const stacks = `${targets} stack${targets === 1 ? '' : 's'}`
-  switch (kind) {
-    case 'heal':
-      return `${name} — ${amount} healed${across}`
-    case 'damage':
-      return `${name} — ${amount} damage${across}`
-    case 'shield':
-      return `${name} — +${amount} Bulwark${across}`
-    case 'atk':
-      return `${name} — +${amount} ATK to ${stacks}`
-    case 'root':
-      return `${name} — ${stacks} rooted for ${amount} exchanges`
-    case 'strikes':
-      return `${name} — ${amount} extra strike${amount === 1 ? '' : 's'}`
-  }
-}
-
-/** Volley is a unit property, so the log does not need to repeat it. */
-function isVolley(unitId: string | undefined): boolean {
-  if (!unitId) return false
-  return unit(unitId).keywords.some((k) => k.k === 'volley')
-}
-
-const BASE_MS = 620
-/** A spell banner must be readable even at 2× (§1.2). */
-const SPELL_MIN_MS = 600
-
-function describe(e: BattleEvent, playerIsA: boolean): string {
-  const side = (s: 'a' | 'b') => (s === 'a') === playerIsA
-  switch (e.t) {
-    case 'battleStart':
-      return 'The warbands close.'
-    case 'passive':
-      return e.text
-    case 'attack': {
-      const name = (uid: string, fallback: string) => {
-        const s = e.snap.find((x) => x.uid === uid)
-        return s ? unit(s.unitId).name : fallback
-      }
-      const src = name(e.src, 'A stack')
-      const dst = name(e.dst, 'the enemy')
-      const verb = e.retaliation ? 'retaliates against' : 'strikes'
-      if (e.dmg === 0 && e.absorbed > 0) return `${src} ${verb} ${dst} — ${e.absorbed} absorbed by Bulwark.`
-      return `${src} ${verb} ${dst} for ${e.dmg}${e.killed > 0 ? `, ${e.killed} slain` : ''}.`
-    }
-    case 'spellCast':
-      return `${side(e.side) ? 'Your' : 'Enemy'} hero casts ${spellSummary(e.name, e.amount, e.kind, e.targets.length)}`
-    case 'frenzy':
-      return 'Frenzy! +ATK'
-    case 'lastStand':
-      return 'Last Stand — one unit holds the line.'
-    case 'root':
-      return 'Rooted — it cannot act.'
-    case 'venom':
-      return 'Venom courses through the ranks.'
-    case 'cover': {
-      const name = (uid: string, fallback: string) => {
-        const sn = e.snap.find((x) => x.uid === uid)
-        return sn ? unit(sn.unitId).name : fallback
-      }
-      return `${name(e.by, 'The front line')} covers ${name(e.saved, 'the back line')} — volley intercepted.`
-    }
-    case 'heal':
-      return 'Healed.'
-    case 'cleave':
-      return 'Cleave!'
-    case 'death':
-      return 'A stack is wiped out.'
-    case 'summon':
-      return 'Reinforcements arrive.'
-    case 'buff':
-      return e.text
-    case 'battleEnd':
-      return e.winner === 'tie' ? 'A standstill.' : side(e.winner) ? 'Victory!' : 'Defeat.'
-  }
+function hitFloat(dmg: number, absorbed: number): Frame['fx'][string]['float'] {
+  if (absorbed > 0 && dmg > 0) return { text: `${dmg + absorbed} −${absorbed}◈ = ${dmg}`, kind: 'dmg' }
+  if (absorbed > 0) return { text: `${absorbed} −${absorbed}◈ = 0`, kind: 'soak' }
+  if (dmg > 0) return { text: `-${dmg}`, kind: 'dmg' }
+  return undefined
 }
 
 function buildFrames(result: BattleResult, playerIsA: boolean): Frame[] {
@@ -133,6 +74,11 @@ function buildFrames(result: BattleResult, playerIsA: boolean): Frame[] {
     let cast: Frame['cast'] = null
     let pulse: Frame['pulse'] = null
 
+    // The heavy-hit threshold is a share of what the victim had BEFORE the
+    // blow, so read the board one step ahead of applying the snapshot.
+    const victimBefore = e.t === 'attack' || e.t === 'cleave' ? boards[e.dst] : undefined
+    let heavy: Frame['heavy'] = null
+
     if (e.t === 'battleStart') {
       for (const s of [...e.a, ...e.b]) boards[s.uid] = s
     } else if ('snap' in e) {
@@ -146,14 +92,12 @@ function buildFrames(result: BattleResult, playerIsA: boolean): Frame[] {
         if (!e.retaliation && isVolley(boards[e.src]?.unitId)) {
           arc = { from: e.src, to: e.dst, covered: false, shot: projectileOf(unit(boards[e.src].unitId)) }
         }
-        fx[e.dst] = {
-          state: 'hit',
-          float:
-            e.dmg > 0
-              ? { text: `-${e.dmg}`, kind: 'dmg' }
-              : e.absorbed > 0
-                ? { text: `◈${e.absorbed}`, kind: 'soak' }
-                : undefined,
+        fx[e.dst] = { state: 'hit', float: hitFloat(e.dmg, e.absorbed) }
+        const pool = victimBefore ? poolOf(victimBefore) : 0
+        if (pool > 0 && e.dmg / pool >= HEAVY_HIT_FRACTION) {
+          heavy = { uid: e.dst, frac: e.dmg / pool }
+          // A one-shot should feel authored: name the stack that threw it.
+          banner = `${unit(boards[e.src]?.unitId ?? e.src).name} — ${e.dmg} damage!`
         }
         break
       }
@@ -210,6 +154,7 @@ function buildFrames(result: BattleResult, playerIsA: boolean): Frame[] {
       cast,
       pulse,
       spent: { ...spent },
+      heavy,
     })
   }
   return frames
@@ -403,7 +348,12 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
           />
         ))}
         {frame.banner && (
-          <div className="spell-banner" style={{ whiteSpace: 'pre-line' }} key={`${i}-banner`}>
+          <div
+            className="spell-banner"
+            data-heavy={frame.heavy ? 'true' : undefined}
+            style={{ whiteSpace: 'pre-line' }}
+            key={`${i}-banner`}
+          >
             {frame.banner}
           </div>
         )}

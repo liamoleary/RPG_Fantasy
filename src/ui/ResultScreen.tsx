@@ -1,11 +1,13 @@
 import { HERO_ART_2X, UNIT_ART } from '../data/art'
 import { FACTION_BY_ID, HERO_BY_ID, unit } from '../data/index'
+import { useState } from 'react'
 import type { BattleEvent, Side, SpellOutcome } from '../engine/battle'
-import { RENOWN_BY_PLACEMENT, ordinal, player, type RunState } from '../engine/run'
+import { RENOWN_BY_PLACEMENT, ordinal, player, type BattleReport, type RunState } from '../engine/run'
 import { useGame } from '../state/store'
 import { Ladder } from './Ladder'
 import { Plate } from './Plate'
 import { Sigil } from './Sigil'
+import { describe as describeEvent, keyMoments } from './battleLog'
 import { unitColor } from './StackCard'
 
 /** How a spell's tally reads on the receipt (Design Notes 03 §2.6). */
@@ -119,6 +121,8 @@ export function ResultScreen({ run }: { run: RunState }) {
         </div>
       )}
 
+      {report && <HowItWent report={report} playerIsA={playerIsA} />}
+
       <div className="panel" style={{ maxHeight: 150, overflowY: 'auto' }}>
         <div className="eyebrow" style={{ marginBottom: 4 }}>
           This round across the lobby
@@ -135,6 +139,37 @@ export function ResultScreen({ run }: { run: RunState }) {
       <button className="btn btn-primary" onClick={store.nextRound} style={{ marginTop: 'auto' }}>
         {run.finished || eliminated ? 'See final standing' : `Muster for round ${run.round + 1}`}
       </button>
+    </div>
+  )
+}
+
+/**
+ * "How it went" (Design Notes 04 §2.3) — three auto-picked moments, then the
+ * whole log on demand. This is the screen that permanently answers "what
+ * killed me?" without a designer on call.
+ */
+function HowItWent({ report, playerIsA }: { report: BattleReport; playerIsA: boolean }) {
+  const [full, setFull] = useState(false)
+  const moments = keyMoments(report.result, playerIsA)
+  if (moments.length === 0) return null
+  return (
+    <div className="panel" style={{ display: 'grid', gap: 4 }}>
+      <div className="eyebrow">How it went</div>
+      {moments.map((m) => (
+        <div key={m.label} className="small moment" data-mine={m.mine ? 'true' : undefined}>
+          <span className="moment-label">{m.label}</span> {m.text}
+        </div>
+      ))}
+      <button className="btn btn-sm btn-ghost" onClick={() => setFull((v) => !v)}>
+        {full ? 'Hide battle log' : 'See full battle log'}
+      </button>
+      {full && (
+        <div className="tiny dim" style={{ maxHeight: 190, overflowY: 'auto', display: 'grid', gap: 2 }}>
+          {report.result.events.map((e, i) => (
+            <div key={i}>{describeEvent(e, playerIsA)}</div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

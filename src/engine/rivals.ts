@@ -12,14 +12,13 @@ import {
   canPromote,
   firstOpenSlot,
   moveStack,
-  musterCount,
   promote,
   promoteCost,
   recruit,
+  recruitPlan,
   rerollCost,
   rollOffer,
   sell,
-  stackOfUnit,
   tierUpCost,
   type CampState,
 } from './camp'
@@ -56,17 +55,26 @@ export interface RivalTurnOutput {
   board: BoardStack[]
   camp: CampState
   gold: number
+  /** every recruit this Muster made, for the balance harness (DN04 §1) */
+  bought: { unitId: string; added: number; merged: boolean }[]
 }
 
 function unitScore(def: UnitDef, input: RivalTurnInput, board: BoardStack[]): number {
   const { archetype, mods } = input
-  const count = musterCount(def, mods)
-  // Raw combat value of what one 3g purchase actually puts on the field.
-  let score = (def.atk * 1.1 + def.hp * 0.7) * count * 0.5 + def.tier * 1.5
+  // Price what the purchase ACTUALLY delivers, not the printed muster size: a
+  // T1 bought into a promoted stack now arrives as a handful of trainees
+  // (DN04 §1.1), and an AI still paying the old price would keep making the
+  // buy the fix exists to remove.
+  const plan = recruitPlan(board, def.id, mods)
+  const count = plan.added
+  // Raw combat value of what one 3g purchase actually puts on the field, in
+  // the form it arrives wearing.
+  const arriving = unit(plan.formId)
+  let score = (arriving.atk * 1.1 + arriving.hp * 0.7) * count * 0.5 + def.tier * 1.5
   const tags = def.tags ?? []
   for (const t of tags) score += TAG_BONUS[archetype][t] ?? 0
   // Adding to an existing stack is nearly always better than a new slot.
-  const existing = stackOfUnit(board, def.id)
+  const existing = plan.target
   if (existing) {
     score += 4
     score += rankPull(existing, count, archetype)
@@ -107,6 +115,7 @@ export function rivalMuster(input: RivalTurnInput, rng: RNG): RivalTurnOutput {
   let { board, gold } = input
   let camp = { ...input.camp }
   const { mods, round, archetype, noise } = input
+  const bought: RivalTurnOutput['bought'] = []
 
   if (!camp.frozen || camp.offer.length === 0) {
     camp = { ...camp, offer: rollOffer(input.factionId as never, camp, mods, rng) }
@@ -161,7 +170,7 @@ export function rivalMuster(input: RivalTurnInput, rng: RNG): RivalTurnOutput {
     if (!best) break
 
     // Full board with no matching stack? Sell the weakest stack to make room.
-    if (firstOpenSlot(board, best.d) === null && !stackOfUnit(board, best.d.id)) {
+    if (firstOpenSlot(board, best.d) === null && !recruitPlan(board, best.d.id, mods).target) {
       const weakest = board.slice().sort((x, y) => stackValue(x) - stackValue(y))[0]
       if (weakest && stackValue(weakest) < best.v * 0.8) {
         const s = sell(board, gold, weakest.uid, mods)
@@ -172,15 +181,17 @@ export function rivalMuster(input: RivalTurnInput, rng: RNG): RivalTurnOutput {
       break
     }
 
+    const plan = recruitPlan(board, best.d.id, mods)
     const res = recruit(board, gold, best.d.id, mods)
     if (!res.ok) break
+    bought.push({ unitId: best.d.id, added: plan.added, merged: plan.target !== null })
     board = res.board
     gold = res.gold
     camp = { ...camp, offer: camp.offer.map((id, i) => (i === best.i ? null : id)) }
   }
 
   board = autoPosition(board)
-  return { board, camp, gold }
+  return { board, camp, gold, bought }
 }
 
 function stackValue(s: BoardStack): number {

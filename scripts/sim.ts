@@ -57,6 +57,34 @@ function disableCover() {
 }
 
 /**
+ * What the shop actually sells, by tier and by phase of the run (DN04 §1).
+ * The fix must kill T1 spam without killing T1 buying: the early game is
+ * supposed to be cheap bodies.
+ */
+const buyMix = {
+  early: new Map<number, number>(),
+  late: new Map<number, number>(),
+  /** recruits that trained up into a stack rather than starting one */
+  converted: 0,
+  merged: 0,
+  total: 0,
+}
+const LATE_FROM = 7
+
+function collectBuys(round: number, bought: { unitId: string; added: number; merged: boolean }[]) {
+  for (const b of bought) {
+    const tier = UNIT_BY_ID.get(b.unitId)?.tier ?? 1
+    const m = round >= LATE_FROM ? buyMix.late : buyMix.early
+    m.set(tier, (m.get(tier) ?? 0) + 1)
+    buyMix.total++
+    if (b.merged) {
+      buyMix.merged++
+      if (b.added < (UNIT_BY_ID.get(b.unitId)?.musterSize ?? 1)) buyMix.converted++
+    }
+  }
+}
+
+/**
  * Per-battle evidence for the RANKS section. Comparing END-OF-RUN boards can
  * only ever rediscover that warlords who survived longer bought more bodies,
  * so the rank question is asked one battle at a time, between boards of
@@ -179,6 +207,7 @@ function playRunHeadless(run: RunState): RunState {
       p.board = out.board
       p.camp = out.camp
       p.gold = out.gold
+      collectBuys(run.round, out.bought)
     }
     resolveBattles(run)
     collectRankDuels(run)
@@ -539,6 +568,29 @@ function main() {
         })
         .filter((r): r is [string, string][] => r !== null),
     ),
+  )
+
+  const mixRow = (label: string, m: Map<number, number>) => {
+    const total = [...m.values()].reduce((n, v) => n + v, 0)
+    return [
+      [label.padEnd(22), ''],
+      ...[1, 2, 3, 4, 5].map((t) => [`T${t} ${pct(total > 0 ? (m.get(t) ?? 0) / total : 0)}`.padStart(11), ''] as [string, string]),
+    ] as [string, string][]
+  }
+  table(
+    `BUY MIX                share of recruits by tier   (late = round ${LATE_FROM}+)`,
+    [
+      mixRow('rounds 1–' + (LATE_FROM - 1), buyMix.early),
+      mixRow(`rounds ${LATE_FROM}+`, buyMix.late),
+      [
+        ['recruits that merged'.padEnd(22), ''],
+        [pct(buyMix.total > 0 ? buyMix.merged / buyMix.total : 0).padStart(11), `  of ${buyMix.total} buys`],
+      ],
+      [
+        ['  ...trained up (§1.1)'.padEnd(22), ''],
+        [pct(buyMix.total > 0 ? buyMix.converted / buyMix.total : 0).padStart(11), '  arrived below full muster'],
+      ],
+    ] as [string, string][][],
   )
 
   table(

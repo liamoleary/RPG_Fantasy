@@ -3,7 +3,7 @@ import { MERC_UNITS, unit, unitsOfPool } from '../data/index'
 import type { FactionId, HeroMods, UnitDef } from '../data/types'
 import type { BoardStack } from './battle'
 import { FRONT_SLOTS, TOTAL_SLOTS } from './battle'
-import { applyRankProgress } from './ranks'
+import { applyRankProgress, lineRootOf } from './ranks'
 import type { RNG } from './rng'
 
 export const RECRUIT_COST = 3
@@ -95,6 +95,89 @@ export function stackOfUnit(board: BoardStack[], unitId: string): BoardStack | u
   return board.find((s) => s.unitId === unitId || inSameLine(s.unitId, def.id))
 }
 
+/**
+ * Where a form sits in its promotion line — 0 is the form you start with.
+ * Memoised: this runs inside the rival AI's purchase loop, and rebuilding the
+ * line array per call showed up against the harness's 50ms budget.
+ */
+const LINE_INDEX = new Map<string, number>()
+export function lineIndexOf(unitId: string): number {
+  const hit = LINE_INDEX.get(unitId)
+  if (hit !== undefined) return hit
+  const idx = Math.max(0, lineOf(lineRootOf(unitId)).indexOf(unitId))
+  LINE_INDEX.set(unitId, idx)
+  return idx
+}
+
+export interface RecruitPlan {
+  /** the stack these recruits join, or null if they start a new one */
+  target: BoardStack | null
+  /** how many bodies actually arrive */
+  added: number
+  /** forms between what you bought and what the stack currently wears */
+  stepsBehind: number
+  /** the form the recruits will be wearing when they arrive */
+  formId: string
+}
+
+/**
+ * What a 3g purchase will actually do (Design Notes 04 §1.1).
+ *
+ * Recruits train up into the stack's current form, and training costs bodies:
+ * every form behind halves the intake, floored at one. Buying the stack's own
+ * form adds the full muster. Buying a form *ahead* of anything you own starts
+ * its own stack — that is late entry at strength, and it stays that way.
+ *
+ * This is the one place the arithmetic lives: `recruit` applies it, the rival
+ * AI prices with it, and the camp button prints it, so the shop can never
+ * promise something the purchase does not deliver.
+ */
+export function recruitPlan(board: BoardStack[], unitId: string, mods: HeroMods): RecruitPlan {
+  const def = unit(unitId)
+  const full = musterCount(def, mods)
+  const root = lineRootOf(unitId)
+  const idx = lineIndexOf(unitId)
+  let best: { stack: BoardStack; steps: number } | null = null
+  for (const s of board) {
+    if (lineRootOf(s.unitId) !== root) continue
+    const steps = lineIndexOf(s.unitId) - idx
+    if (steps < 0) continue
+    // The least-advanced eligible stack loses the fewest recruits in training.
+    if (!best || steps < best.steps) best = { stack: s, steps }
+  }
+  if (!best) return { target: null, added: full, stepsBehind: 0, formId: unitId }
+  return {
+    target: best.stack,
+    added: Math.max(1, Math.floor(full / 2 ** best.steps)),
+    stepsBehind: best.steps,
+    formId: best.stack.unitId,
+  }
+}
+
+/**
+ * Two stacks in the same form are one company (§1.2): fold every duplicate of
+ * `uid`'s form into it. Without this, promoting into a form you already field
+ * leaves two half-stacks that each miss their Banner Rank threshold.
+ */
+export function mergeSameForm(board: BoardStack[], uid: string): BoardStack[] {
+  const keep = board.find((s) => s.uid === uid)
+  if (!keep) return board
+  const dupes = board.filter((s) => s.uid !== uid && s.unitId === keep.unitId)
+  if (dupes.length === 0) return board
+  const merged: BoardStack = {
+    ...keep,
+    count: keep.count + dupes.reduce((n, d) => n + d.count, 0),
+    spent: keep.spent + dupes.reduce((n, d) => n + d.spent, 0),
+    // Growth bonuses are per unit, not pooled — the company keeps the better.
+    bonusAtk: Math.max(keep.bonusAtk, ...dupes.map((d) => d.bonusAtk)),
+    bonusHp: Math.max(keep.bonusHp, ...dupes.map((d) => d.bonusHp)),
+    growthTicks: Math.max(keep.growthTicks, ...dupes.map((d) => d.growthTicks)),
+    rank: Math.max(keep.rank ?? 0, ...dupes.map((d) => d.rank ?? 0)),
+  }
+  merged.rank = applyRankProgress(merged)
+  return board.filter((s) => !dupes.some((d) => d.uid === s.uid)).map((s) => (s.uid === uid ? merged : s))
+}
+
 export function inSameLine(a: string, b: string): boolean {
   if (a === b) return true
   return lineOf(a).includes(b) || lineOf(b).includes(a)
@@ -136,19 +219,18 @@ export function nextUid(): string {
 export function recruit(board: BoardStack[], gold: number, unitId: string, mods: HeroMods): RecruitResult {
   const def = unit(unitId)
   if (gold < RECRUIT_COST) return { ok: false, reason: 'Not enough gold', board, gold }
-  const add = musterCount(def, mods)
-  const existing = stackOfUnit(board, unitId)
-  if (existing) {
+  const plan = recruitPlan(board, unitId, mods)
+  if (plan.target) {
     // A recruit is the main way a stack crosses a Banner Rank threshold (§3.1).
-    const count = existing.count + add
-    const grown = { ...existing, count, spent: existing.spent + RECRUIT_COST }
+    const count = plan.target.count + plan.added
+    const grown = { ...plan.target, count, spent: plan.target.spent + RECRUIT_COST }
     grown.rank = applyRankProgress(grown)
-    const next = board.map((s) => (s.uid === existing.uid ? grown : s))
+    const next = board.map((s) => (s.uid === plan.target!.uid ? grown : s))
     return { ok: true, board: next, gold: gold - RECRUIT_COST }
   }
   const slot = firstOpenSlot(board, def)
   if (slot === null) return { ok: false, reason: 'No open slot', board, gold }
-  const fresh: BoardStack = { uid: nextUid(), unitId, count: add, slot, bonusAtk: 0, bonusHp: 0, growthTicks: 0, spent: RECRUIT_COST, rank: 0 }
+  const fresh: BoardStack = { uid: nextUid(), unitId, count: plan.added, slot, bonusAtk: 0, bonusHp: 0, growthTicks: 0, spent: RECRUIT_COST, rank: 0 }
   fresh.rank = applyRankProgress(fresh)
   return { ok: true, board: [...board, fresh], gold: gold - RECRUIT_COST }
 }
@@ -177,8 +259,8 @@ export function promote(board: BoardStack[], gold: number, uid: string, camp: Ca
     if (open === null) return { ok: false, reason: 'No room in the target row', board, gold }
     slot = open
   }
-  const next = board.map((s) => (s.uid === uid ? { ...s, unitId: target.id, slot, spent: s.spent + cost } : s))
-  return { ok: true, board: next, gold: gold - cost }
+  const promoted = board.map((s) => (s.uid === uid ? { ...s, unitId: target.id, slot, spent: s.spent + cost } : s))
+  return { ok: true, board: mergeSameForm(promoted, uid), gold: gold - cost }
 }
 
 export function sell(board: BoardStack[], gold: number, uid: string, mods: HeroMods): RecruitResult {

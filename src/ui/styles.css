@@ -1512,6 +1512,130 @@ h3 {
   color: #9ecbff;
 }
 
+/* ── impact (DN04 §7) ───────────────────────────────────────────────────── */
+
+/* Grades, not one effect: a 6-damage poke and a 38-damage swing must not read
+   the same. Weight is the share of the victim's pool the blow removed. */
+.stack[data-weight='light'] {
+  animation: shake 0.3s ease;
+}
+.stack[data-weight='heavy'] {
+  animation: knockback 0.36s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.stack[data-act='true'] {
+  animation: lunge 0.34s cubic-bezier(0.3, 1.4, 0.4, 1);
+}
+.float[data-size='md'] {
+  font-size: 19px;
+}
+.float[data-size='lg'] {
+  font-size: 26px;
+  animation: floatHeavy 0.95s ease forwards;
+}
+
+.battlefield[data-shake='true'] {
+  animation: fieldShake 0.34s ease;
+}
+
+.impact-spark {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 8;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(var(--x), var(--y));
+  background: radial-gradient(circle, #fff 0%, #ffd07a 40%, transparent 70%);
+  animation: sparkOut 0.4s ease forwards;
+}
+
+/* ── caster flavours (DN04 §10) ─────────────────────────────────────────── */
+
+/* A spell landing: light blooms out of the recipient in the caster's palette,
+   so the Cleric's heal is gold and a dryad's is green at a glance. */
+.cast-bloom {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+  pointer-events: none;
+  animation: bloom 0.7s ease forwards;
+}
+.cast-bloom[data-fx='holy'] {
+  background: radial-gradient(circle at 50% 62%, #ffe9b380 0%, #ffc86b33 45%, transparent 72%);
+}
+.cast-bloom[data-fx='nature'] {
+  background: radial-gradient(circle at 50% 62%, #d7f7bb80 0%, #7fd39a3d 45%, transparent 72%);
+}
+.cast-bloom[data-fx='storm'] {
+  background: radial-gradient(circle at 50% 62%, #d6f2ff80 0%, #6cc9ff40 45%, transparent 72%);
+}
+.cast-bloom[data-fx='arcane'] {
+  background: radial-gradient(circle at 50% 62%, #e5d4ff80 0%, #9a7ae040 45%, transparent 72%);
+}
+.cast-bloom[data-fx='blood'] {
+  background: radial-gradient(circle at 50% 62%, #ffd0c880 0%, #d9534f40 45%, transparent 72%);
+}
+
+/* ── hero stage and plaques ─────────────────────────────────────────────── */
+
+/* Your hero owns the dead space under your back line (§9). The portrait is
+   masked into the UI rather than framed, so it reads as presence, not a card. */
+.hero-stage {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  width: 100%;
+  min-height: 62px;
+  padding: 4px 10px;
+  overflow: hidden;
+  border-radius: 10px;
+  /* Centre stage, literally (§9) — the glow pools under the portrait rather
+     than washing in from an edge. */
+  justify-content: center;
+  background: radial-gradient(80% 120% at 50% 100%, color-mix(in srgb, var(--fc) 20%, transparent), transparent 70%);
+}
+.hero-stage[data-flare='true'] {
+  animation: stageFlare 0.6s ease;
+}
+.stage-art {
+  flex: none;
+  width: 76px;
+  height: 62px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  color: var(--fc);
+  -webkit-mask-image: radial-gradient(120% 100% at 40% 40%, #000 45%, transparent 78%);
+  mask-image: radial-gradient(120% 100% at 40% 40%, #000 45%, transparent 78%);
+}
+.stage-art .plate {
+  object-position: 50% 12% !important;
+}
+.stage-body {
+  display: grid;
+  gap: 3px;
+  padding-bottom: 6px;
+  min-width: 0;
+}
+.stage-name {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Pips arc over the portrait rather than sitting in a row beside it. */
+.hero-stage .plaque-pips > i {
+  width: 7px;
+  height: 7px;
+}
+
 /* ── hero plaques ───────────────────────────────────────────────────────── */
 
 .plaque-row {
@@ -1872,6 +1996,102 @@ h3 {
     opacity: 0;
   }
 }
+@keyframes knockback {
+  0% {
+    transform: translate(0, 0);
+  }
+  22% {
+    transform: translate(0, 7px) scale(0.96);
+  }
+  60% {
+    transform: translate(0, -2px);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+/* A one-frame hold at contact is what makes a swing land rather than glide. */
+@keyframes lunge {
+  0% {
+    transform: translateY(0);
+  }
+  38% {
+    transform: translateY(-9px) scale(1.05);
+  }
+  46% {
+    transform: translateY(-9px) scale(1.05);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+@keyframes floatHeavy {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 6px) scale(0.7);
+  }
+  18% {
+    opacity: 1;
+    transform: translate(-50%, -2px) scale(1.15);
+  }
+  34% {
+    transform: translate(-50%, -4px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -26px) scale(1);
+  }
+}
+@keyframes fieldShake {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  20% {
+    transform: translate(-3px, 2px);
+  }
+  45% {
+    transform: translate(3px, -2px);
+  }
+  70% {
+    transform: translate(-2px, 1px);
+  }
+}
+@keyframes sparkOut {
+  0% {
+    opacity: 1;
+    transform: translate(var(--x), var(--y)) scale(0.4);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--x), var(--y)) scale(3.4);
+  }
+}
+@keyframes bloom {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.06);
+  }
+}
+@keyframes stageFlare {
+  0% {
+    box-shadow: inset 0 0 0 0 transparent;
+  }
+  40% {
+    box-shadow: inset 0 0 34px -6px var(--fc);
+  }
+  100% {
+    box-shadow: inset 0 0 0 0 transparent;
+  }
+}
 @keyframes popUp {
   from {
     transform: translateY(100%);
@@ -1935,6 +2155,27 @@ h3 {
   }
   100% {
     opacity: 0;
+  }
+}
+
+/* Reduced motion keeps the information and drops the movement (§7): a hit
+   still announces itself, as a flash instead of a shove, and the field never
+   jolts. The blanket rules below already flatten durations; these swap the
+   effect outright so the grade is not simply lost. */
+.reduced-motion .battlefield[data-shake='true'] {
+  animation: none !important;
+}
+.reduced-motion .stack[data-weight='light'],
+.reduced-motion .stack[data-weight='heavy'] {
+  animation: hitFlash 0.25s ease !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .battlefield[data-shake='true'] {
+    animation: none !important;
+  }
+  .stack[data-weight='light'],
+  .stack[data-weight='heavy'] {
+    animation: hitFlash 0.25s ease !important;
   }
 }
 

@@ -1,6 +1,6 @@
 import { UNIT_ART } from '../data/art'
 import { FACTION_BY_ID, unit } from '../data/index'
-import type { Projectile, RowPref, UnitDef } from '../data/types'
+import type { CastFx, Projectile, RowPref, UnitDef } from '../data/types'
 import type { StackSnap } from '../engine/battle'
 import { Plate } from './Plate'
 import { Sigil } from './Sigil'
@@ -18,6 +18,19 @@ export function unitColor(def: UnitDef): string {
 export function projectileOf(def: UnitDef): Projectile {
   if (def.projectile) return def.projectile
   return def.pool === 'vanguard' ? 'bolt' : def.pool === 'verdant' ? 'arrow' : def.pool === 'stormtide' ? 'spark' : 'arrow'
+}
+
+/** Faction defaults for spell flavour (DN04 §10). */
+const FACTION_CAST: Record<string, CastFx> = { vanguard: 'holy', verdant: 'nature', stormtide: 'storm' }
+
+/** What this unit's magic looks like: data wins, otherwise its faction. */
+export function castFxOf(def: UnitDef): CastFx {
+  return def.castFx ?? FACTION_CAST[def.pool] ?? 'arcane'
+}
+
+/** What a hero's magic looks like — same rule, so an army reads as one colour. */
+export function castFxOfFaction(factionId: string): CastFx {
+  return FACTION_CAST[factionId] ?? 'arcane'
 }
 
 /** Row eligibility, in one character. Shared by every card and sheet (§1.4). */
@@ -93,7 +106,11 @@ interface Props {
   illegal?: boolean
   state?: 'hit' | 'act' | 'dead' | null
   onClick?: () => void
-  float?: { text: string; kind: 'dmg' | 'heal' | 'buff' | 'soak' } | null
+  float?: { text: string; kind: 'dmg' | 'heal' | 'buff' | 'soak'; weight?: number } | null
+  /** share of pool this blow took — scales the shake, knockback and number (§7) */
+  weight?: number
+  /** a spell landing on this stack, in its caster's flavour (§10) */
+  bloom?: CastFx | null
   /** Muster: 'ready' = affordable promotion waiting, 'soon' = needs more gold */
   promote?: 'ready' | 'soon' | null
   /** tapping the badge promotes without opening the sheet (DN04 §8) */
@@ -131,6 +148,8 @@ export function StackCard({
   state,
   onClick,
   float,
+  weight = 0,
+  bloom,
   promote,
   onPromoteTap,
   cover = 0,
@@ -159,6 +178,7 @@ export function StackCard({
       data-saved={savedByCover ? 'true' : undefined}
       data-apex={apexMax > 0 && apexCharge >= apexMax ? 'ready' : undefined}
       data-apex-firing={apexFiring ? 'true' : undefined}
+      data-weight={weight >= 0.4 ? 'heavy' : weight > 0 ? 'light' : undefined}
       data-hit={state === 'hit' ? 'true' : undefined}
       data-act={state === 'act' ? 'true' : undefined}
       data-dead={state === 'dead' ? 'true' : undefined}
@@ -179,7 +199,15 @@ export function StackCard({
           ▲
         </span>
       )}
-      {float && <span className={`float float-${float.kind}`}>{float.text}</span>}
+      {bloom && <span className="cast-bloom" data-fx={bloom} aria-hidden="true" />}
+      {float && (
+        <span
+          className={`float float-${float.kind}`}
+          data-size={(float.weight ?? 0) >= 0.4 ? 'lg' : (float.weight ?? 0) >= 0.15 ? 'md' : undefined}
+        >
+          {float.text}
+        </span>
+      )}
       <span className="row-glyph" aria-hidden="true">
         {rowGlyph(def.row)}
       </span>
@@ -228,6 +256,8 @@ export function SnapCard({
   snap,
   state,
   float,
+  weight,
+  bloom,
   onClick,
   savedByCover,
   apexFiring,
@@ -235,6 +265,8 @@ export function SnapCard({
   snap: StackSnap
   state?: 'hit' | 'act' | 'dead' | null
   float?: Props['float']
+  weight?: number
+  bloom?: CastFx | null
   onClick?: () => void
   savedByCover?: boolean
   apexFiring?: boolean
@@ -252,6 +284,8 @@ export function SnapCard({
       health={total > 0 ? cur / total : 0}
       state={state}
       float={float}
+      weight={weight}
+      bloom={bloom}
       onClick={onClick}
       cover={snap.cover}
       apexCharge={snap.apexCharge}

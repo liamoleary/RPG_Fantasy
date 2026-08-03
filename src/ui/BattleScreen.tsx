@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { HERO_ART } from '../data/art'
+import { HERO_ART, HERO_ART_2X } from '../data/art'
 import { FACTION_BY_ID, HERO_BY_ID, unit } from '../data/index'
-import type { Projectile } from '../data/types'
+import type { CastFx, FactionId, Projectile } from '../data/types'
 import type { BattleResult, Side, StackSnap } from '../engine/battle'
 import { player, type RunState, type Warlord } from '../engine/run'
 import { useGame } from '../state/store'
@@ -11,7 +11,7 @@ import { Ladder } from './Ladder'
 import { Plate } from './Plate'
 import { Sigil } from './Sigil'
 import { describe, HEAVY_HIT_FRACTION, poolOf, spellSummary } from './battleLog'
-import { projectileOf, SnapCard } from './StackCard'
+import { castFxOfFaction, projectileOf, SnapCard } from './StackCard'
 
 /** Volley is a unit property, so the log does not need to repeat it. */
 function isVolley(unitId: string | undefined): boolean {
@@ -31,8 +31,21 @@ const SPELL_MIN_MS = 600
 
 interface Frame {
   boards: Record<string, StackSnap>
-  /** transient per-stack effects for this frame */
-  fx: Record<string, { state?: 'hit' | 'act' | 'dead'; float?: { text: string; kind: 'dmg' | 'heal' | 'buff' | 'soak' } }>
+  /**
+   * Transient per-stack effects for this frame. `weight` is the share of the
+   * victim's pool the blow took (§7): it scales the number, the knockback and
+   * whether the screen shakes at all. `bloom` is the receiving end of a spell
+   * in its caster's flavour (§10).
+   */
+  fx: Record<
+    string,
+    {
+      state?: 'hit' | 'act' | 'dead'
+      float?: { text: string; kind: 'dmg' | 'heal' | 'buff' | 'soak'; weight?: number }
+      weight?: number
+      bloom?: CastFx
+    }
+  >
   banner: string | null
   line: string
   /** a shot to draw arcing over the front line, from one card to another */
@@ -56,14 +69,23 @@ interface Frame {
  * warning (§2.1) — when Bulwark eats part of a blow, the float shows the whole
  * sum, not just what got through.
  */
-function hitFloat(dmg: number, absorbed: number): Frame['fx'][string]['float'] {
-  if (absorbed > 0 && dmg > 0) return { text: `${dmg + absorbed} −${absorbed}◈ = ${dmg}`, kind: 'dmg' }
+function hitFloat(dmg: number, absorbed: number, weight = 0): Frame['fx'][string]['float'] {
+  if (absorbed > 0 && dmg > 0) return { text: `${dmg + absorbed} −${absorbed}◈ = ${dmg}`, kind: 'dmg', weight }
   if (absorbed > 0) return { text: `${absorbed} −${absorbed}◈ = 0`, kind: 'soak' }
-  if (dmg > 0) return { text: `-${dmg}`, kind: 'dmg' }
+  if (dmg > 0) return { text: `-${dmg}`, kind: 'dmg', weight }
   return undefined
 }
 
-function buildFrames(result: BattleResult, playerIsA: boolean): Frame[] {
+/** The flavour a stack's own side casts in — heals and buffs land in it (§10). */
+function bloomOf(s: StackSnap | undefined, sides: Record<Side, FactionId>): CastFx | undefined {
+  if (!s) return undefined
+  const own = unit(s.unitId)
+  // A mercenary fighting for the Verdant Court is healed by Verdant magic, so
+  // the side's colours win unless the unit declares its own.
+  return own.castFx ?? castFxOfFaction(sides[s.side])
+}
+
+function buildFrames(result: BattleResult, playerIsA: boolean, sides: Record<Side, FactionId>): Frame[] {
   const boards: Record<string, StackSnap> = {}
   const frames: Frame[] = []
   const spent: Record<Side, number> = { a: 0, b: 0 }
@@ -95,10 +117,11 @@ function buildFrames(result: BattleResult, playerIsA: boolean): Frame[] {
         if (!e.retaliation && isVolley(boards[e.src]?.unitId)) {
           arc = { from: e.src, to: e.dst, covered: false, shot: projectileOf(unit(boards[e.src].unitId)) }
         }
-        fx[e.dst] = { state: 'hit', float: hitFloat(e.dmg, e.absorbed) }
         const pool = victimBefore ? poolOf(victimBefore) : 0
-        if (pool > 0 && e.dmg / pool >= HEAVY_HIT_FRACTION) {
-          heavy = { uid: e.dst, frac: e.dmg / pool }
+        const weight = pool > 0 ? Math.min(1, e.dmg / pool) : 0
+        fx[e.dst] = { state: 'hit', float: hitFloat(e.dmg, e.absorbed, weight), weight }
+        if (pool > 0 && weight >= HEAVY_HIT_FRACTION) {
+          heavy = { uid: e.dst, frac: weight }
           // A one-shot should feel authored: name the stack that threw it.
           banner = `${unit(boards[e.src]?.unitId ?? e.src).name} — ${e.dmg} damage!`
         }
@@ -108,7 +131,9 @@ function buildFrames(result: BattleResult, playerIsA: boolean): Frame[] {
         fx[e.dst] = { state: 'hit', float: { text: `-${e.dmg}`, kind: 'dmg' } }
         break
       case 'heal':
-        fx[e.uid] = { float: { text: `+${e.amount}`, kind: 'heal' } }
+        // A heal blooms on the recipient in its side's flavour (§10) — gold
+        // light for the Vanguard's Cleric, green for a Verdant grove.
+        fx[e.uid] = { float: { text: `+${e.amount}`, kind: 'heal' }, bloom: bloomOf(boards[e.uid], sides) }
         break
       case 'frenzy':
         fx[e.uid] = { float: { text: `+${e.atk} ATK`, kind: 'buff' } }
@@ -123,7 +148,7 @@ function buildFrames(result: BattleResult, playerIsA: boolean): Frame[] {
         saved = e.saved
         break
       case 'buff':
-        for (const uid of e.uids) fx[uid] = { float: { text: e.text, kind: 'buff' } }
+        for (const uid of e.uids) fx[uid] = { float: { text: e.text, kind: 'buff' }, bloom: bloomOf(boards[uid], sides) }
         break
       case 'root':
         fx[e.uid] = { float: { text: 'rooted', kind: 'soak' } }
@@ -175,7 +200,18 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
   const p = player(run)
   const report = run.reports.find((r) => r.aId === p.id || r.bId === p.id)
   const playerIsA = report ? report.aId === p.id : true
-  const frames = useMemo(() => (result ? buildFrames(result, playerIsA) : []), [result, playerIsA])
+  const foeWarlord = report ? run.warlords.find((w) => w.id === (playerIsA ? report.bId : report.aId)) : null
+  const sideFactions = useMemo<Record<Side, FactionId>>(
+    () => ({
+      a: (playerIsA ? p.factionId : foeWarlord?.factionId) ?? p.factionId,
+      b: (playerIsA ? foeWarlord?.factionId : p.factionId) ?? p.factionId,
+    }),
+    [playerIsA, p.factionId, foeWarlord?.factionId],
+  )
+  const frames = useMemo(
+    () => (result ? buildFrames(result, playerIsA, sideFactions) : []),
+    [result, playerIsA, sideFactions],
+  )
   const [i, setI] = useState(0)
   const [done, setDone] = useState(false)
   /** the snapshot the player tapped; inspecting holds the replay (§2.1) */
@@ -195,6 +231,10 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
     key: number
   } | null>(null)
   const [beams, setBeams] = useState<{ x1: number; y1: number; len: number; rot: number; key: number }[]>([])
+  /** a heavy hit shakes the field, at most once a second (§7) */
+  const [shake, setShake] = useState(0)
+  const lastShake = useRef(0)
+  const [spark, setSpark] = useState<{ x: number; y: number; key: number } | null>(null)
 
   useEffect(() => {
     setI(0)
@@ -260,6 +300,21 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
     } else {
       setBeams([])
     }
+
+    // A heavy blow marks the contact point and jolts the field — but no more
+    // than once a second, so a flurry of big hits shares one jolt (§7).
+    const hv = frame.heavy && card(frame.heavy.uid)
+    if (frame.heavy && hv) {
+      const c = centre(hv)
+      setSpark({ x: c.x, y: c.y, key: i })
+      const now = performance.now()
+      if (now - lastShake.current > 1000) {
+        lastShake.current = now
+        setShake(i)
+      }
+    } else {
+      setSpark(null)
+    }
   }, [i, frames])
 
   useEffect(() => {
@@ -293,7 +348,7 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
   const frame = frames[i]
   const mine = Object.values(frame.boards).filter((s) => (s.side === 'a') === playerIsA)
   const theirs = Object.values(frame.boards).filter((s) => (s.side === 'a') !== playerIsA)
-  const foe = report ? run.warlords.find((w) => w.id === (playerIsA ? report.bId : report.aId)) : null
+  const foe = foeWarlord
   const foeFaction = foe ? FACTION_BY_ID.get(foe.factionId) : null
   const mySide: Side = playerIsA ? 'a' : 'b'
   const foeSide: Side = playerIsA ? 'b' : 'a'
@@ -330,7 +385,15 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
         </span>
       </div>
 
-      <div className="battlefield" style={{ position: 'relative' }} ref={fieldRef}>
+      <div className="battlefield" data-shake={shake === i ? 'true' : undefined} style={{ position: 'relative' }} ref={fieldRef}>
+        {spark && !peek && (
+          <span
+            key={`spark${spark.key}`}
+            className="impact-spark"
+            style={{ ['--x' as string]: `${spark.x}px`, ['--y' as string]: `${spark.y}px` }}
+            aria-hidden="true"
+          />
+        )}
         {shot && !peek && (
           <span
             key={shot.key}
@@ -394,10 +457,9 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
         <SnapBoard snaps={theirs} fx={frame.fx} saved={frame.saved} apexUid={frame.apex?.uid} onPeek={setPeek} />
         <div className="center dim tiny">— — —</div>
         <SnapBoard snaps={mine} fx={frame.fx} saved={frame.saved} apexUid={frame.apex?.uid} mine onPeek={setPeek} />
-        <HeroPlaque
+        <HeroStage
           warlord={p}
           side={mySide}
-          mine
           casts={totals[mySide]}
           spent={frame.spent[mySide]}
           flare={frame.cast?.side === mySide}
@@ -442,6 +504,57 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
 
       {heroPeek && <HeroSheet warlord={heroPeek} round={run.round} onClose={() => setHeroPeek(null)} />}
     </div>
+  )
+}
+
+/**
+ * Your hero, centre stage (Design Notes 04 §9). The portrait is the largest
+ * single element on the screen after the boards, gradient-masked into the dead
+ * space the DN03 §3 orientation fix left below your back line, and casts
+ * launch from it — the plaque version stays for the enemy, whose board matters
+ * more than their face.
+ */
+function HeroStage({
+  warlord,
+  side,
+  casts,
+  spent,
+  flare,
+  pulse,
+  onTap,
+}: {
+  warlord: Warlord
+  side: Side
+  casts: number
+  spent: number
+  flare?: boolean
+  pulse?: string | null
+  onTap: () => void
+}) {
+  const hero = HERO_BY_ID.get(warlord.heroId)
+  const faction = FACTION_BY_ID.get(warlord.factionId)
+  return (
+    <button
+      className="hero-stage"
+      data-plaque={side}
+      data-flare={flare ? 'true' : undefined}
+      style={{ ['--fc' as string]: faction?.colors.accent }}
+      onClick={onTap}
+      aria-label={`${hero?.name ?? warlord.name} — pause and inspect`}
+    >
+      <span className="stage-art">
+        <Plate src={HERO_ART_2X[warlord.heroId]} eager fallback={<Sigil id={hero?.sigil ?? 'shield'} size={30} />} />
+      </span>
+      <span className="stage-body">
+        <span className="stage-name">{hero?.name ?? warlord.name}</span>
+        <span className="plaque-pips" aria-label={`${Math.max(0, casts - spent)} of ${casts} casts left`}>
+          {Array.from({ length: casts }, (_, k) => (
+            <i key={k} data-spent={k < spent ? 'true' : undefined} />
+          ))}
+        </span>
+      </span>
+      {pulse && <span className="plaque-pulse">{pulse}</span>}
+    </button>
   )
 }
 
@@ -531,6 +644,8 @@ function SnapBoard({
               snap={s}
               state={f?.state ?? null}
               float={f?.float ?? null}
+              weight={f?.weight ?? 0}
+              bloom={f?.bloom ?? null}
               savedByCover={saved === s.uid}
               apexFiring={apexUid === s.uid}
               onClick={() => onPeek(s)}

@@ -113,6 +113,14 @@ export type SigilId =
 export type Projectile = 'bolt' | 'arrow' | 'spark' | 'harpoon'
 
 /**
+ * How a caster's magic looks (Design Notes 04 §10). Archers got projectiles in
+ * DN02/03; casters got nothing, and the Battle Cleric's per-exchange heal was
+ * the most invisible power in the game. Defaults by faction, overridable per
+ * unit or hero.
+ */
+export type CastFx = 'holy' | 'nature' | 'storm' | 'arcane' | 'blood'
+
+/**
  * Apex abilities (Design Notes 04 §3) — the reward for finishing a promotion
  * line, and only that: the six line-top forms, no T5s, no mercenaries. The
  * meter charges in battle and the ultimate fires in place of an attack.
@@ -150,6 +158,8 @@ export interface UnitDef {
   projectile?: Projectile
   /** line-top forms only: the ultimate this form charges toward (DN04 §3) */
   apex?: ApexDef
+  /** overrides the faction's default spell flavour (DN04 §10) */
+  castFx?: CastFx
   /** synergy tags used by rival scoring and by the player's own sorting */
   tags?: string[]
 }
@@ -194,6 +204,8 @@ export interface HeroDef {
   signatureBoons: string[]
   unlockRenown: number
   sigil: SigilId
+  /** overrides the faction's default spell flavour (DN04 §10) */
+  castFx?: CastFx
 }
 
 export interface FactionDef {

@@ -1361,6 +1361,96 @@ h3 {
 .boon:active {
   transform: scale(0.985);
 }
+/* ── boon paths (DN04 §11) ──────────────────────────────────────────────── */
+
+/* Three paths, side by side. One column per branch where there is room; on a
+   phone they stack, and the offered card names the rank it advances instead. */
+.paths {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.path {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding: 6px 4px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--bc) 35%, var(--line));
+  background: color-mix(in srgb, var(--bc) 10%, transparent);
+}
+.path-name {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: var(--bc);
+}
+.path-pips {
+  display: flex;
+  gap: 2px;
+}
+.path-pips > i {
+  width: 8px;
+  height: 4px;
+  border-radius: 1px;
+  background: #ffffff26;
+}
+.path-pips > i[data-on='true'] {
+  background: var(--bc);
+  box-shadow: 0 0 5px var(--bc);
+}
+.path-title {
+  font-size: 11px;
+  font-weight: 800;
+}
+
+/* What this card does to your standing, said plainly on the card. */
+.boon-advance {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--bc);
+  opacity: 0.9;
+}
+
+.path-toast {
+  position: fixed;
+  left: 50%;
+  top: 16%;
+  transform: translateX(-50%);
+  z-index: 70;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--bc);
+  background: #0b0d14ee;
+  font-weight: 700;
+  box-shadow: 0 0 24px -6px var(--bc);
+  animation: banner 1.9s ease forwards;
+  pointer-events: none;
+}
+
+.strip-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px 1px 2px;
+  border-radius: 5px;
+  color: var(--bc);
+  background: color-mix(in srgb, var(--bc) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bc) 45%, transparent);
+}
+.strip-group > i {
+  font-style: normal;
+  font-size: 10px;
+}
+.strip-group > b {
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 /* The before → after a Magic boon is actually buying (DN03 §2.4). */
 .boon-preview {
   font-size: 12px;

@@ -29,7 +29,7 @@ import { opponentOf, player, type RunState } from '../engine/run'
 import { useGame } from '../state/store'
 import { InspectSheet, RankProgress, promoteBlock } from './InspectSheet'
 import { GlossarySheet } from './Glossary'
-import { HeroSheet, branchColor } from './HeroSheet'
+import { HeroSheet, PathColumns, branchColor, branchPicks, pathTitle } from './HeroSheet'
 import { Plate } from './Plate'
 import { unitArtFor, usePreloadArt } from './preload'
 import { Ladder, WarlordSheet } from './Ladder'
@@ -97,6 +97,7 @@ export function MusterScreen({ run }: { run: RunState }) {
   const [campFx, setCampFx] = useState<string | null>(null)
   /** uid whose promotion is one confirm away, straight from the board (§8) */
   const [promoteUid, setPromoteUid] = useState<string | null>(null)
+  const [pathToast, setPathToast] = useState<{ branch: BoonBranch; title: string } | null>(null)
   const foeId = opponentOf(run, p.id)
   const foe = foeId ? run.warlords.find((w) => w.id === foeId) : null
   const rCost = rerollCost(p.camp, p.mods)
@@ -151,6 +152,12 @@ export function MusterScreen({ run }: { run: RunState }) {
       }
     }
     store.chooseBoon(id)
+    // "Your Magic is now Expert" — the pick advances a named rank (§11).
+    if (boon) {
+      const to = pathTitle(branchPicks(p.boonsTaken)[boon.branch] + 1)
+      setPathToast({ branch: boon.branch, title: to })
+      window.setTimeout(() => setPathToast(null), 1900)
+    }
     // A boon that changes what you can *buy* has nothing on the board to touch,
     // so it floats over the War Camp — the thing it actually changed.
     setBoonFx(fx)
@@ -411,8 +418,21 @@ export function MusterScreen({ run }: { run: RunState }) {
       {store.inspecting && <WarlordSheet run={run} id={store.inspecting} onClose={() => store.inspect(null)} />}
       {heroOpen && <HeroSheet warlord={p} round={run.round} onClose={() => setHeroOpen(false)} />}
       {glossary && <GlossarySheet onClose={() => setGlossary(false)} />}
+      {pathToast && (
+        <div className="path-toast" style={{ ['--bc' as string]: branchColor(pathToast.branch) }} role="status">
+          Your {pathToast.branch} is now <strong>{pathToast.title}</strong>
+        </div>
+      )}
       {run.phase === 'levelup' && run.boonOffer.length > 0 && (
-        <BoonModal offers={run.boonOffer} level={level} hero={hero} mods={p.mods} round={run.round} onPick={pickBoon} />
+        <BoonModal
+          offers={run.boonOffer}
+          level={level}
+          hero={hero}
+          mods={p.mods}
+          round={run.round}
+          taken={p.boonsTaken}
+          onPick={pickBoon}
+        />
       )}
     </div>
   )
@@ -770,17 +790,19 @@ function RangedThreat({ board }: { board: BoardStack[] }) {
  */
 function BoonStrip({ ids, onOpen }: { ids: string[]; onOpen: () => void }) {
   if (ids.length === 0) return null
+  const picks = branchPicks(ids)
+  // Grouped by branch with its rank (§11) — the strip should read as three
+  // paths you are walking, not a pile of icons in pick order.
   return (
-    <button className="boon-strip" onClick={onOpen} aria-label={`${ids.length} boons taken — open hero sheet`}>
-      {ids.map((id, i) => {
-        const b = BOON_BY_ID.get(id)
-        if (!b) return null
-        return (
-          <i key={`${id}${i}`} style={{ ['--bc' as string]: branchColor(b.branch) }} title={`${b.name} — ${b.text}`}>
-            {BRANCH_GLYPH[b.branch]}
-          </i>
-        )
-      })}
+    <button className="boon-strip" onClick={onOpen} aria-label={`Boons taken — open hero sheet`}>
+      {(['might', 'magic', 'command'] as BoonBranch[])
+        .filter((b) => picks[b] > 0)
+        .map((branch) => (
+          <span key={branch} className="strip-group" style={{ ['--bc' as string]: branchColor(branch) }}>
+            <i>{BRANCH_GLYPH[branch]}</i>
+            <b>{pathTitle(picks[branch])}</b>
+          </span>
+        ))}
     </button>
   )
 }
@@ -827,6 +849,7 @@ function BoonModal({
   hero,
   mods,
   round,
+  taken,
   onPick,
 }: {
   offers: BoonDef[]
@@ -834,20 +857,26 @@ function BoonModal({
   hero: HeroDef
   mods: HeroMods
   round: number
+  taken: string[]
   onPick: (id: string) => void
 }) {
+  const picks = branchPicks(taken)
   return (
     <div className="scrim">
       <div className="sheet">
         <div className="center">
           <div className="eyebrow">Level {level}</div>
-          <h2>Choose a boon</h2>
+          <h2>Choose a path</h2>
         </div>
+        <PathColumns boonsTaken={taken} />
         {offers.map((b) => (
           <button key={b.id} className="boon" style={{ ['--bc' as string]: branchColor(b.branch) }} onClick={() => onPick(b.id)}>
             <span className="boon-branch">
               {b.branch}
               {b.capstone ? ' \u00b7 capstone' : ''}
+            </span>
+            <span className="boon-advance">
+              advances {b.branch} to {pathTitle(picks[b.branch] + 1)}
             </span>
             <strong>{b.name}</strong>
             <span className="small dim">{b.text}</span>

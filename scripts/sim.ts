@@ -14,6 +14,7 @@ import { HARD_CAP_ROUND, advanceRound, newRun, resolveBattles, type RunState } f
 import { boardPower, rivalMuster, NOISE, pickBoon, type Difficulty } from '../src/engine/rivals'
 import { isLevelUpRound } from '../src/engine/boons'
 import { applyBoon } from '../src/engine/run'
+import { lineOf } from '../src/engine/camp'
 import { lineRootOf, thresholdsFor } from '../src/engine/ranks'
 import { hashSeed, makeRng } from '../src/engine/rng'
 
@@ -237,6 +238,18 @@ function main() {
   const nearMissSeat = { n: 0, placementSum: 0, top2: 0 }
   const honoredByLine = new Map<string, number>()
 
+  /**
+   * Promotion-line adoption (Design Notes 03 §5.2). Every faction now has one
+   * melee and one ranged 3-form line; the question this answers is whether the
+   * ranged ones actually get walked to the top now that they have a top, or
+   * whether the line is entered and abandoned at Tier 2.
+   */
+  const LINES = ALL_UNITS.filter((u) => u.lineNext && lineRootOf(u.id) === u.id).map((root) => {
+    const forms = lineOf(root.id)
+    return { root: root.id, forms: new Set(forms), top: forms[forms.length - 1] }
+  })
+  const lineSeat = new Map<string, { held: number; top: number; topPlacementSum: number }>()
+
   for (let i = 0; i < args.runs; i++) {
     const seed = args.seed + i * 7919
     const rng = makeRng(seed)
@@ -276,6 +289,19 @@ function main() {
           if ((s.rank ?? 0) < 2) continue
           const line = lineRootOf(s.unitId)
           honoredByLine.set(line, (honoredByLine.get(line) ?? 0) + 1)
+        }
+        // Once per board, not once per stack — two Militia stacks are still
+        // one seat that chose the Militia line.
+        for (const ln of LINES) {
+          const held = w.board.some((s) => ln.forms.has(s.unitId))
+          if (!held) continue
+          const rec = lineSeat.get(ln.root) ?? { held: 0, top: 0, topPlacementSum: 0 }
+          rec.held++
+          if (w.board.some((s) => s.unitId === ln.top)) {
+            rec.top++
+            rec.topPlacementSum += placement
+          }
+          lineSeat.set(ln.root, rec)
         }
       }
       const seenThisRun = new Set(w.board.map((s) => s.unitId))
@@ -513,6 +539,21 @@ function main() {
         })
         .filter((r): r is [string, string][] => r !== null),
     ),
+  )
+
+  table(
+    'PROMOTION LINES        boards holding   reached the top   avg place at the top',
+    LINES.map((ln) => {
+      const rec = lineSeat.get(ln.root) ?? { held: 0, top: 0, topPlacementSum: 0 }
+      const topName = UNIT_BY_ID.get(ln.top)?.name ?? ln.top
+      const ranged = UNIT_BY_ID.get(ln.root)?.row === 'back'
+      return [
+        [`${ranged ? 'ranged' : 'melee '} ${topName}`.padEnd(30), ''],
+        [pct(rankBoards > 0 ? rec.held / rankBoards : 0).padStart(9), ''],
+        [pct(rec.held > 0 ? rec.top / rec.held : 0).padStart(12), ''],
+        [(rec.top > 0 ? rec.topPlacementSum / rec.top : 0).toFixed(2).padStart(12), `  n ${rec.top}`],
+      ] as [string, string][]
+    }),
   )
 
   console.log(`BATTLES      ${rd.battles} resolved · ${pct(rd.ties / rd.battles)} ties`)

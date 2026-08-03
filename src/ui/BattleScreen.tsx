@@ -408,6 +408,7 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
 
       <div className="log center small">{peek || heroPeek ? 'Paused — close to resume.' : frame.line}</div>
 
+      <div className="action-bar">
       <div className="row" style={{ gap: 8 }}>
         <button className="btn btn-sm grow" onClick={() => setPaused((v) => !v)} disabled={done}>
           {paused ? '▶ Resume' : '❚❚ Pause'}
@@ -423,6 +424,7 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
       <button className="btn btn-primary" disabled={!done} onClick={store.finishBattle}>
         {done ? 'Continue' : 'Fighting…'}
       </button>
+      </div>
 
       {peek && (
         <InspectSheet

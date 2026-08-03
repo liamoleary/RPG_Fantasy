@@ -34,7 +34,7 @@ export function HomeScreen() {
   }
 
   return (
-    <div className="screen">
+    <div className="screen" data-scroll="true">
       <div className="title">BANNERFELL</div>
       <div className="center small dim" style={{ marginTop: -8 }}>
         Draft a warband. Outlast seven rival warlords.

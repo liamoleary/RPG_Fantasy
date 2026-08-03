@@ -96,6 +96,8 @@ interface Props {
   float?: { text: string; kind: 'dmg' | 'heal' | 'buff' | 'soak' } | null
   /** Muster: 'ready' = affordable promotion waiting, 'soon' = needs more gold */
   promote?: 'ready' | 'soon' | null
+  /** tapping the badge promotes without opening the sheet (DN04 §8) */
+  onPromoteTap?: () => void
   /** Cover charges available — one shield dot each (Design Notes 02 §3.3) */
   cover?: number
   /** Apex meter (DN04 §3) — omit for the forms that have no ultimate */
@@ -130,6 +132,7 @@ export function StackCard({
   onClick,
   float,
   promote,
+  onPromoteTap,
   cover = 0,
   apexCharge = 0,
   apexMax = 0,
@@ -142,7 +145,9 @@ export function StackCard({
   const def = unit(unitId)
   const color = unitColor(def)
   const Tag = onClick ? 'button' : 'div'
-  return (
+  // A tappable badge cannot live inside the card: the card is itself a button.
+  // The wrapper is the positioning context for both (§8).
+  const card = (
     <Tag
       className="stack"
       style={{ ['--sc' as string]: color }}
@@ -169,7 +174,7 @@ export function StackCard({
       {/* Hit flash is an overlay, never a filter on the image — a filter
           forces a re-decode mid-battle on Safari. */}
       {state === 'hit' && <span className="card-flash" aria-hidden="true" />}
-      {promote && (
+      {promote && !onPromoteTap && (
         <span className="promote-flag" data-state={promote} aria-hidden="true">
           ▲
         </span>
@@ -201,6 +206,20 @@ export function StackCard({
         </span>
       )}
     </Tag>
+  )
+  if (!onPromoteTap || !promote) return card
+  return (
+    <span className="stack-wrap" style={{ ['--sc' as string]: color }}>
+      {card}
+      <button
+        className="promote-flag promote-tap"
+        data-state={promote}
+        onClick={onPromoteTap}
+        aria-label={`Promote ${def.name}`}
+      >
+        ▲
+      </button>
+    </span>
   )
 }
 

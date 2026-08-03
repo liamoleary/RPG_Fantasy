@@ -95,6 +95,8 @@ export function MusterScreen({ run }: { run: RunState }) {
   /** the one-second beat after a boon lands: what it visibly changed (§2.2) */
   const [boonFx, setBoonFx] = useState<Record<string, string>>({})
   const [campFx, setCampFx] = useState<string | null>(null)
+  /** uid whose promotion is one confirm away, straight from the board (§8) */
+  const [promoteUid, setPromoteUid] = useState<string | null>(null)
   const foeId = opponentOf(run, p.id)
   const foe = foeId ? run.warlords.find((w) => w.id === foeId) : null
   const rCost = rerollCost(p.camp, p.mods)
@@ -183,9 +185,12 @@ export function MusterScreen({ run }: { run: RunState }) {
   const offerPlan = planFor(offerUnitId)
   const inspectedStack = stackUid ? p.board.find((s) => s.uid === stackUid) : null
   const promo = inspectedStack ? promoteBlock(inspectedStack.unitId, p.camp.tier, p.gold, p.mods) : null
+  const promoteStack = promoteUid ? p.board.find((s) => s.uid === promoteUid) : null
+  const promoteTarget = promoteStack ? promoteBlock(promoteStack.unitId, p.camp.tier, p.gold, p.mods) : null
 
   return (
     <div className="screen">
+      <div className="screen-body">
       <Ladder run={run} onInspect={(id) => store.inspect(id)} />
 
       <div className="row spread">
@@ -231,6 +236,7 @@ export function MusterScreen({ run }: { run: RunState }) {
           coverOf={coverOf}
           owner={p}
           boonFx={boonFx}
+          onPromoteTap={(uid) => setPromoteUid(uid)}
           onRowInfo={setRowInfo}
           onStack={(uid) => (store.selected === uid ? store.select(null) : setStackUid(uid))}
           onSlot={(slot) => store.place(slot)}
@@ -238,7 +244,7 @@ export function MusterScreen({ run }: { run: RunState }) {
       </div>
 
       {/* ── war camp: bottom-anchored, within thumb reach ── */}
-      <div className="panel" style={{ display: 'grid', gap: 8, marginTop: 'auto', position: 'relative' }}>
+      <div className="panel camp-panel">
         {campFx && <span className="float float-buff camp-float">{campFx}</span>}
         <div className="row spread">
           <span className="eyebrow">War Camp · Tier {p.camp.tier}</span>
@@ -260,21 +266,23 @@ export function MusterScreen({ run }: { run: RunState }) {
         </div>
 
         <div className="row wrap" style={{ gap: 6 }}>
-          <button className="btn btn-sm grow" disabled={p.gold < rCost} onClick={store.reroll}>
+          <button className="btn btn-sm grow btn-quiet" disabled={p.gold < rCost} onClick={store.reroll}>
             Reroll {rCost === 0 ? 'free' : `${rCost}g`}
           </button>
-          <button className="btn btn-sm grow" onClick={store.toggleFreeze}>
+          <button className="btn btn-sm grow btn-quiet" onClick={store.toggleFreeze}>
             {p.camp.frozen ? '❄ Frozen' : 'Freeze'}
           </button>
-          <button className="btn btn-sm grow" disabled={tCost === null || p.gold < tCost} onClick={store.tierUp}>
-            {tCost === null ? 'Max Tier' : `Tier ${p.camp.tier + 1} · ${tCost}g`}
-          </button>
         </div>
+
+        <TierUpButton tier={p.camp.tier} cost={tCost} gold={p.gold} onBuy={store.tierUp} />
+      </div>
       </div>
 
-      <button className="btn btn-primary" onClick={store.fight}>
-        {p.board.length === 0 ? 'Fight with an empty board' : 'Ready — Fight!'}
-      </button>
+      <div className="action-bar">
+        <button className="btn btn-primary" onClick={store.fight}>
+          {p.board.length === 0 ? 'Fight with an empty board' : 'Ready — Fight!'}
+        </button>
+      </div>
 
       {/* ── sheets ── */}
       {offerUnitId && (
@@ -326,6 +334,14 @@ export function MusterScreen({ run }: { run: RunState }) {
           }}
           extra={<RankProgress unitId={inspectedStack.unitId} count={inspectedStack.count} rank={inspectedStack.rank} />}
           onClose={() => setStackUid(null)}
+          onPromote={
+            promo?.target
+              ? () => {
+                  store.promote(inspectedStack.uid)
+                  setStackUid(null)
+                }
+              : undefined
+          }
           actions={
             <>
               <button
@@ -337,19 +353,6 @@ export function MusterScreen({ run }: { run: RunState }) {
               >
                 Move
               </button>
-              {promo?.target && (
-                <button
-                  className="btn btn-sm btn-gold grow"
-                  disabled={!promo.ok}
-                  title={promo.reason}
-                  onClick={() => {
-                    store.promote(inspectedStack.uid)
-                    setStackUid(null)
-                  }}
-                >
-                  Promote → {promo.target.name} · {promo.cost}g
-                </button>
-              )}
               <button
                 className="btn btn-sm btn-danger"
                 onClick={() => {
@@ -364,6 +367,45 @@ export function MusterScreen({ run }: { run: RunState }) {
         />
       )}
 
+      {promoteStack && promoteTarget?.target && (
+        <>
+          <div className="scrim" onClick={() => setPromoteUid(null)} />
+          <div className="promote-pop">
+            <div className="row">
+              <span className="promote-face">
+                <Plate
+                  src={UNIT_ART[promoteTarget.target.id]}
+                  eager
+                  fallback={<Sigil id={promoteTarget.target.sigil} size={16} />}
+                />
+              </span>
+              <div className="grow">
+                <strong>{promoteTarget.target.name}</strong>
+                <div className="tiny dim">
+                  {unit(promoteStack.unitId).name} · {promoteStack.count} strong
+                  {promoteTarget.reason ? ` — ${promoteTarget.reason}` : ''}
+                </div>
+              </div>
+            </div>
+            <div className="row" style={{ gap: 8 }}>
+              <button className="btn btn-sm grow btn-quiet" onClick={() => setPromoteUid(null)}>
+                Not yet
+              </button>
+              <button
+                className="btn btn-sm btn-gold grow"
+                disabled={!promoteTarget.ok}
+                onClick={() => {
+                  store.promote(promoteStack.uid)
+                  setPromoteUid(null)
+                }}
+              >
+                Promote · {promoteTarget.cost}g
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {rowInfo && <RowInfoSheet row={rowInfo} onClose={() => setRowInfo(null)} />}
       {store.scouting && foe && <ScoutSheet run={run} foeId={foe.id} onClose={() => store.setScouting(false)} />}
       {store.inspecting && <WarlordSheet run={run} id={store.inspecting} onClose={() => store.inspect(null)} />}
@@ -373,6 +415,50 @@ export function MusterScreen({ run }: { run: RunState }) {
         <BoonModal offers={run.boonOffer} level={level} hero={hero} mods={p.mods} round={run.round} onPick={pickBoon} />
       )}
     </div>
+  )
+}
+
+const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V']
+
+/**
+ * Camp Tier is one of the biggest decisions in the game and used to dress like
+ * Reroll and Freeze (Design Notes 04 §6). It gets its own banner: the tier you
+ * are buying as a Roman numeral on a shield, the cost, and a pulse ONLY when
+ * you can actually afford it — so the pulse means "go", not "look at me".
+ */
+function TierUpButton({ tier, cost, gold, onBuy }: { tier: number; cost: number | null; gold: number; onBuy: () => void }) {
+  const [flash, setFlash] = useState(false)
+  if (cost === null) {
+    return (
+      <div className="tier-up" data-max="true">
+        <span className="tier-shield">{ROMAN[tier]}</span>
+        <span className="tier-body">
+          <span className="tier-title">Camp Tier {ROMAN[tier]}</span>
+          <span className="tier-sub">The camp can grow no further.</span>
+        </span>
+      </div>
+    )
+  }
+  const afford = gold >= cost
+  return (
+    <button
+      className="tier-up"
+      data-afford={afford ? 'true' : undefined}
+      data-flash={flash ? 'true' : undefined}
+      disabled={!afford}
+      onClick={() => {
+        setFlash(true)
+        window.setTimeout(() => setFlash(false), 450)
+        onBuy()
+      }}
+    >
+      <span className="tier-shield">{ROMAN[tier + 1]}</span>
+      <span className="tier-body">
+        <span className="tier-title">Raise the War Camp</span>
+        <span className="tier-sub">Tier {ROMAN[tier + 1]} unlocks its recruits</span>
+      </span>
+      <span className="tier-cost">{cost}g</span>
+    </button>
   )
 }
 
@@ -392,6 +478,7 @@ export function Board({
   coverOf,
   owner,
   boonFx,
+  onPromoteTap,
 }: {
   board: BoardStack[]
   selected?: string | null
@@ -412,6 +499,8 @@ export function Board({
   owner?: { mods: HeroMods; boonsTaken: string[] }
   /** uid → float text, for the beat right after a boon lands (§2.2) */
   boonFx?: Record<string, string>
+  /** Muster only: tapping a card's gold chevron promotes it in one step (§8) */
+  onPromoteTap?: (uid: string) => void
 }) {
   const bySlot = new Map(board.map((s) => [s.slot, s]))
   const holding = selected !== undefined && selected !== null
@@ -480,6 +569,7 @@ export function Board({
               rank={st.rank}
               rankFlash={rankFlash === st.uid}
               promote={promoteStateOf?.(st) ?? null}
+              onPromoteTap={onPromoteTap && promoteStateOf?.(st) ? () => onPromoteTap(st.uid) : undefined}
               cover={coverOf?.(st) ?? 0}
               selected={held}
               illegal={holding && !held && !droppable}

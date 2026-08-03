@@ -87,6 +87,7 @@ export function InspectSheet({
   campTier,
   gold,
   extra,
+  onPromote,
   actions,
   onClose,
 }: {
@@ -100,6 +101,8 @@ export function InspectSheet({
   gold?: number
   /** Phase B slot — Banner Rank progress renders here (§3.3) */
   extra?: ReactNode
+  /** DN04 §8: promotion pins to the top of the sheet, not the bottom */
+  onPromote?: () => void
   actions?: ReactNode
   onClose: () => void
 }) {
@@ -131,6 +134,25 @@ export function InspectSheet({
             </div>
           </div>
         </div>
+
+        {/* The player should never scroll to grow (§8). */}
+        {onPromote && nextBlock?.target && (
+          <button
+            className="btn btn-gold promote-pin"
+            disabled={!nextBlock.ok}
+            title={nextBlock.reason}
+            onClick={onPromote}
+          >
+            <span className="promote-face">
+              <Plate src={UNIT_ART[nextBlock.target.id]} eager fallback={<Sigil id={nextBlock.target.sigil} size={14} />} />
+            </span>
+            <span className="grow" style={{ textAlign: 'left' }}>
+              Promote → {nextBlock.target.name}
+              {nextBlock.reason && <span className="promote-why">{nextBlock.reason}</span>}
+            </span>
+            <span>{nextBlock.cost}g</span>
+          </button>
+        )}
 
         <div className="stat-grid">
           <Stat label="ATK" value={atk} className="chip-atk" buffed={atk > def.atk} />

@@ -67,6 +67,7 @@ export function ResultScreen({ run }: { run: RunState }) {
 
   return (
     <div className="screen">
+      <div className="screen-body" style={{ overflowY: 'auto' }}>
       <Ladder run={run} onInspect={(id) => store.inspect(id)} />
 
       <div className="center" style={{ marginTop: 18 }}>
@@ -136,9 +137,13 @@ export function ResultScreen({ run }: { run: RunState }) {
           ))}
       </div>
 
-      <button className="btn btn-primary" onClick={store.nextRound} style={{ marginTop: 'auto' }}>
-        {run.finished || eliminated ? 'See final standing' : `Muster for round ${run.round + 1}`}
-      </button>
+      </div>
+
+      <div className="action-bar">
+        <button className="btn btn-primary" onClick={store.nextRound}>
+          {run.finished || eliminated ? 'See final standing' : `Muster for round ${run.round + 1}`}
+        </button>
+      </div>
     </div>
   )
 }
@@ -183,7 +188,7 @@ export function RunOverScreen({ run }: { run: RunState }) {
   const hero = HERO_BY_ID.get(p.heroId)!
 
   return (
-    <div className="screen">
+    <div className="screen" data-scroll="true">
       <div className="center" style={{ marginTop: 28 }}>
         <div className="hero-art hero-art-ceremony" style={{ ['--fc' as string]: f.colors.primary }} data-big="true">
           <Plate src={HERO_ART_2X[p.heroId]} eager fallback={<Sigil id={hero.sigil} size={56} />} />

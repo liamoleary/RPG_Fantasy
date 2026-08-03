@@ -58,10 +58,15 @@ button {
   cursor: pointer;
 }
 
+/* Fixed to the dynamic viewport (DN04 §5): browser chrome appearing must not
+   push the Fight button below the fold. Everything that can overflow scrolls
+   inside its own region instead of scrolling the page. */
 .app {
   max-width: 520px;
   margin: 0 auto;
-  min-height: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
@@ -179,6 +184,29 @@ h3 {
   padding: 14px;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
+}
+/* The one screen that is a document rather than a board — Home is long by
+   nature, so it keeps its own scroll. */
+.screen[data-scroll='true'] {
+  overflow-y: auto;
+}
+
+/* Everything above the pinned bar; the only part allowed to give up space. */
+.screen-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Pinned to the bottom of the viewport, always reachable by a thumb. */
+.action-bar {
+  flex: none;
+  display: grid;
+  gap: 8px;
+  padding-top: 2px;
 }
 
 /* ── home ───────────────────────────────────────────────────────────────── */
@@ -337,6 +365,7 @@ h3 {
   position: relative;
 }
 .board-row > .stack,
+.board-row > .stack-wrap,
 .board-row > .slot {
   flex: 0 0 calc((100% - 18px) / 4);
   width: auto;
@@ -917,6 +946,165 @@ h3 {
 .volley-arc[data-covered='true'] > i {
   background: linear-gradient(90deg, transparent, #9ecbff);
   box-shadow: 0 0 7px 2px #9ecbffaa;
+}
+
+/* A card that carries a tappable promote badge (DN04 §8). */
+.stack-wrap {
+  position: relative;
+  display: block;
+}
+.promote-tap {
+  position: absolute;
+  z-index: 7;
+  top: -6px;
+  right: -6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 900;
+  border: 1px solid #f0d68d;
+  background: linear-gradient(180deg, var(--gold), #a8802c);
+  color: #23180a;
+  box-shadow: 0 2px 8px -2px #000;
+}
+.promote-tap[data-state='soon'] {
+  background: var(--panel-2);
+  border-color: color-mix(in srgb, var(--gold) 45%, var(--line));
+  color: var(--gold);
+  opacity: 0.8;
+}
+
+/* One-tap confirm, anchored to the board rather than a full sheet. */
+.promote-pop {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 60;
+  margin: 0 auto;
+  max-width: 520px;
+  padding: 12px 14px calc(14px + env(safe-area-inset-bottom));
+  display: grid;
+  gap: 8px;
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border-top: 1px solid color-mix(in srgb, var(--gold) 45%, var(--line));
+  border-radius: 14px 14px 0 0;
+  animation: popUp 0.16s ease;
+}
+
+/* The promotion pinned at the top of the Inspect sheet (§8). */
+.promote-pin {
+  width: 100%;
+  min-height: 46px;
+  gap: 10px;
+}
+.promote-face {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex: none;
+  display: grid;
+  place-items: center;
+  background: #0b111d;
+  border: 1px solid #f0d68d;
+}
+.promote-face .plate {
+  object-position: 50% 5% !important;
+}
+.promote-why {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+/* ── the camp (DN04 §5, §6) ─────────────────────────────────────────────── */
+
+/* The one internally-scrollable region: the camp gives up space so the board
+   and the Fight button never do. */
+.camp-panel {
+  display: grid;
+  gap: 8px;
+  position: relative;
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Reroll and Freeze are furniture; they should read as furniture. */
+.btn-quiet {
+  background: transparent;
+  color: var(--ink-dim);
+}
+
+/* Tier-up is a decision, so it dresses like one. */
+.tier-up {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 6px 12px 6px 8px;
+  text-align: left;
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--line));
+  border-radius: 4px 4px 10px 10px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--gold) 16%, var(--panel-2)), var(--panel));
+  transition: transform 0.08s ease;
+}
+.tier-up:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.tier-up[data-max='true'] {
+  opacity: 0.55;
+}
+/* Pulsing only when affordable turns the animation into an answer, not decor. */
+.tier-up[data-afford='true'] {
+  border-color: var(--gold);
+  animation: tierReady 2.2s ease-in-out infinite;
+}
+.tier-up[data-flash='true'] {
+  animation: tierFlash 0.45s ease;
+}
+.tier-up:active {
+  transform: scale(0.985);
+}
+.tier-shield {
+  flex: none;
+  width: 30px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  color: #23180a;
+  background: linear-gradient(180deg, var(--gold), #a8802c);
+  clip-path: polygon(0 0, 100% 0, 100% 62%, 50% 100%, 0 62%);
+}
+.tier-body {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.tier-title {
+  font-size: 13px;
+  font-weight: 800;
+}
+.tier-sub {
+  font-size: 11px;
+  color: var(--ink-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tier-cost {
+  flex: none;
+  font-weight: 900;
+  color: var(--gold);
 }
 
 /* ── Apex (DN04 §3) ─────────────────────────────────────────────────────── */
@@ -1682,6 +1870,34 @@ h3 {
   100% {
     clip-path: inset(0 0 0 0);
     opacity: 0;
+  }
+}
+@keyframes popUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes tierReady {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow: 0 0 16px -4px var(--gold);
+  }
+}
+@keyframes tierFlash {
+  0% {
+    filter: brightness(1);
+  }
+  40% {
+    filter: brightness(1.9);
+  }
+  100% {
+    filter: brightness(1);
   }
 }
 @keyframes apexReady {

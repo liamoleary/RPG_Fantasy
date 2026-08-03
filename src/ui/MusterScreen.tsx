@@ -19,6 +19,7 @@ import { heroState, opponentOf, player, type RunState } from '../engine/run'
 import { useGame } from '../state/store'
 import { InspectSheet, RankProgress } from './InspectSheet'
 import { Plate } from './Plate'
+import { unitArtFor, usePreloadArt } from './preload'
 import { Ladder, WarlordSheet } from './Ladder'
 import { Sigil } from './Sigil'
 import { StackCard, rowGlyph, unitColor } from './StackCard'
@@ -50,6 +51,10 @@ export function MusterScreen({ run }: { run: RunState }) {
   const tCost = tierUpCost(p.camp, p.mods)
   const level = heroLevel(run.round)
   const hero = HERO_BY_ID.get(p.heroId)!
+
+  // Your board and the board you are about to fight, fetched while the player
+  // reads the camp — the battle must never open on a blank frame (§4).
+  usePreloadArt(unitArtFor([...p.board.map((s) => s.unitId), ...(foe?.board ?? []).map((s) => s.unitId)]))
 
   const selectedStack = store.selected ? p.board.find((s) => s.uid === store.selected) : null
   const occupied = new Map(p.board.map((s) => [s.slot, s]))
@@ -142,6 +147,7 @@ export function MusterScreen({ run }: { run: RunState }) {
               unitId={unitId}
               affordable={p.gold >= RECRUIT_COST}
               bonusCount={unitId ? musterCount(unit(unitId), p.mods) : 0}
+              priority={i < 3}
               onInspect={() => setOfferIndex(i)}
             />
           ))}
@@ -363,11 +369,14 @@ function OfferCard({
   unitId,
   affordable,
   bonusCount,
+  priority,
   onInspect,
 }: {
   unitId: string | null
   affordable: boolean
   bonusCount: number
+  /** the offers visible without scrolling on a small phone */
+  priority?: boolean
   onInspect: () => void
 }) {
   if (!unitId) return <div className="offer-card" data-empty="true" />
@@ -377,7 +386,7 @@ function OfferCard({
   return (
     <button className="offer-card" style={{ ['--sc' as string]: unitColor(def) }} onClick={onInspect}>
       <span className="offer-art">
-        <Plate src={UNIT_ART[unitId]} fallback={<Sigil id={def.sigil} size={20} />} />
+        <Plate src={UNIT_ART[unitId]} priority={priority} fallback={<Sigil id={def.sigil} size={20} />} />
       </span>
       <span className="tier-pip">T{def.tier}</span>
       <span className="row-glyph" aria-hidden="true">

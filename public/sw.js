@@ -9,6 +9,26 @@ self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()))
 })
 
+/* The app hands us the plate list once it is idle (see src/ui/preload.ts).
+   Keeping it out of `install` means 3.2 MB of art never blocks first paint,
+   but a second run — or an offline one — has every card ready. */
+self.addEventListener('message', (e) => {
+  const data = e.data
+  if (!data || data.type !== 'warm-art' || !Array.isArray(data.urls)) return
+  e.waitUntil(
+    caches.open(CACHE).then(async (c) => {
+      for (const url of data.urls) {
+        try {
+          if (await c.match(url)) continue
+          await c.add(url)
+        } catch {
+          // A plate that will not fetch just stays uncached.
+        }
+      }
+    }),
+  )
+})
+
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches

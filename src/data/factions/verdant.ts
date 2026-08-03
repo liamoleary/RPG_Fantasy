@@ -103,8 +103,25 @@ export const VERDANT_UNITS: UnitDef[] = [
     musterSize: 2,
     row: 'back',
     keywords: [{ k: 'volley' }, { k: 'growth', x: 1 }],
+    lineNext: 'vd_matriarch',
     sigil: 'moon',
     tags: ['ranged', 'growth'],
+  },
+  {
+    // Top of the dryad line (§5.2). Growth 2 matches the other Verdant T4s;
+    // ranks are inherited from the root, vd_dryad.
+    id: 'vd_matriarch',
+    name: 'Moonbow Matriarch',
+    pool: 'verdant',
+    tier: 4,
+    atk: 5,
+    hp: 4,
+    init: 6,
+    musterSize: 1,
+    row: 'back',
+    keywords: [{ k: 'volley' }, { k: 'growth', x: 2 }],
+    sigil: 'moon',
+    tags: ['ranged', 'growth', 'elite'],
   },
   {
     id: 'vd_glade',

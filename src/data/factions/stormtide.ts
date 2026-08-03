@@ -108,8 +108,26 @@ export const STORMTIDE_UNITS: UnitDef[] = [
     musterSize: 2,
     row: 'back',
     keywords: [{ k: 'volley' }, { k: 'venom', x: 1 }],
+    lineNext: 'st_stormspear',
     sigil: 'lightning',
     tags: ['ranged'],
+  },
+  {
+    // Top of the slinger line (§5.2). Frenzy 2 rather than the Warlord's 4:
+    // a back-row stack takes casualties rarely, so the trigger is worth less
+    // there — sim-tuned. Ranks are inherited from the root, st_slinger.
+    id: 'st_stormspear',
+    name: 'Stormspear Tidecaller',
+    pool: 'stormtide',
+    tier: 4,
+    atk: 5,
+    hp: 5,
+    init: 6,
+    musterSize: 1,
+    row: 'back',
+    keywords: [{ k: 'volley' }, { k: 'frenzy', x: 2 }],
+    sigil: 'lightning',
+    tags: ['ranged', 'frenzy', 'elite'],
   },
   {
     id: 'st_wolfrider',

@@ -60,6 +60,27 @@ describe('rank thresholds', () => {
       expect(thresholdsFor(u.id), `${u.id} has no thresholds`).not.toBeNull()
     }
   })
+
+  it('rank blocks live only on line roots — anywhere else they are dead data', () => {
+    // rankDefOf resolves through lineRootOf, so a block on a mid or top form
+    // is never read. Catching it here stops a new promotion form quietly
+    // shipping rewards nobody will ever see.
+    for (const u of ALL_UNITS) {
+      if (!u.rank) continue
+      expect(lineRootOf(u.id), `${u.id} defines a rank block but is not its line root`).toBe(u.id)
+    }
+  })
+
+  it('the new T4 line tops inherit their line root ranks', () => {
+    for (const [top, root] of [
+      ['vg_ballistier', 'vg_crossbow'],
+      ['vd_matriarch', 'vd_dryad'],
+      ['st_stormspear', 'st_slinger'],
+    ] as const) {
+      expect(lineRootOf(top)).toBe(root)
+      expect(rankDefOf(top)).toBe(unit(root).rank)
+    }
+  })
 })
 
 describe('rank progress', () => {

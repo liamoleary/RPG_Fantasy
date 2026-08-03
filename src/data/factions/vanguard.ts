@@ -103,8 +103,25 @@ export const VANGUARD_UNITS: UnitDef[] = [
     musterSize: 2,
     row: 'back',
     keywords: [{ k: 'volley' }],
+    lineNext: 'vg_ballistier',
     sigil: 'bow',
     tags: ['ranged'],
+  },
+  {
+    // Top of the crossbow line (Design Notes 03 §5.2). Ranks come from the
+    // line root, vg_crossbow — a block here would never be read.
+    id: 'vg_ballistier',
+    name: 'Sunlance Ballistier',
+    pool: 'vanguard',
+    tier: 4,
+    atk: 6,
+    hp: 4,
+    init: 5,
+    musterSize: 1,
+    row: 'back',
+    keywords: [{ k: 'volley' }],
+    sigil: 'bow',
+    tags: ['ranged', 'elite'],
   },
   {
     id: 'vg_shieldmaiden',

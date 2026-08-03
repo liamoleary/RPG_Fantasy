@@ -3,6 +3,7 @@ import { MERC_UNITS, unit, unitsOfPool } from '../data/index'
 import type { FactionId, HeroMods, UnitDef } from '../data/types'
 import type { BoardStack } from './battle'
 import { FRONT_SLOTS, TOTAL_SLOTS } from './battle'
+import { applyRankProgress } from './ranks'
 import type { RNG } from './rng'
 
 export const RECRUIT_COST = 3
@@ -138,12 +139,17 @@ export function recruit(board: BoardStack[], gold: number, unitId: string, mods:
   const add = musterCount(def, mods)
   const existing = stackOfUnit(board, unitId)
   if (existing) {
-    const next = board.map((s) => (s.uid === existing.uid ? { ...s, count: s.count + add, spent: s.spent + RECRUIT_COST } : s))
+    // A recruit is the main way a stack crosses a Banner Rank threshold (§3.1).
+    const count = existing.count + add
+    const grown = { ...existing, count, spent: existing.spent + RECRUIT_COST }
+    grown.rank = applyRankProgress(grown)
+    const next = board.map((s) => (s.uid === existing.uid ? grown : s))
     return { ok: true, board: next, gold: gold - RECRUIT_COST }
   }
   const slot = firstOpenSlot(board, def)
   if (slot === null) return { ok: false, reason: 'No open slot', board, gold }
-  const fresh: BoardStack = { uid: nextUid(), unitId, count: add, slot, bonusAtk: 0, bonusHp: 0, growthTicks: 0, spent: RECRUIT_COST }
+  const fresh: BoardStack = { uid: nextUid(), unitId, count: add, slot, bonusAtk: 0, bonusHp: 0, growthTicks: 0, spent: RECRUIT_COST, rank: 0 }
+  fresh.rank = applyRankProgress(fresh)
   return { ok: true, board: [...board, fresh], gold: gold - RECRUIT_COST }
 }
 

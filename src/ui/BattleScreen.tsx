@@ -3,7 +3,7 @@ import { FACTION_BY_ID, unit } from '../data/index'
 import type { BattleEvent, BattleResult, StackSnap } from '../engine/battle'
 import { player, type RunState } from '../engine/run'
 import { useGame } from '../state/store'
-import { InspectSheet } from './InspectSheet'
+import { InspectSheet, RankProgress } from './InspectSheet'
 import { Ladder } from './Ladder'
 import { SnapCard } from './StackCard'
 
@@ -233,6 +233,7 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
         <InspectSheet
           unitId={peek.unitId}
           context={{ count: peek.count, bonusAtk: peek.atk - unit(peek.unitId).atk, bonusHp: peek.maxHp - unit(peek.unitId).hp }}
+          extra={<RankProgress unitId={peek.unitId} count={peek.startCount} rank={peek.rank} />}
           onClose={() => setPeek(null)}
         />
       )}

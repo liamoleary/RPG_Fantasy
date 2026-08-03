@@ -2,9 +2,10 @@
 import { BOON_BY_ID, FACTIONS, HERO_BY_ID, faction, heroesOfFaction, unit } from '../data/index'
 import type { BoonDef, FactionId, HeroDef, HeroMods } from '../data/types'
 import { ZERO_MODS, addMods } from '../data/types'
-import { economyGold, simulateBattle, type BattleResult, type BoardStack, type HeroState } from './battle'
+import { economyGold, simulateBattle, type BattleResult, type BoardStack, type HeroState, type Survivor } from './battle'
 import { heroLevel, isLevelUpRound, offerBoons } from './boons'
 import { MAX_CAMP_TIER, income, newCamp, rollOffer, type CampState } from './camp'
+import { applyRankProgress, rankDefOf, refreshRanks } from './ranks'
 import { autoPosition, NOISE, pickBoon, rivalMuster, type Archetype, type Difficulty } from './rivals'
 import { hashSeed, makeRng, type RNG } from './rng'
 
@@ -204,6 +205,9 @@ export function beginRound(run: RunState) {
   for (const w of run.warlords) {
     if (!w.alive) continue
     applyGrowth(w)
+    // Anything that moved a count since the last Muster — Growth, boons,
+    // hero passives — can have crossed a Banner Rank threshold (§3.1).
+    refreshRanks(w.board)
     w.gold = income(run.round, w.mods) + economyGold(w.board)
     w.camp.rerollsUsedThisRound = 0
     if (!w.camp.frozen || w.camp.offer.length === 0) {
@@ -263,7 +267,11 @@ function applyGrowth(w: Warlord) {
   for (const s of w.board) {
     const g = unit(s.unitId).keywords.find((k) => k.k === 'growth')
     if (!g) continue
-    const amount = (g.x ?? 1) + w.mods.growthBonus
+    let amount = (g.x ?? 1) + w.mods.growthBonus
+    // Honored growth rewards resolve here, not in battle.ts: Growth is a Muster
+    // effect on the stack's permanent stats, so battle never sees it.
+    const rd = (s.rank ?? 0) >= 2 ? rankDefOf(s.unitId) : null
+    if (rd && rd.honored.type === 'growthPlus') amount += rd.honored.x
     s.growthTicks += 1
     s.bonusHp += amount + extraHp
     if (s.growthTicks % 2 === 0) s.bonusAtk += amount
@@ -378,6 +386,13 @@ export function resolveBattles(run: RunState): BattleReport[] {
     run.log.push(`R${run.round}: ${winner.name} defeated ${loser.name}${loserIsGhost ? ' (ghost)' : ` (−${r.damage} HP)`}.`)
   }
 
+  // Thornqueen Maravel: every stack that walked off the field grows by one.
+  // A ghost board belongs to an eliminated warlord and is never modified.
+  for (const r of reports) {
+    growSurvivors(byId(run, r.aId), r.result.survivorsA)
+    if (!r.ghost) growSurvivors(byId(run, r.bId), r.result.survivorsB)
+  }
+
   if (run.round >= HARD_CAP_ROUND) {
     for (const w of run.warlords) {
       if (!w.alive) continue
@@ -390,6 +405,22 @@ export function resolveBattles(run: RunState): BattleReport[] {
   run.reports = reports
   run.phase = 'result'
   return reports
+}
+
+/**
+ * `survivorGrowsCount` (Thornqueen Maravel): +1 permanent count to every stack
+ * that ended the battle with at least one unit standing, once per battle.
+ * Summoned stacks appear in the survivor list but not on the board, so the uid
+ * lookup drops them on its own.
+ */
+function growSurvivors(w: Warlord, survivors: Survivor[]) {
+  if (heroDef(w.heroId).passive.id !== 'survivorGrowsCount') return
+  const standing = new Set(survivors.filter((s) => s.count > 0).map((s) => s.uid))
+  for (const s of w.board) {
+    if (!standing.has(s.uid)) continue
+    s.count += 1
+    s.rank = applyRankProgress(s)
+  }
 }
 
 function eliminate(run: RunState) {

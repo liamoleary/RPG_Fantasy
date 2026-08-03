@@ -7,7 +7,8 @@
  * so the renderer stays a dumb projector of the log.
  */
 import { UNIT_BY_ID } from '../data/index'
-import type { FactionId, HeroDef, HeroMods, Row, UnitDef } from '../data/types'
+import type { AbilityEffect, FactionId, HeroDef, HeroMods, KeywordId, Row, UnitDef } from '../data/types'
+import { rankDefOf } from './ranks'
 import { makeRng, type RNG } from './rng'
 
 export const MAX_EXCHANGES = 200
@@ -31,6 +32,8 @@ export interface BoardStack {
   growthTicks: number
   /** gold sunk into this stack, for sell refunds */
   spent: number
+  /** Banner Rank earned by stack size: 0 none, 1 Veteran, 2 Honored (§3) */
+  rank: number
 }
 
 export interface HeroState {
@@ -59,6 +62,7 @@ export interface StackSnap {
   bulwark: number
   alive: boolean
   rooted: boolean
+  rank: number
 }
 
 export type BattleEvent =
@@ -124,6 +128,16 @@ interface RStack {
   retaliatedCycle: number
   actions: number
   jitter: number
+  rank: number
+  // ── Honored (Rank 2) behaviour flags, set from data in buildStack ────────
+  /** Piercing Volley: fraction of the raw hit carried to a second stack */
+  volleySplash: number
+  /** Overcharge: consumed by this stack's first attack of the battle */
+  firstShotDouble: boolean
+  /** the unit's triggered ability resolves twice */
+  abilityEcho: boolean
+  /** extra ATK on top of each Frenzy trigger */
+  frenzyPlus: number
 }
 
 interface Ctx {
@@ -153,6 +167,7 @@ function snap(s: RStack): StackSnap {
     bulwark: s.bulwark,
     alive: s.alive,
     rooted: false,
+    rank: s.rank,
   }
 }
 
@@ -172,13 +187,32 @@ function buildStack(bs: BoardStack, side: Side, hero: HeroState, heroDef: HeroDe
   if (!def) throw new Error(`unknown unit ${bs.unitId}`)
   const m = hero.mods
   const row: Row = bs.slot < FRONT_SLOTS ? 'front' : 'back'
-  const volley = kw(def, 'volley') !== undefined
 
+  // Banner Ranks are data-driven stack modifiers on the same pipeline as
+  // keywords (§3.1): they fold into the reads below, never into new branches
+  // further down the simulation.
+  const rank = bs.rank ?? 0
+  const rdef = rankDefOf(bs.unitId)
+  const honored = rank >= 2 && rdef ? rdef.honored : null
+  const granted = honored && honored.type === 'keyword' ? honored : null
+  const extraKw = (k: KeywordId): number => (granted && granted.k === k ? (granted.x ?? 1) : 0)
+  const has = (k: KeywordId): boolean => kw(def, k) !== undefined || extraKw(k) > 0
+
+  const volley = has('volley')
   let atk = def.atk + bs.bonusAtk + m.allAtk + (row === 'front' ? m.frontAtk : m.backAtk)
   if (volley) atk += m.volleyAtk
-  const maxHp = Math.max(1, def.hp + bs.bonusHp + m.allHp)
+  let hp = def.hp + bs.bonusHp + m.allHp
+  if (rank >= 1 && rdef) {
+    atk += rdef.veteran.atk ?? 0
+    hp += rdef.veteran.hp ?? 0
+  }
+  if (honored && honored.type === 'statPerUnit') {
+    atk += honored.atk ?? 0
+    hp += honored.hp ?? 0
+  }
+  const maxHp = Math.max(1, hp)
 
-  let bulwark = kw(def, 'bulwark') ?? 0
+  let bulwark = (kw(def, 'bulwark') ?? 0) + extraKw('bulwark')
   if (row === 'front') bulwark += m.frontBulwark
   if (row === 'front' && heroDef.passive.id === 'frontBulwark3') bulwark += heroDef.passive.x ?? 3
 
@@ -195,20 +229,25 @@ function buildStack(bs: BoardStack, side: Side, hero: HeroState, heroDef: HeroDe
     wound: 0,
     bulwark,
     alive: bs.count > 0,
-    charge: kw(def, 'charge') !== undefined || m.chargeAll,
+    charge: has('charge') || m.chargeAll,
     volley,
-    siege: kw(def, 'siege') !== undefined,
-    cleave: kw(def, 'cleave') !== undefined || (m.cleaveFront && row === 'front'),
-    lifesteal: kw(def, 'lifesteal') !== undefined || m.lifestealAll,
-    guard: kw(def, 'guard') ?? 0,
-    venom: kw(def, 'venom') ?? 0,
-    frenzy: kw(def, 'frenzy') ?? 0,
+    siege: has('siege'),
+    cleave: has('cleave') || (m.cleaveFront && row === 'front'),
+    lifesteal: has('lifesteal') || m.lifestealAll,
+    guard: (kw(def, 'guard') ?? 0) + extraKw('guard'),
+    venom: (kw(def, 'venom') ?? 0) + extraKw('venom'),
+    frenzy: (kw(def, 'frenzy') ?? 0) + extraKw('frenzy'),
     venomPending: 0,
     frenzied: false,
     rootedUntil: -1,
     retaliatedCycle: -1,
     actions: 0,
     jitter: rng.next(),
+    rank,
+    volleySplash: honored && honored.type === 'volleySplash' ? honored.frac : 0,
+    firstShotDouble: honored ? honored.type === 'firstShotDouble' : false,
+    abilityEcho: honored ? honored.type === 'abilityEcho' : false,
+    frenzyPlus: honored && honored.type === 'frenzyPlus' ? honored.x : 0,
   }
 }
 
@@ -324,7 +363,7 @@ function onCasualties(ctx: Ctx, s: RStack, killed: number) {
   if (killed <= 0 || !s.alive) return
   if (s.frenzy > 0) {
     const heroDef = ctx.heroDefs[s.side]
-    let gain = s.frenzy + ctx.heroes[s.side].mods.frenzyAtk
+    let gain = s.frenzy + ctx.heroes[s.side].mods.frenzyAtk + s.frenzyPlus
     if (!s.frenzied && heroDef.passive.id === 'frenzyPermanentAtk') gain += heroDef.passive.x ?? 1
     s.frenzied = true
     s.atk += gain
@@ -341,9 +380,16 @@ function onDeath(ctx: Ctx, s: RStack) {
 function fireAbility(ctx: Ctx, s: RStack, trigger: string) {
   const ab = s.def.ability
   if (!ab || ab.trigger !== trigger) return
-  if (trigger !== 'onDeath' && !s.alive) return
+  // Honored ability echo (§3): the same effect resolves a second time.
+  const times = s.abilityEcho ? 2 : 1
+  for (let i = 0; i < times; i++) {
+    if (trigger !== 'onDeath' && !s.alive) return
+    applyAbilityEffect(ctx, s, ab.effect)
+  }
+}
+
+function applyAbilityEffect(ctx: Ctx, s: RStack, e: AbilityEffect) {
   const allies = aliveOn(ctx, s.side)
-  const e = ab.effect
 
   switch (e.type) {
     case 'alliesBulwark': {
@@ -402,7 +448,7 @@ function fireAbility(ctx: Ctx, s: RStack, trigger: string) {
       const slot = range.find((sl) => !used.has(sl))
       if (slot === undefined) break
       const fresh = buildStack(
-        { uid: `${s.uid}~sum${ctx.exchange}`, unitId: def.id, count: e.count, slot, bonusAtk: 0, bonusHp: 0, growthTicks: 0, spent: 0 },
+        { uid: `${s.uid}~sum${ctx.exchange}`, unitId: def.id, count: e.count, slot, bonusAtk: 0, bonusHp: 0, growthTicks: 0, spent: 0, rank: 0 },
         s.side,
         ctx.heroes[s.side],
         ctx.heroDefs[s.side],
@@ -422,7 +468,12 @@ function performAttack(ctx: Ctx, attacker: RStack, isExtra = false, cycle = 0) {
   const target = chooseTarget(ctx, attacker)
   if (!target) return
 
-  const raw = attacker.atk * attacker.count
+  let raw = attacker.atk * attacker.count
+  // Overcharge (§3): the first shot this stack fires all battle lands double.
+  if (attacker.firstShotDouble) {
+    attacker.firstShotDouble = false
+    raw *= 2
+  }
   const res = applyDamage(ctx, target, raw, { siege: attacker.siege })
   ctx.events.push({
     t: 'attack',
@@ -449,6 +500,33 @@ function performAttack(ctx: Ctx, attacker: RStack, isExtra = false, cycle = 0) {
   const targetDied = res.died
   if (targetDied) onDeath(ctx, target)
   else onCasualties(ctx, target, res.killed)
+
+  // Piercing Volley (§3): the same volley carries into a second stack for a
+  // fraction of its raw damage. Like every volley it draws no retaliation, and
+  // it reports as an ordinary attack so the replay needs no new event type.
+  if (attacker.volleySplash > 0 && attacker.alive) {
+    const foes = enemiesOf(ctx, attacker)
+    const others = foes.filter((f) => f.uid !== target.uid)
+    const pool = others.length > 0 ? others : foes
+    const splash = Math.floor(raw * attacker.volleySplash)
+    if (pool.length > 0 && splash > 0) {
+      const second = ctx.rng.pick(pool)
+      const sp = applyDamage(ctx, second, splash, { siege: attacker.siege })
+      ctx.events.push({
+        t: 'attack',
+        src: attacker.uid,
+        dst: second.uid,
+        side: attacker.side,
+        dmg: sp.dealt,
+        absorbed: sp.absorbed,
+        killed: sp.killed,
+        retaliation: false,
+        snap: snaps(attacker, second),
+      })
+      if (sp.died) onDeath(ctx, second)
+      else onCasualties(ctx, second, sp.killed)
+    }
+  }
 
   // Cleave: overkill spills into a stack adjacent to the one that fell.
   if (attacker.cleave && targetDied && res.overkill > 0) {

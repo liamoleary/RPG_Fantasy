@@ -17,12 +17,28 @@ export function rowWord(row: RowPref): string {
   return row === 'front' ? 'Front' : row === 'back' ? 'Back' : 'Any'
 }
 
+/** Banner Rank chevrons: one bronze for Veteran, two gold for Honored (§3.3). */
+export function RankPips({ rank, flash }: { rank: number; flash?: boolean }) {
+  if (rank <= 0) return null
+  return (
+    <span className={`rank-pips${flash ? ' rank-flash' : ''}`} data-rank={rank >= 2 ? 2 : 1}>
+      {rank >= 2 ? '››' : '›'}
+    </span>
+  )
+}
+
+export const rankWord = (rank: number): string => (rank >= 2 ? 'Honored' : rank === 1 ? 'Veteran' : '')
+
 interface Props {
   unitId: string
   count: number
   atk: number
   hp: number
   bulwark?: number
+  /** 0 none / 1 Veteran / 2 Honored */
+  rank?: number
+  /** stamp the chevron in — set for one action after a rank-up */
+  rankFlash?: boolean
   /** 0–1 pooled-HP fraction; omit outside battle */
   health?: number
   selected?: boolean
@@ -39,6 +55,8 @@ export function StackCard({
   atk,
   hp,
   bulwark = 0,
+  rank = 0,
+  rankFlash,
   health,
   selected,
   illegal,
@@ -61,12 +79,13 @@ export function StackCard({
       data-dead={state === 'dead' ? 'true' : undefined}
       onClick={onClick}
       type={onClick ? 'button' : undefined}
-      aria-label={`${def.name}, ${count} units, ${atk} attack, ${hp} health, ${rowWord(def.row)} row`}
+      aria-label={`${def.name}, ${count} units, ${atk} attack, ${hp} health, ${rowWord(def.row)} row${rank > 0 ? `, ${rankWord(rank)}` : ''}`}
     >
       {float && <span className={`float float-${float.kind}`}>{float.text}</span>}
       <span className="row-glyph" aria-hidden="true">
         {rowGlyph(def.row)}
       </span>
+      <RankPips rank={rank} flash={rankFlash} />
       <span className="count-badge">{count}</span>
       <Sigil id={def.sigil} size={20} />
       <span className="stack-name">{def.name}</span>
@@ -106,6 +125,7 @@ export function SnapCard({
       atk={snap.atk}
       hp={snap.maxHp}
       bulwark={snap.bulwark}
+      rank={snap.rank}
       health={total > 0 ? cur / total : 0}
       state={state}
       float={float}

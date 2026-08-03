@@ -10,9 +10,10 @@
  */
 import { FACTIONS, HEROES, UNIT_BY_ID } from '../src/data/index'
 import { HARD_CAP_ROUND, advanceRound, newRun, resolveBattles, type RunState } from '../src/engine/run'
-import { rivalMuster, NOISE, pickBoon, type Difficulty } from '../src/engine/rivals'
+import { boardPower, rivalMuster, NOISE, pickBoon, type Difficulty } from '../src/engine/rivals'
 import { isLevelUpRound } from '../src/engine/boons'
 import { applyBoon } from '../src/engine/run'
+import { lineRootOf, thresholdsFor } from '../src/engine/ranks'
 import { hashSeed, makeRng } from '../src/engine/rng'
 
 interface Args {
@@ -31,6 +32,56 @@ function parseArgs(): Args {
     runs: Number(get('runs', '1000')),
     difficulty: get('difficulty', 'standard') as Difficulty,
     seed: Number(get('seed', '12345')),
+  }
+}
+
+/**
+ * Per-battle evidence for the RANKS section. Comparing END-OF-RUN boards can
+ * only ever rediscover that warlords who survived longer bought more bodies,
+ * so the rank question is asked one battle at a time, between boards of
+ * comparable power.
+ */
+interface Duel {
+  n: number
+  won: number
+}
+/** duels decided by who holds more Honored (rank 2) stacks */
+const honoredDuels: Duel = { n: 0, won: 0 }
+/**
+ * Control cohort: duels where both sides hold the same number of Honored
+ * stacks but one holds more Veteran-only stacks. Rank 1 is a flat +1/unit,
+ * so this cohort has the same *board shape* bias as the Honored one —
+ * boardPower systematically undercounts wide stacks — without the milestone
+ * skill. The difference between the two rates is what Rank 2 is actually
+ * worth; either rate on its own mostly measures the heuristic's blind spot.
+ */
+const veteranDuels: Duel = { n: 0, won: 0 }
+
+function collectRankDuels(run: RunState) {
+  for (const r of run.reports) {
+    if (r.ghost || r.winner === 'tie') continue
+    const a = run.warlords.find((w) => w.id === r.aId)
+    const b = run.warlords.find((w) => w.id === r.bId)
+    if (!a || !b) continue
+    const pa = boardPower(a.board)
+    const pb = boardPower(b.board)
+    if (pa <= 0 || pb <= 0) continue
+    // Only near-mirror matchups: otherwise this just measures board size again.
+    if (Math.abs(Math.log(pa / pb)) > 0.15) continue
+
+    const atRank = (w: typeof a, rank: number): number => w.board.filter((s) => (s.rank ?? 0) === rank).length
+    const ha = atRank(a, 2)
+    const hb = atRank(b, 2)
+    if (ha !== hb) {
+      honoredDuels.n++
+      if (r.winner === (ha > hb ? 'a' : 'b')) honoredDuels.won++
+      continue
+    }
+    const va = atRank(a, 1)
+    const vb = atRank(b, 1)
+    if (va === vb) continue
+    veteranDuels.n++
+    if (r.winner === (va > vb ? 'a' : 'b')) veteranDuels.won++
   }
 }
 
@@ -63,6 +114,7 @@ function playRunHeadless(run: RunState): RunState {
       p.gold = out.gold
     }
     resolveBattles(run)
+    collectRankDuels(run)
     if (run.finished) break
     advanceRound(run)
   }
@@ -106,6 +158,19 @@ function main() {
   let ties = 0
   let battles = 0
 
+  // Banner Rank adoption and its effect on placement (§3.4).
+  let rankBoards = 0
+  let boardsWithVeteran = 0
+  let boardsWithHonored = 0
+  const honoredSeat = { n: 0, placementSum: 0, top2: 0 }
+  const plainSeat = { n: 0, placementSum: 0, top2: 0 }
+  // Honored vs "none" is dominated by survivorship: a warlord who lasted 14
+  // rounds bought 14 rounds of bodies. The honest control is the NEAR-MISS
+  // cohort — boards that also grew a big stack but stopped short of Rank 2 —
+  // which isolates what the reward itself is worth.
+  const nearMissSeat = { n: 0, placementSum: 0, top2: 0 }
+  const honoredByLine = new Map<string, number>()
+
   for (let i = 0; i < args.runs; i++) {
     const seed = args.seed + i * 7919
     const rng = makeRng(seed)
@@ -121,6 +186,32 @@ function main() {
       bump(byFaction, w.factionId, placement)
       bump(byHero, w.heroId, placement)
       bump(byArchetype, w.archetype, placement)
+      if (w.board.length > 0) {
+        rankBoards++
+        const best = w.board.reduce((n, s) => Math.max(n, s.rank ?? 0), 0)
+        if (best >= 1) boardsWithVeteran++
+        if (best >= 2) boardsWithHonored++
+        const seat = best >= 2 ? honoredSeat : plainSeat
+        seat.n++
+        seat.placementSum += placement
+        if (placement <= 2) seat.top2++
+        const nearMiss =
+          best < 2 &&
+          w.board.some((s) => {
+            const th = thresholdsFor(s.unitId)
+            return th !== null && s.count >= th[1] * 0.75
+          })
+        if (nearMiss) {
+          nearMissSeat.n++
+          nearMissSeat.placementSum += placement
+          if (placement <= 2) nearMissSeat.top2++
+        }
+        for (const s of w.board) {
+          if ((s.rank ?? 0) < 2) continue
+          const line = lineRootOf(s.unitId)
+          honoredByLine.set(line, (honoredByLine.get(line) ?? 0) + 1)
+        }
+      }
       const seenThisRun = new Set(w.board.map((s) => s.unitId))
       for (const uidStr of seenThisRun) {
         const rec = unitSeen.get(uidStr) ?? { drafted: 0, wonWith: 0 }
@@ -217,6 +308,71 @@ function main() {
         [String(d.n).padStart(8), Math.abs(d.delta) > 0.08 ? '  ⚠' : ''],
       ] as [string, string][]
     }),
+  )
+
+  const avg = (b: { n: number; placementSum: number }): number => (b.n > 0 ? b.placementSum / b.n : 0)
+  const honAvg = avg(honoredSeat)
+  const plainAvg = avg(plainSeat)
+  const nearAvg = avg(nearMissSeat)
+  const honWin = honoredDuels.n > 0 ? honoredDuels.won / honoredDuels.n : 0.5
+  const vetWin = veteranDuels.n > 0 ? veteranDuels.won / veteranDuels.n : 0.5
+  const duelEdge = honWin - vetWin
+
+  table(
+    'RANKS              adoption and power-matched edge      flag >8% over the control',
+    [
+      [
+        ['boards with a Veteran stack'.padEnd(34), ''],
+        [pct(rankBoards > 0 ? boardsWithVeteran / rankBoards : 0).padStart(9), ''],
+        [`  of ${rankBoards} boards`, ''],
+      ],
+      [
+        ['boards with an Honored stack'.padEnd(34), ''],
+        [pct(rankBoards > 0 ? boardsWithHonored / rankBoards : 0).padStart(9), ''],
+        [`  of ${rankBoards} boards`, ''],
+      ],
+      [
+        ['avg place — Honored holders'.padEnd(34), ''],
+        [honAvg.toFixed(2).padStart(9), ''],
+        [`  n ${honoredSeat.n}`, ''],
+      ],
+      [
+        ['avg place — no Honored stack'.padEnd(34), ''],
+        [plainAvg.toFixed(2).padStart(9), ''],
+        [`  n ${plainSeat.n} · survivorship-heavy, informational`, ''],
+      ],
+      [
+        ['avg place — near-miss (75%+, no rank 2)'.padEnd(34), ''],
+        [nearAvg.toFixed(2).padStart(9), ''],
+        [`  n ${nearMissSeat.n}`, ''],
+      ],
+      [
+        ['power-matched: more Honored wins'.padEnd(34), ''],
+        [pct(honWin).padStart(9), ''],
+        [`  n ${honoredDuels.n} battles`, ''],
+      ],
+      [
+        ['power-matched: more Veteran wins'.padEnd(34), ''],
+        [pct(vetWin).padStart(9), ''],
+        [`  n ${veteranDuels.n} battles · control`, ''],
+      ],
+      [
+        ['Honored edge over the control'.padEnd(34), ''],
+        [`${duelEdge >= 0 ? '+' : ''}${(duelEdge * 100).toFixed(1)}%`.padStart(9), ''],
+        ['', duelEdge > 0.08 ? '  ⚠ Honored stacks dominate — raise thresholds or flatten rewards' : ''],
+      ],
+    ] as [string, string][][],
+  )
+
+  table(
+    'HONORED STACKS BY LINE   count (top 8)',
+    [...honoredByLine.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([line, n]) => [
+        [(UNIT_BY_ID.get(line)?.name ?? line).padEnd(30), ''],
+        [String(n).padStart(8), ''],
+      ] as [string, string][]),
   )
 
   console.log(`\nRUN LENGTH   median ${median} (target ≤14)   p95 ${p95} (target ≤16)   min ${lengths[0]}   max ${lengths[lengths.length - 1]}`)

@@ -8,7 +8,7 @@ const grommash = HERO_BY_ID.get('h_grommash')!
 const sylvaen = HERO_BY_ID.get('h_sylvaen')!
 
 function stack(unitId: string, count: number, slot: number, extra: Partial<BoardStack> = {}): BoardStack {
-  return { uid: `${unitId}@${slot}`, unitId, count, slot, bonusAtk: 0, bonusHp: 0, growthTicks: 0, spent: 3, ...extra }
+  return { uid: `${unitId}@${slot}`, unitId, count, slot, bonusAtk: 0, bonusHp: 0, growthTicks: 0, spent: 3, rank: 0, ...extra }
 }
 
 function hero(id: string, level = 1, mods = {}): HeroState {

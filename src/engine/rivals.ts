@@ -23,6 +23,7 @@ import {
   tierUpCost,
   type CampState,
 } from './camp'
+import { lineRootOf, rankDefOf, thresholdsOf } from './ranks'
 import type { RNG } from './rng'
 
 export type Archetype = 'aggro' | 'greedy' | 'balanced' | 'economy'
@@ -65,11 +66,31 @@ function unitScore(def: UnitDef, input: RivalTurnInput, board: BoardStack[]): nu
   const tags = def.tags ?? []
   for (const t of tags) score += TAG_BONUS[archetype][t] ?? 0
   // Adding to an existing stack is nearly always better than a new slot.
-  if (stackOfUnit(board, def.id)) score += 4
-  else if (firstOpenSlot(board, def) === null) score -= 100
+  const existing = stackOfUnit(board, def.id)
+  if (existing) {
+    score += 4
+    score += rankPull(existing, count, archetype)
+  } else if (firstOpenSlot(board, def) === null) score -= 100
   if (def.pool === 'merc') score -= 1.5
   if (input.round <= 3 && def.tier >= 4) score -= 3
   return score
+}
+
+/**
+ * Banner Ranks must be visible to the AI (§3.4) or the player farms a blind
+ * opponent. Cheap lookups only — this runs inside the purchase loop.
+ */
+function rankPull(existing: BoardStack, add: number, archetype: Archetype): number {
+  const def = rankDefOf(existing.unitId)
+  if (!def) return 0
+  const rank = existing.rank ?? 0
+  if (rank >= 2) return 0
+  const th = thresholdsOf(def, unit(lineRootOf(existing.unitId)))
+  const next = rank === 0 ? th[0] : th[1]
+  const mult = archetype === 'greedy' ? 1.6 : 1
+  if (existing.count + add >= next) return 5 * mult
+  if (existing.count + add * 2 >= next) return 2 * mult
+  return 0
 }
 
 function boardPower(board: BoardStack[]): number {

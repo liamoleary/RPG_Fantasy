@@ -16,7 +16,7 @@ import {
 import { heroLevel } from '../engine/boons'
 import { heroState, opponentOf, player, type RunState } from '../engine/run'
 import { useGame } from '../state/store'
-import { InspectSheet } from './InspectSheet'
+import { InspectSheet, RankProgress } from './InspectSheet'
 import { Ladder, WarlordSheet } from './Ladder'
 import { Sigil } from './Sigil'
 import { StackCard, rowGlyph, unitColor } from './StackCard'
@@ -76,6 +76,7 @@ export function MusterScreen({ run }: { run: RunState }) {
     if (stackOfUnit(p.board, offerUnitId) || firstOpenSlot(p.board, def) !== null) return { ok: true }
     return { ok: false, reason: `No open ${def.row === 'any' ? '' : `${def.row} `}slot — sell or move something first.` }
   })()
+  const offerStack = offerUnitId ? stackOfUnit(p.board, offerUnitId) : undefined
   const inspectedStack = stackUid ? p.board.find((s) => s.uid === stackUid) : null
   const promoteTarget = inspectedStack ? canPromote(inspectedStack, p.camp) : null
   const pCost = promoteTarget ? promoteCost(promoteTarget, p.mods) : null
@@ -118,6 +119,7 @@ export function MusterScreen({ run }: { run: RunState }) {
           selected={store.selected}
           canDropAt={canDropAt}
           labels="full"
+          rankFlash={store.rankFlash}
           onRowInfo={setRowInfo}
           onStack={(uid) => (store.selected === uid ? store.select(null) : setStackUid(uid))}
           onSlot={(slot) => store.place(slot)}
@@ -165,6 +167,14 @@ export function MusterScreen({ run }: { run: RunState }) {
         <InspectSheet
           unitId={offerUnitId}
           mods={p.mods}
+          extra={
+            <RankProgress
+              unitId={offerUnitId}
+              count={offerStack?.count ?? 0}
+              rank={offerStack?.rank ?? 0}
+              projected={(offerStack?.count ?? 0) + musterCount(unit(offerUnitId), p.mods)}
+            />
+          }
           onClose={() => setOfferIndex(null)}
           actions={
             <>
@@ -189,6 +199,7 @@ export function MusterScreen({ run }: { run: RunState }) {
           unitId={inspectedStack.unitId}
           mods={p.mods}
           context={{ count: inspectedStack.count, bonusAtk: inspectedStack.bonusAtk, bonusHp: inspectedStack.bonusHp }}
+          extra={<RankProgress unitId={inspectedStack.unitId} count={inspectedStack.count} rank={inspectedStack.rank} />}
           onClose={() => setStackUid(null)}
           actions={
             <>
@@ -249,6 +260,7 @@ export function Board({
   compact,
   labels = 'none',
   onRowInfo,
+  rankFlash,
 }: {
   board: BoardStack[]
   selected?: string | null
@@ -259,6 +271,8 @@ export function Board({
   /** 'full' = tappable eyebrow labels (Muster), 'tag' = faint corner word */
   labels?: 'full' | 'tag' | 'none'
   onRowInfo?: (row: Row) => void
+  /** uid of a stack that just ranked up, for the chevron stamp (§3.3) */
+  rankFlash?: string | null
 }) {
   const bySlot = new Map(board.map((s) => [s.slot, s]))
   const holding = selected !== undefined && selected !== null
@@ -318,6 +332,8 @@ export function Board({
               count={st.count}
               atk={def.atk + st.bonusAtk}
               hp={def.hp + st.bonusHp}
+              rank={st.rank}
+              rankFlash={rankFlash === st.uid}
               selected={held}
               illegal={holding && !held && !droppable}
               onClick={handle}
@@ -488,6 +504,7 @@ function ScoutSheet({ run, foeId, onClose }: { run: RunState; foeId: string; onC
         <InspectSheet
           unitId={peeked.unitId}
           context={{ count: peeked.count, bonusAtk: peeked.bonusAtk, bonusHp: peeked.bonusHp }}
+          extra={<RankProgress unitId={peeked.unitId} count={peeked.count} rank={peeked.rank} />}
           onClose={() => setPeek(null)}
         />
       )}

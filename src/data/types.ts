@@ -48,6 +48,38 @@ export interface Ability {
   text: string
 }
 
+/**
+ * Banner Ranks (Design Notes 01 §3). A stack that grows past a threshold
+ * upgrades permanently. Rewards are a small CLOSED set the engine handles
+ * centrally — same pipeline as keywords, so no reward needs bespoke UI code.
+ */
+export type RankReward =
+  /** grant a keyword (adds to any the unit already carries) at battle start */
+  | { type: 'keyword'; k: KeywordId; x?: number }
+  /** volleys carry into a second random enemy stack for floor(frac × damage) */
+  | { type: 'volleySplash'; frac: number }
+  /** the stack's first attack each battle deals double raw damage */
+  | { type: 'firstShotDouble' }
+  /** the unit's triggered ability fires twice each time it triggers */
+  | { type: 'abilityEcho' }
+  /** Growth ticks grant +x extra (Verdant) — resolved at Muster, not in battle */
+  | { type: 'growthPlus'; x: number }
+  /** Frenzy triggers grant +x extra ATK (Stormtide) */
+  | { type: 'frenzyPlus'; x: number }
+  /** flat extra per-unit stats — the generic fallback */
+  | { type: 'statPerUnit'; atk?: number; hp?: number }
+
+export interface RankDef {
+  /** override the musterSize defaults ([12,24] / [8,16] / [4,8]) */
+  thresholds?: [number, number]
+  /** Rank 1: a small per-unit stat bonus */
+  veteran: { atk?: number; hp?: number }
+  /** Rank 2: the named milestone skill */
+  honoredName: string
+  honoredText: string
+  honored: RankReward
+}
+
 export type SigilId =
   | 'shield'
   | 'hammer'
@@ -85,6 +117,9 @@ export interface UnitDef {
   keywords: Keyword[]
   ability?: Ability
   lineNext?: string
+  /** Banner Rank rewards, defined on the LINE ROOT only — every later form
+   *  inherits them, so a promoted Footman still fights as Militia veterans. */
+  rank?: RankDef
   sigil: SigilId
   /** synergy tags used by rival scoring and by the player's own sorting */
   tags?: string[]

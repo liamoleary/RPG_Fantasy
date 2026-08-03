@@ -38,6 +38,8 @@ interface Store {
   selected: string | null
   scouting: boolean
   inspecting: string | null
+  /** uid of a stack that just gained a Banner Rank — one stamp, then cleared */
+  rankFlash: string | null
   playerBattle: BattleResult | null
   speed: 1 | 2
   renownEarned: number
@@ -82,6 +84,7 @@ export const useGame = create<Store>((set, get) => ({
   selected: null,
   scouting: false,
   inspecting: null,
+  rankFlash: null,
   playerBattle: null,
   speed: 1,
   renownEarned: 0,
@@ -92,7 +95,7 @@ export const useGame = create<Store>((set, get) => ({
     const run = newRun({ seed, factionId, heroId, difficulty })
     const save = { ...get().save, settings: { ...get().save.settings, difficulty } }
     persist(save, run)
-    set({ run, save, screen: 'muster', selected: null, playerBattle: null, renownEarned: 0, speed: save.settings.speedDefault })
+    set({ run, save, screen: 'muster', selected: null, rankFlash: null, playerBattle: null, renownEarned: 0, speed: save.settings.speedDefault })
   },
 
   resume: () => {
@@ -101,12 +104,17 @@ export const useGame = create<Store>((set, get) => ({
     // Stack uids are minted from a counter; restart it past anything saved.
     const highest = active.warlords.flatMap((w) => w.board).reduce((n, s) => Math.max(n, Number(s.uid.replace(/\D/g, '')) || 0), 0)
     resetUid(highest)
+    // A run saved before Banner Ranks shipped has no `rank` on its stacks;
+    // normalise once here so no engine read has to guess (§3).
+    const boards = [...active.warlords.map((w) => w.board), ...Object.values(active.ghostBoards)]
+    for (const board of boards) for (const s of board) if (typeof s.rank !== 'number') s.rank = 0
     // A run saved mid-'result' must come back to the result screen — dropping it
     // on Muster lets Fight resolve the same round twice.
     set({
       run: active,
       screen: active.phase === 'over' ? 'runover' : active.phase === 'result' ? 'result' : 'muster',
       selected: null,
+      rankFlash: null,
       playerBattle: null,
     })
   },
@@ -125,13 +133,17 @@ export const useGame = create<Store>((set, get) => ({
     const p = player(run)
     const unitId = p.camp.offer[index]
     if (!unitId) return
+    const before = new Map(p.board.map((s) => [s.uid, s.rank]))
     const res = campRecruit(p.board, p.gold, unitId, p.mods)
     if (!res.ok) return
+    // The engine decides the rank; the UI only notices that one went up, so the
+    // card can stamp its new chevron (§3.3).
+    const promoted = res.board.find((s) => s.rank > (before.get(s.uid) ?? 0))
     p.board = res.board
     p.gold = res.gold
     p.camp = { ...p.camp, offer: p.camp.offer.map((id, i) => (i === index ? null : id)) }
     persist(get().save, run)
-    set({ run: { ...run } })
+    set({ run: { ...run }, rankFlash: promoted?.uid ?? null })
   },
 
   reroll: () => {
@@ -148,7 +160,7 @@ export const useGame = create<Store>((set, get) => ({
       frozen: false,
     }
     persist(get().save, run)
-    set({ run: { ...run } })
+    set({ run: { ...run }, rankFlash: null })
   },
 
   toggleFreeze: () => {
@@ -157,7 +169,7 @@ export const useGame = create<Store>((set, get) => ({
     const p = player(run)
     p.camp = { ...p.camp, frozen: !p.camp.frozen }
     persist(get().save, run)
-    set({ run: { ...run } })
+    set({ run: { ...run }, rankFlash: null })
   },
 
   tierUp: () => {
@@ -177,7 +189,7 @@ export const useGame = create<Store>((set, get) => ({
       p.camp = { ...p.camp, offer: [...p.camp.offer, ...rolled.slice(0, added)] }
     }
     persist(get().save, run)
-    set({ run: { ...run } })
+    set({ run: { ...run }, rankFlash: null })
   },
 
   promote: (uid) => {
@@ -189,7 +201,7 @@ export const useGame = create<Store>((set, get) => ({
     p.board = res.board
     p.gold = res.gold
     persist(get().save, run)
-    set({ run: { ...run }, selected: null })
+    set({ run: { ...run }, selected: null, rankFlash: null })
   },
 
   sell: (uid) => {
@@ -201,7 +213,7 @@ export const useGame = create<Store>((set, get) => ({
     p.board = res.board
     p.gold = res.gold
     persist(get().save, run)
-    set({ run: { ...run }, selected: null })
+    set({ run: { ...run }, selected: null, rankFlash: null })
   },
 
   select: (uid) => set({ selected: uid }),
@@ -212,7 +224,7 @@ export const useGame = create<Store>((set, get) => ({
     const p = player(run)
     p.board = moveStack(p.board, selected, slot)
     persist(get().save, run)
-    set({ run: { ...run }, selected: null })
+    set({ run: { ...run }, selected: null, rankFlash: null })
   },
 
   autoArrange: () => {
@@ -220,7 +232,7 @@ export const useGame = create<Store>((set, get) => ({
     if (!run) return
     autoArrangePlayer(run)
     persist(get().save, run)
-    set({ run: { ...run }, selected: null })
+    set({ run: { ...run }, selected: null, rankFlash: null })
   },
 
   chooseBoon: (boonId) => {
@@ -260,6 +272,7 @@ export const useGame = create<Store>((set, get) => ({
       screen: 'battle',
       selected: null,
       scouting: false,
+      rankFlash: null,
     })
   },
 
@@ -291,7 +304,7 @@ export const useGame = create<Store>((set, get) => ({
 
     advanceRound(run)
     persist(get().save, run)
-    set({ run: { ...run }, screen: 'muster', playerBattle: null, selected: null })
+    set({ run: { ...run }, screen: 'muster', playerBattle: null, selected: null, rankFlash: null })
   },
 
   setSpeed: (s) => {

@@ -5,37 +5,16 @@
  * so the sheet itself has no opinion about game actions.
  */
 import type { ReactNode } from 'react'
-import { ALL_UNITS, unit } from '../data/index'
+import { unit } from '../data/index'
 import { ZERO_MODS, type HeroMods, type UnitDef } from '../data/types'
 import { lineOf, promoteCost } from '../engine/camp'
+import { RANK_NAMES, lineRootOf, rankDefOf, rankForCount, thresholdsOf, veteranText } from '../engine/ranks'
 import { Sigil } from './Sigil'
 import { keywordName, keywordText } from './keywords'
-import { rowGlyph, rowWord, unitColor } from './StackCard'
-
-/**
- * unitId -> the first form of its promotion line. `lineNext` only points
- * forward, so the root is found by walking the predecessor map built once here.
- */
-const LINE_ROOT: Map<string, string> = (() => {
-  const prev = new Map<string, string>()
-  for (const u of ALL_UNITS) if (u.lineNext) prev.set(u.lineNext, u.id)
-  const root = new Map<string, string>()
-  for (const u of ALL_UNITS) {
-    let cur = u.id
-    const seen = new Set<string>([cur])
-    for (;;) {
-      const p = prev.get(cur)
-      if (!p || seen.has(p)) break
-      cur = p
-      seen.add(p)
-    }
-    root.set(u.id, cur)
-  }
-  return root
-})()
+import { RankPips, rowGlyph, rowWord, unitColor } from './StackCard'
 
 export function lineFormsOf(unitId: string): UnitDef[] {
-  return lineOf(LINE_ROOT.get(unitId) ?? unitId).map(unit)
+  return lineOf(lineRootOf(unitId)).map(unit)
 }
 
 export interface StackContext {
@@ -159,6 +138,88 @@ export function InspectSheet({
           Close
         </button>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Banner Rank progress (§3.3). All the arithmetic lives in engine/ranks.ts —
+ * this only formats what the engine already decided.
+ */
+export function RankProgress({
+  unitId,
+  count,
+  rank = 0,
+  /** count after one more purchase, for a shop offer card */
+  projected,
+}: {
+  unitId: string
+  count: number
+  rank?: number
+  projected?: number
+}) {
+  const def = rankDefOf(unitId)
+  if (!def) return null
+  const th = thresholdsOf(def, unit(lineRootOf(unitId)))
+  const earned = Math.max(rank, rankForCount(count, th))
+  const next = earned === 0 ? th[0] : earned === 1 ? th[1] : null
+  const nextName = earned === 0 ? 'Veteran' : `Honored: ${def.honoredName}`
+  const rootName = unit(lineRootOf(unitId)).name
+
+  return (
+    <div className="rank-panel">
+      <div className="row spread">
+        <span className="eyebrow">Banner Rank — {rootName} line</span>
+        <span className="row" style={{ gap: 4 }}>
+          <RankPips rank={earned} />
+          <span className="tiny dim">{earned === 0 ? 'Unranked' : RANK_NAMES[earned]}</span>
+        </span>
+      </div>
+
+      {next !== null ? (
+        <>
+          <div className="small">
+            <strong>
+              {count} / {next}
+            </strong>{' '}
+            — {nextName}
+          </div>
+          <span className="rank-bar">
+            <i style={{ width: `${Math.min(100, (count / next) * 100)}%` }} />
+          </span>
+          {projected !== undefined && projected > count && (
+            <div className="tiny gold">
+              {projected >= next
+                ? `This purchase reaches ${earned === 0 ? 'Veteran' : 'Honored'}.`
+                : `After this purchase: ${projected} / ${next}.`}
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="small gold">Fully honoured — both banners earned.</div>
+      )}
+
+      <div className="rank-row" data-earned={earned >= 1 ? 'true' : undefined}>
+        <RankPips rank={1} />
+        <span className="grow">
+          <strong className="small">Veteran — {th[0]}+</strong>
+          <span className="tiny dim" style={{ display: 'block' }}>
+            {veteranText(def)}
+          </span>
+        </span>
+      </div>
+      <div className="rank-row" data-earned={earned >= 2 ? 'true' : undefined}>
+        <RankPips rank={2} />
+        <span className="grow">
+          <strong className="small">
+            {def.honoredName} — {th[1]}+
+          </strong>
+          <span className="tiny dim" style={{ display: 'block' }}>
+            {def.honoredText}
+          </span>
+        </span>
+      </div>
+      <div className="tiny dim">Ranks are permanent for the run and survive promotion — they only ever go up.</div>
     </div>
   )
 }

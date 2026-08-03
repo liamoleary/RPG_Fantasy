@@ -81,6 +81,13 @@ export function MusterScreen({ run }: { run: RunState }) {
 
   // Promotion is the easiest thing to miss on this screen — surface it on the
   // card instead of making the player open every stack to go looking.
+  // Out of battle the pips show what the stack will START each battle with.
+  const coverOf = (stack: BoardStack): number => {
+    if (stack.slot >= FRONT_SLOTS) return 0
+    const k = unit(stack.unitId).keywords.find((x) => x.k === 'cover')
+    return (k ? (k.x ?? 1) : 0) + p.mods.frontCover
+  }
+
   const promoteStateOf = (stack: BoardStack): PromoteState => {
     const target = canPromote(stack, p.camp)
     if (!target) return null
@@ -154,6 +161,7 @@ export function MusterScreen({ run }: { run: RunState }) {
           labels="full"
           rankFlash={store.rankFlash}
           promoteStateOf={promoteStateOf}
+          coverOf={coverOf}
           onRowInfo={setRowInfo}
           onStack={(uid) => (store.selected === uid ? store.select(null) : setStackUid(uid))}
           onSlot={(slot) => store.place(slot)}
@@ -304,6 +312,7 @@ export function Board({
   onRowInfo,
   rankFlash,
   promoteStateOf,
+  coverOf,
 }: {
   board: BoardStack[]
   selected?: string | null
@@ -318,6 +327,8 @@ export function Board({
   rankFlash?: string | null
   /** Muster only: flags stacks that can be promoted right now */
   promoteStateOf?: (stack: BoardStack) => PromoteState
+  /** Muster only: Cover charges this stack starts each battle with */
+  coverOf?: (stack: BoardStack) => number
 }) {
   const bySlot = new Map(board.map((s) => [s.slot, s]))
   const holding = selected !== undefined && selected !== null
@@ -380,6 +391,7 @@ export function Board({
               rank={st.rank}
               rankFlash={rankFlash === st.uid}
               promote={promoteStateOf?.(st) ?? null}
+              cover={coverOf?.(st) ?? 0}
               selected={held}
               illegal={holding && !held && !droppable}
               onClick={handle}
@@ -555,6 +567,7 @@ function ScoutSheet({ run, foeId, onClose }: { run: RunState; foeId: string; onC
           <div className="small dim">
             {hero.name} — {hero.passive.text}
           </div>
+          <RangedThreat board={foe.board} />
           <div className="eyebrow">Their board right now — tap a stack to inspect</div>
           <Board board={foe.board} compact labels="tag" onStack={setPeek} />
           <button className="btn btn-primary" onClick={onClose}>
@@ -571,6 +584,47 @@ function ScoutSheet({ run, foeId, onClose }: { run: RunState; foeId: string; onC
         />
       )}
     </>
+  )
+}
+
+/**
+ * What their board can do to your back line (§3.4). This is the line that
+ * turns "my shaman died at random" into "I saw three volleys coming and put
+ * the Shieldmaiden in front of him".
+ */
+function RangedThreat({ board }: { board: BoardStack[] }) {
+  let volley = 0
+  let siege = 0
+  for (const st of board) {
+    const def = unit(st.unitId)
+    if (def.keywords.some((k) => k.k === 'siege')) siege++
+    else if (def.keywords.some((k) => k.k === 'volley')) volley++
+  }
+  const none = volley === 0 && siege === 0
+  return (
+    <div className="threat-line">
+      <span className="threat-label">Ranged threat</span>
+      {none ? (
+        <span className="small dim">nothing on that board shoots over your front line.</span>
+      ) : (
+        <span className="small">
+          {volley > 0 && (
+            <>
+              <strong>{volley}</strong> volley stack{volley === 1 ? '' : 's'}
+            </>
+          )}
+          {volley > 0 && siege > 0 && ', '}
+          {siege > 0 && (
+            <>
+              <strong>{siege}</strong> siege
+            </>
+          )}
+          <span className="dim">
+            {siege > 0 ? ' — siege ignores Cover.' : ' — Cover can intercept these.'}
+          </span>
+        </span>
+      )}
+    </div>
   )
 }
 

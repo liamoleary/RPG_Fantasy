@@ -48,6 +48,14 @@ export const SYMBOL_GLOSSARY: SymbolGroup[] = [
     ],
   },
   {
+    group: 'Cover',
+    entries: [
+      { mark: '▮▮', cls: 'g-cover', name: 'Cover charges', text: 'Shield dots on a front-row stack. Each one intercepts a single enemy volley aimed at the back-row stack behind it. Charges reset every battle.' },
+      { mark: '↷', cls: 'g-cover', name: 'Arcing shot', text: 'A volley in flight. It arcs over the front line, which is how you tell a ranged attack from a melee lunge.' },
+      { mark: '✓', cls: 'g-cover', name: '"Covered!"', text: 'A volley was intercepted. The arc bends to the coverer, it takes the hit instead, and the stack behind it glows and takes nothing.' },
+    ],
+  },
+  {
     group: 'The lobby ladder',
     entries: [
       { mark: '30', cls: 'g-count', name: 'Banner chip', text: "A rival warlord's remaining HP, under their hero's face. Tap any chip to inspect that warlord." },

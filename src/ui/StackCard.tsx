@@ -31,6 +31,22 @@ export function RankPips({ rank, flash }: { rank: number; flash?: boolean }) {
 
 export const rankWord = (rank: number): string => (rank >= 2 ? 'Honored' : rank === 1 ? 'Veteran' : '')
 
+/**
+ * One shield dot per remaining Cover charge (§3.3). Same family as the rank
+ * chevrons but unmistakably distinct: dots, not carets, and on the left.
+ */
+export function CoverPips({ charges }: { charges: number }) {
+  if (charges <= 0) return null
+  return (
+    <span className="cover-pips" aria-hidden="true">
+      {Array.from({ length: Math.min(charges, 4) }, (_, i) => (
+        <i key={i} />
+      ))}
+      {charges > 4 && <b>{charges}</b>}
+    </span>
+  )
+}
+
 interface Props {
   unitId: string
   count: number
@@ -51,6 +67,12 @@ interface Props {
   float?: { text: string; kind: 'dmg' | 'heal' | 'buff' | 'soak' } | null
   /** Muster: 'ready' = affordable promotion waiting, 'soon' = needs more gold */
   promote?: 'ready' | 'soon' | null
+  /** Cover charges available — one shield dot each (Design Notes 02 §3.3) */
+  cover?: number
+  /** this stack was just saved by a coverer — brief glow */
+  savedByCover?: boolean
+  /** measured by the battle screen to draw volley arcs */
+  domId?: string
   /** on screen this frame (board, battle) — load the plate immediately */
   eager?: boolean
   /** jump the fetch queue (the visible camp offers) */
@@ -72,6 +94,9 @@ export function StackCard({
   onClick,
   float,
   promote,
+  cover = 0,
+  savedByCover,
+  domId,
   eager,
   priority,
 }: Props) {
@@ -86,12 +111,14 @@ export function StackCard({
       data-sel={selected ? 'true' : 'false'}
       data-illegal={illegal ? 'true' : undefined}
       data-promote={promote ?? undefined}
+      data-uid={domId}
+      data-saved={savedByCover ? 'true' : undefined}
       data-hit={state === 'hit' ? 'true' : undefined}
       data-act={state === 'act' ? 'true' : undefined}
       data-dead={state === 'dead' ? 'true' : undefined}
       onClick={onClick}
       type={onClick ? 'button' : undefined}
-      aria-label={`${def.name}, ${count} units, ${atk} attack, ${hp} health, ${rowWord(def.row)} row${rank > 0 ? `, ${rankWord(rank)}` : ''}${promote === 'ready' ? ', promotion available' : ''}`}
+      aria-label={`${def.name}, ${count} units, ${atk} attack, ${hp} health, ${rowWord(def.row)} row${rank > 0 ? `, ${rankWord(rank)}` : ''}${promote === 'ready' ? ', promotion available' : ''}${cover > 0 ? `, Cover ${cover}` : ''}`}
     >
       <span className="card-art">
         <Plate src={UNIT_ART[unitId]} eager={eager} priority={priority} fallback={<Sigil id={def.sigil} size={26} />} />
@@ -111,6 +138,7 @@ export function StackCard({
         {rowGlyph(def.row)}
       </span>
       <RankPips rank={rank} flash={rankFlash} />
+      <CoverPips charges={cover} />
       <span className="count-badge">{count}</span>
       <span className="card-foot">
         <span className="stack-name">{def.name}</span>
@@ -136,11 +164,13 @@ export function SnapCard({
   state,
   float,
   onClick,
+  savedByCover,
 }: {
   snap: StackSnap
   state?: 'hit' | 'act' | 'dead' | null
   float?: Props['float']
   onClick?: () => void
+  savedByCover?: boolean
 }) {
   const total = snap.startCount * snap.maxHp
   const cur = snap.count * snap.maxHp - snap.wound
@@ -156,6 +186,9 @@ export function SnapCard({
       state={state}
       float={float}
       onClick={onClick}
+      cover={snap.cover}
+      savedByCover={savedByCover}
+      domId={snap.uid}
       eager
     />
   )

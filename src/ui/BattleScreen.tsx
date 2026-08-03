@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { FACTION_BY_ID, unit } from '../data/index'
 import type { BattleEvent, BattleResult, StackSnap } from '../engine/battle'
 import { player, type RunState } from '../engine/run'
@@ -19,6 +19,16 @@ interface Frame {
   fx: Record<string, { state?: 'hit' | 'act' | 'dead'; float?: { text: string; kind: 'dmg' | 'heal' | 'buff' | 'soak' } }>
   banner: string | null
   line: string
+  /** a shot to draw arcing over the front line, from one card to another */
+  arc: { from: string; to: string; covered: boolean } | null
+  /** the back-row stack a coverer just saved — it glows rather than dies */
+  saved: string | null
+}
+
+/** Volley is a unit property, so the log does not need to repeat it. */
+function isVolley(unitId: string | undefined): boolean {
+  if (!unitId) return false
+  return unit(unitId).keywords.some((k) => k.k === 'volley')
 }
 
 const BASE_MS = 620
@@ -80,6 +90,8 @@ function buildFrames(result: BattleResult, playerIsA: boolean): Frame[] {
   for (const e of result.events) {
     const fx: Frame['fx'] = {}
     let banner: string | null = null
+    let arc: Frame['arc'] = null
+    let saved: string | null = null
 
     if (e.t === 'battleStart') {
       for (const s of [...e.a, ...e.b]) boards[s.uid] = s
@@ -90,6 +102,8 @@ function buildFrames(result: BattleResult, playerIsA: boolean): Frame[] {
     switch (e.t) {
       case 'attack': {
         fx[e.src] = { state: 'act' }
+        // A volley must read as a shot, not a shove (§3.1).
+        if (!e.retaliation && isVolley(boards[e.src]?.unitId)) arc = { from: e.src, to: e.dst, covered: false }
         fx[e.dst] = {
           state: 'hit',
           float:
@@ -113,6 +127,12 @@ function buildFrames(result: BattleResult, playerIsA: boolean): Frame[] {
       case 'venom':
         fx[e.uid] = { state: 'hit', float: { text: 'venom', kind: 'dmg' } }
         break
+      case 'cover':
+        // The save is the whole point of the feature — make it unmissable.
+        fx[e.by] = { float: { text: 'Covered!', kind: 'soak' } }
+        arc = { from: e.src, to: e.by, covered: true }
+        saved = e.saved
+        break
       case 'buff':
         for (const uid of e.uids) fx[uid] = { float: { text: e.text, kind: 'buff' } }
         break
@@ -133,7 +153,7 @@ function buildFrames(result: BattleResult, playerIsA: boolean): Frame[] {
         break
     }
 
-    frames.push({ boards: { ...boards }, fx, banner, line: describe(e, playerIsA) })
+    frames.push({ boards: { ...boards }, fx, banner, line: describe(e, playerIsA), arc, saved })
   }
   return frames
 }
@@ -149,12 +169,42 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
   /** the snapshot the player tapped; inspecting holds the replay (§2.1) */
   const [peek, setPeek] = useState<StackSnap | null>(null)
   const timer = useRef<number | null>(null)
+  const fieldRef = useRef<HTMLDivElement | null>(null)
+  const [shot, setShot] = useState<{ x1: number; y1: number; x2: number; y2: number; covered: boolean; key: number } | null>(null)
 
   useEffect(() => {
     setI(0)
     setDone(false)
     setPeek(null)
   }, [result])
+
+  /**
+   * Rows are dropped when empty, so slot arithmetic would put the arc in the
+   * wrong place — measure the real cards instead. Layout effect so the arc is
+   * positioned in the same paint as the frame it belongs to.
+   */
+  useLayoutEffect(() => {
+    const arc = frames[i]?.arc
+    const field = fieldRef.current
+    if (!arc || !field) {
+      setShot(null)
+      return
+    }
+    const from = field.querySelector(`[data-uid="${CSS.escape(arc.from)}"]`)
+    const to = field.querySelector(`[data-uid="${CSS.escape(arc.to)}"]`)
+    if (!from || !to) {
+      setShot(null)
+      return
+    }
+    const box = field.getBoundingClientRect()
+    const centre = (el: Element) => {
+      const r = el.getBoundingClientRect()
+      return { x: r.left - box.left + r.width / 2, y: r.top - box.top + r.height / 2 }
+    }
+    const a = centre(from)
+    const b = centre(to)
+    setShot({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, covered: arc.covered, key: i })
+  }, [i, frames])
 
   useEffect(() => {
     if (done || frames.length === 0) return
@@ -210,15 +260,36 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
         </span>
       </div>
 
-      <div className="battlefield" style={{ position: 'relative' }}>
+      <div className="battlefield" style={{ position: 'relative' }} ref={fieldRef}>
+        {shot && !peek && (
+          <span
+            key={shot.key}
+            className="volley-arc"
+            data-covered={shot.covered ? 'true' : undefined}
+            style={
+              {
+                '--x1': `${shot.x1}px`,
+                '--y1': `${shot.y1}px`,
+                '--dx': `${shot.x2 - shot.x1}px`,
+                '--dy': `${shot.y2 - shot.y1}px`,
+                // Lift the apex clear of the front line it is arcing over.
+                '--lift': `${Math.max(26, Math.abs(shot.y2 - shot.y1) * 0.45)}px`,
+                '--ms': `${Math.round(360 / store.speed)}ms`,
+              } as React.CSSProperties
+            }
+            aria-hidden="true"
+          >
+            <i />
+          </span>
+        )}
         {frame.banner && (
           <div className="spell-banner" style={{ whiteSpace: 'pre-line' }} key={`${i}-banner`}>
             {frame.banner}
           </div>
         )}
-        <SnapBoard snaps={theirs} fx={frame.fx} onPeek={setPeek} />
+        <SnapBoard snaps={theirs} fx={frame.fx} saved={frame.saved} onPeek={setPeek} />
         <div className="center dim tiny">— — —</div>
-        <SnapBoard snaps={mine} fx={frame.fx} mine onPeek={setPeek} />
+        <SnapBoard snaps={mine} fx={frame.fx} saved={frame.saved} mine onPeek={setPeek} />
       </div>
 
       <div className="log center small">{peek ? 'Paused — close to resume.' : frame.line}</div>
@@ -252,12 +323,15 @@ function SnapBoard({
   snaps,
   fx,
   mine,
+  saved,
   onPeek,
 }: {
   snaps: StackSnap[]
   fx: Frame['fx']
   /** your own block — mirror it so your front line faces the enemy */
   mine?: boolean
+  /** uid of a stack a coverer just saved this frame */
+  saved?: string | null
   onPeek: (s: StackSnap) => void
 }) {
   const bySlot = new Map(snaps.map((s) => [s.slot, s]))
@@ -276,7 +350,14 @@ function SnapBoard({
           if (!s || !visible(slot)) return <div key={slot} className="slot" />
           const f = fx[s.uid]
           return (
-            <SnapCard key={slot} snap={s} state={f?.state ?? null} float={f?.float ?? null} onClick={() => onPeek(s)} />
+            <SnapCard
+              key={slot}
+              snap={s}
+              state={f?.state ?? null}
+              float={f?.float ?? null}
+              savedByCover={saved === s.uid}
+              onClick={() => onPeek(s)}
+            />
           )
         })}
       </div>

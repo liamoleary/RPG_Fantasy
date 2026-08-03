@@ -819,6 +819,71 @@ h3 {
   color: color-mix(in srgb, var(--sc) 70%, #fff);
 }
 
+/* ── Cover (Design Notes 02 §3) ──────────────────────────────────────────── */
+
+/* One shield dot per remaining charge, left of the count badge. Dots, not
+   carets, so it never reads as a rank chevron. Dark backing keeps it legible
+   over a painted plate, same treatment as the rank pips. */
+.cover-pips {
+  position: absolute;
+  z-index: 3;
+  top: 21px;
+  right: 2px;
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  padding: 2px 3px;
+  border-radius: 6px;
+  background: rgba(11, 17, 29, 0.8);
+  border: 1px solid color-mix(in srgb, #9ecbff 55%, transparent);
+  pointer-events: none;
+}
+.cover-pips > i {
+  width: 5px;
+  height: 6px;
+  background: #9ecbff;
+  /* a tiny shield, not a circle */
+  clip-path: polygon(50% 100%, 0 55%, 0 0, 100% 0, 100% 55%);
+}
+.cover-pips > b {
+  font-size: 9px;
+  font-weight: 800;
+  color: #9ecbff;
+  line-height: 1;
+}
+
+/* The volley itself: a streak that arcs over the front line. X moves linearly,
+   Y is a parabola through --lift, which is what makes it read as a lob rather
+   than a straight line. Transform-only, so it never touches layout. */
+.volley-arc {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 6;
+  pointer-events: none;
+  transform: translate(var(--x1), var(--y1));
+  animation: volleyX var(--ms) linear forwards;
+}
+.volley-arc > i {
+  display: block;
+  width: 9px;
+  height: 3px;
+  margin: -1px 0 0 -4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, #ffe6b0);
+  box-shadow: 0 0 6px 1px #ffcf7a99;
+  animation: volleyY var(--ms) ease-in forwards;
+}
+.volley-arc[data-covered='true'] > i {
+  background: linear-gradient(90deg, transparent, #9ecbff);
+  box-shadow: 0 0 7px 2px #9ecbffaa;
+}
+
+/* A stack that was just saved: it should be obvious nothing hit it. */
+.stack[data-saved='true'] {
+  animation: coverSaved 0.5s ease;
+}
+
 /* ── glossary ───────────────────────────────────────────────────────────── */
 
 .glossary-row {
@@ -902,6 +967,27 @@ h3 {
 }
 .g-buff {
   color: #ffd97a;
+}
+.g-cover {
+  color: #9ecbff;
+  border-color: color-mix(in srgb, #9ecbff 45%, transparent);
+}
+.threat-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  padding: 7px 9px;
+  border-radius: var(--fx-radius);
+  border: 1px solid color-mix(in srgb, #9ecbff 30%, var(--line));
+  background: var(--panel-2);
+}
+.threat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 800;
+  color: #9ecbff;
 }
 .g-kw {
   color: var(--fx-accent);
@@ -1230,6 +1316,31 @@ h3 {
 @keyframes promoteReady {
   50% {
     box-shadow: 0 0 0 1px var(--gold), 0 0 20px -3px var(--gold);
+  }
+}
+@keyframes volleyX {
+  to {
+    transform: translate(calc(var(--x1) + var(--dx)), var(--y1));
+  }
+}
+@keyframes volleyY {
+  0% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(calc(var(--dy) / 2 - var(--lift)));
+  }
+  100% {
+    transform: translateY(var(--dy));
+  }
+}
+@keyframes coverSaved {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px var(--sc);
+  }
+  40% {
+    box-shadow: 0 0 0 2px #9ecbff, 0 0 18px -2px #9ecbff;
   }
 }
 @keyframes hitFlash {

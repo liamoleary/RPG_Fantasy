@@ -8,7 +8,8 @@
  * like failing tests. Targets: faction avg placement 4.2–4.8, hero 4.0–5.0,
  * median run <= 14 rounds, p95 <= 16, no unit with a >8% win delta.
  */
-import { FACTIONS, HEROES, UNIT_BY_ID } from '../src/data/index'
+import { ALL_UNITS, BOONS, FACTIONS, HEROES, UNIT_BY_ID } from '../src/data/index'
+import { FRONT_SLOTS } from '../src/engine/battle'
 import { HARD_CAP_ROUND, advanceRound, newRun, resolveBattles, type RunState } from '../src/engine/run'
 import { boardPower, rivalMuster, NOISE, pickBoon, type Difficulty } from '../src/engine/rivals'
 import { isLevelUpRound } from '../src/engine/boons'
@@ -20,6 +21,8 @@ interface Args {
   runs: number
   difficulty: Difficulty
   seed: number
+  /** 'off' strips Cover from the data, for a like-for-like before/after */
+  cover: 'on' | 'off'
 }
 
 function parseArgs(): Args {
@@ -32,7 +35,24 @@ function parseArgs(): Args {
     runs: Number(get('runs', '1000')),
     difficulty: get('difficulty', 'standard') as Difficulty,
     seed: Number(get('seed', '12345')),
+    cover: get('cover', 'on') === 'off' ? 'off' : 'on',
   }
+}
+
+/**
+ * Run the lobby as it was before Design Notes 02: strip the Cover keyword from
+ * every unit and remove the Overwatch boon from the pool. Mutating the data
+ * here rather than diffing against an older commit keeps the seeds, the rival
+ * policies and the RNG stream identical, so the only difference measured is
+ * the interception itself.
+ */
+function disableCover() {
+  for (const u of ALL_UNITS) {
+    const i = u.keywords.findIndex((k) => k.k === 'cover')
+    if (i >= 0) u.keywords.splice(i, 1)
+  }
+  const b = BOONS.findIndex((x) => x.id === 'b_overwatch')
+  if (b >= 0) BOONS.splice(b, 1)
 }
 
 /**
@@ -56,6 +76,52 @@ const honoredDuels: Duel = { n: 0, won: 0 }
  * worth; either rate on its own mostly measures the heuristic's blind spot.
  */
 const veteranDuels: Duel = { n: 0, won: 0 }
+
+/**
+ * Ranged legibility guardrails (Design Notes 02 §4). Counted per battle
+ * inside the round loop — `run.reports` is replaced every round, so anything
+ * read after the run only ever sees the final one.
+ */
+const rowDeaths = {
+  battles: 0,
+  ties: 0,
+  withBackDeath: 0,
+  withFrontDeath: 0,
+  back: 0,
+  front: 0,
+  saves: 0,
+  /** battles where at least one side actually fielded a front-row coverer */
+  withCoverer: 0,
+  /** back-row wipes in that subset — the number Cover is supposed to move */
+  coveredBattlesWithBackDeath: 0,
+}
+
+function collectRowDeaths(run: RunState) {
+  for (const r of run.reports) {
+    rowDeaths.battles++
+    if (r.winner === 'tie') rowDeaths.ties++
+    let back = 0
+    let front = 0
+    // battleStart carries both opening boards, including Cover charges.
+    const opening = r.result.events[0]
+    const hasCoverer =
+      opening?.t === 'battleStart' && [...opening.a, ...opening.b].some((sn) => sn.cover > 0)
+    if (hasCoverer) rowDeaths.withCoverer++
+    for (const e of r.result.events) {
+      if (e.t === 'cover') rowDeaths.saves++
+      if (e.t !== 'death') continue
+      const dead = e.snap.find((sn) => sn.uid === e.uid)
+      if (!dead) continue
+      if (dead.slot >= FRONT_SLOTS) back++
+      else front++
+    }
+    rowDeaths.back += back
+    rowDeaths.front += front
+    if (back > 0) rowDeaths.withBackDeath++
+    if (front > 0) rowDeaths.withFrontDeath++
+    if (hasCoverer && back > 0) rowDeaths.coveredBattlesWithBackDeath++
+  }
+}
 
 function collectRankDuels(run: RunState) {
   for (const r of run.reports) {
@@ -115,6 +181,7 @@ function playRunHeadless(run: RunState): RunState {
     }
     resolveBattles(run)
     collectRankDuels(run)
+    collectRowDeaths(run)
     if (run.finished) break
     advanceRound(run)
   }
@@ -148,6 +215,7 @@ function table(title: string, rows: [string, string][][]) {
 
 function main() {
   const args = parseArgs()
+  if (args.cover === 'off') disableCover()
   const t0 = Date.now()
 
   const byFaction = new Map<string, Bucket>()
@@ -155,8 +223,6 @@ function main() {
   const byArchetype = new Map<string, Bucket>()
   const unitSeen = new Map<string, { drafted: number; wonWith: number }>()
   const lengths: number[] = []
-  let ties = 0
-  let battles = 0
 
   // Banner Rank adoption and its effect on placement (§3.4).
   let rankBoards = 0
@@ -220,10 +286,6 @@ function main() {
         unitSeen.set(uidStr, rec)
       }
     }
-    for (const r of run.reports) {
-      battles++
-      if (r.winner === 'tie') ties++
-    }
   }
 
   lengths.sort((a, b) => a - b)
@@ -232,7 +294,7 @@ function main() {
   const elapsed = Date.now() - t0
 
   console.log(`\nBANNERFELL — balance harness`)
-  console.log(`${args.runs} lobbies · difficulty ${args.difficulty} · seed ${args.seed} · ${elapsed}ms (${(elapsed / args.runs).toFixed(1)}ms/run)`)
+  console.log(`${args.runs} lobbies · difficulty ${args.difficulty} · seed ${args.seed} · Cover ${args.cover} · ${elapsed}ms (${(elapsed / args.runs).toFixed(1)}ms/run)`)
 
   table(
     'FACTION            avg place   win%    n      target 4.2–4.8',
@@ -376,7 +438,84 @@ function main() {
   )
 
   console.log(`\nRUN LENGTH   median ${median} (target ≤14)   p95 ${p95} (target ≤16)   min ${lengths[0]}   max ${lengths[lengths.length - 1]}`)
-  console.log(`BATTLES      ${battles} resolved · ${pct(ties / battles)} ties`)
+  // Design Notes 02 §4: the whole point of Cover is fewer back-row wipes.
+  const rd = rowDeaths
+  table(
+    `RANGED (Cover ${args.cover})       per battle across the whole run`,
+    [
+      [
+        ['battles with a back-row wipe'.padEnd(34), ''],
+        [pct(rd.withBackDeath / rd.battles).padStart(9), ''],
+        [`  ${rd.withBackDeath} of ${rd.battles}`, ''],
+      ],
+      [
+        ['battles with a front-row wipe'.padEnd(34), ''],
+        [pct(rd.withFrontDeath / rd.battles).padStart(9), ''],
+        [`  ${rd.withFrontDeath} of ${rd.battles}`, ''],
+      ],
+      [
+        ['back-row stacks wiped per battle'.padEnd(34), ''],
+        [(rd.back / rd.battles).toFixed(3).padStart(9), ''],
+        ['', ''],
+      ],
+      [
+        ['front-row stacks wiped per battle'.padEnd(34), ''],
+        [(rd.front / rd.battles).toFixed(3).padStart(9), ''],
+        ['', ''],
+      ],
+      [
+        ['battles with a coverer present'.padEnd(34), ''],
+        [pct(rd.withCoverer / rd.battles).padStart(9), ''],
+        [`  ${rd.withCoverer} of ${rd.battles}`, ''],
+      ],
+      [
+        ['  ...of those, a back-row wipe'.padEnd(34), ''],
+        [pct(rd.withCoverer ? rd.coveredBattlesWithBackDeath / rd.withCoverer : 0).padStart(9), ''],
+        ['  the subset Cover can move', ''],
+      ],
+      [
+        ['Cover saves per battle'.padEnd(34), ''],
+        [(rd.saves / rd.battles).toFixed(3).padStart(9), ''],
+        [`  ${rd.saves} total`, ''],
+      ],
+      [
+        ['  ...per battle with a coverer'.padEnd(34), ''],
+        [(rd.withCoverer ? rd.saves / rd.withCoverer : 0).toFixed(3).padStart(9), ''],
+        ['', ''],
+      ],
+    ] as [string, string][][],
+  )
+
+  // Volley must survive the counterplay, and the Cover carriers must not
+  // become auto-picks now that they do two defensive jobs (§4).
+  const tierBase = (tier: number) => {
+    const t = tierTotals.get(tier)
+    return t ? t.wonWith / t.drafted : 0
+  }
+  const watchlist = [
+    ['VOLLEY', ALL_UNITS.filter((u) => u.keywords.some((k) => k.k === 'volley')).map((u) => u.id)],
+    ['COVER', ['vg_shieldmaiden', 'mc_pikewall', 'vg_colossus']],
+  ] as const
+  table(
+    'WATCHLIST                     win-delta vs same tier      flag >8%',
+    watchlist.flatMap(([group, ids]) =>
+      ids
+        .map((id) => {
+          const rec = unitSeen.get(id)
+          const u = UNIT_BY_ID.get(id)
+          if (!rec || !u || rec.drafted < 40) return null
+          const delta = rec.wonWith / rec.drafted - tierBase(u.tier)
+          return [
+            [`${group.padEnd(7)} T${u.tier} ${u.name}`.padEnd(32), ''],
+            [`${delta >= 0 ? '+' : ''}${(delta * 100).toFixed(1)}%`.padStart(8), ''],
+            [String(rec.drafted).padStart(8), Math.abs(delta) > 0.08 ? '  ⚠' : ''],
+          ] as [string, string][]
+        })
+        .filter((r): r is [string, string][] => r !== null),
+    ),
+  )
+
+  console.log(`BATTLES      ${rd.battles} resolved · ${pct(rd.ties / rd.battles)} ties`)
   console.log('')
 }
 

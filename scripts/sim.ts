@@ -603,9 +603,32 @@ function main() {
         [`${ranged ? 'ranged' : 'melee '} ${topName}`.padEnd(30), ''],
         [pct(rankBoards > 0 ? rec.held / rankBoards : 0).padStart(9), ''],
         [pct(rec.held > 0 ? rec.top / rec.held : 0).padStart(12), ''],
-        [(rec.top > 0 ? rec.topPlacementSum / rec.top : 0).toFixed(2).padStart(12), `  n ${rec.top}`],
+        [
+          (rec.top > 0 ? rec.topPlacementSum / rec.top : 0).toFixed(2).padStart(12),
+          // DN04 §3: past ~80% the ultimate has stopped being a choice.
+          `  n ${rec.top}${rec.held > 0 && rec.top / rec.held > 0.8 ? '  ⚠ raise the charge' : ''}`,
+        ],
       ] as [string, string][]
     }),
+  )
+
+  // Apex holders must not become auto-picks: the fantasy is the moment, not
+  // permanent DPS (DN04 §3).
+  const APEX_IDS = ALL_UNITS.filter((u) => u.apex).map((u) => u.id)
+  table(
+    'APEX UNITS                    win-delta vs same tier      flag >8%',
+    APEX_IDS.map((id) => {
+      const rec = unitSeen.get(id)
+      const u = UNIT_BY_ID.get(id)
+      if (!rec || !u) return null
+      const delta = rec.drafted >= 40 ? rec.wonWith / rec.drafted - tierBase(u.tier) : 0
+      return [
+        [`${u.apex?.name ?? ''}`.padEnd(20), ''],
+        [`${u.name}`.padEnd(24), ''],
+        [`${delta >= 0 ? '+' : ''}${(delta * 100).toFixed(1)}%`.padStart(8), ''],
+        [String(rec.drafted).padStart(8), Math.abs(delta) > 0.08 ? '  ⚠' : ''],
+      ] as [string, string][]
+    }).filter((r): r is [string, string][] => r !== null),
   )
 
   console.log(`BATTLES      ${rd.battles} resolved · ${pct(rd.ties / rd.battles)} ties`)

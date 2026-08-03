@@ -5,10 +5,12 @@
  * so the sheet itself has no opinion about game actions.
  */
 import type { ReactNode } from 'react'
+import { UNIT_ART } from '../data/art'
 import { unit } from '../data/index'
 import { ZERO_MODS, type HeroMods, type UnitDef } from '../data/types'
 import { lineOf, promoteCost } from '../engine/camp'
 import { RANK_NAMES, lineRootOf, rankDefOf, rankForCount, thresholdsOf, veteranText } from '../engine/ranks'
+import { Plate } from './Plate'
 import { Sigil } from './Sigil'
 import { keywordName, keywordText } from './keywords'
 import { RankPips, rowGlyph, rowWord, unitColor } from './StackCard'
@@ -50,6 +52,10 @@ export function InspectSheet({
   return (
     <div className="scrim" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        {/* The plate leads: this is the screen where the player decides. */}
+        <div className="sheet-art" style={{ ['--sc' as string]: unitColor(def) }}>
+          <Plate src={UNIT_ART[unitId]} eager fallback={<Sigil id={def.sigil} size={64} />} />
+        </div>
         <div className="row">
           <span className="faction-icon" style={{ ['--fc' as string]: unitColor(def) }}>
             <Sigil id={def.sigil} size={22} />
@@ -99,8 +105,8 @@ export function InspectSheet({
               const ahead = i > currentIndex
               return (
                 <div key={f.id} className="line-form" data-now={f.id === unitId ? 'true' : undefined}>
-                  <span className="line-form-icon" style={{ ['--fc' as string]: unitColor(f) }}>
-                    <Sigil id={f.sigil} size={16} />
+                  <span className="line-form-art" style={{ ['--sc' as string]: unitColor(f) }}>
+                    <Plate src={UNIT_ART[f.id]} fallback={<Sigil id={f.sigil} size={16} />} />
                   </span>
                   <span className="grow">
                     <strong className="small">{f.name}</strong>

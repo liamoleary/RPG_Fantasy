@@ -1,8 +1,11 @@
-import { FACTION_BY_ID, HERO_BY_ID } from '../data/index'
+import { HERO_ART_2X, UNIT_ART } from '../data/art'
+import { FACTION_BY_ID, HERO_BY_ID, unit } from '../data/index'
 import { RENOWN_BY_PLACEMENT, ordinal, player, type RunState } from '../engine/run'
 import { useGame } from '../state/store'
 import { Ladder } from './Ladder'
+import { Plate } from './Plate'
 import { Sigil } from './Sigil'
+import { unitColor } from './StackCard'
 
 export function ResultScreen({ run }: { run: RunState }) {
   const store = useGame()
@@ -14,7 +17,16 @@ export function ResultScreen({ run }: { run: RunState }) {
   const foeId = report ? (playerIsA ? report.bId : report.aId) : null
   const foe = foeId ? run.warlords.find((w) => w.id === foeId) : null
   const damage = tie ? (report?.result.damageToBoth ?? 0) : (report?.damage ?? 0)
-  const survivors = report ? (playerIsA ? report.result.survivorsA : report.result.survivorsB) : []
+  const mySurvivors = report ? (playerIsA ? report.result.survivorsA : report.result.survivorsB) : []
+  // The brief asks for the winning board's plates: on a defeat that is the
+  // board that just beat you, which is the more useful thing to look at.
+  const winnersSurvivors = report
+    ? report.winner === 'a'
+      ? report.result.survivorsA
+      : report.winner === 'b'
+        ? report.result.survivorsB
+        : mySurvivors
+    : []
 
   const eliminated = !p.alive
   const headline = tie ? 'Standstill' : won ? 'Victory' : 'Defeat'
@@ -40,9 +52,25 @@ export function ResultScreen({ run }: { run: RunState }) {
         </div>
         <div className="center">
           <div className="eyebrow">Survivors</div>
-          <div style={{ fontSize: 26, fontWeight: 800 }}>{survivors.reduce((n, s) => n + s.count, 0)}</div>
+          <div style={{ fontSize: 26, fontWeight: 800 }}>{mySurvivors.reduce((n, s) => n + s.count, 0)}</div>
         </div>
       </div>
+
+      {winnersSurvivors.length > 0 && (
+        <div>
+          <div className="eyebrow" style={{ marginBottom: 5 }}>
+            {won ? 'Your warband, still standing' : tie ? 'Left on the field' : `What ${foe?.name ?? 'they'} had left`}
+          </div>
+          <div className="survivor-strip">
+            {winnersSurvivors.map((sv) => (
+              <span key={sv.uid} className="survivor" style={{ ['--sc' as string]: unitColor(unit(sv.unitId)) }}>
+                <Plate src={UNIT_ART[sv.unitId]} eager fallback={<Sigil id={unit(sv.unitId).sigil} size={18} />} />
+                <span className="survivor-count">{sv.count}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {won && (
         <div className="small dim center">
@@ -82,8 +110,8 @@ export function RunOverScreen({ run }: { run: RunState }) {
   return (
     <div className="screen">
       <div className="center" style={{ marginTop: 28 }}>
-        <div style={{ color: f.colors.primary }}>
-          <Sigil id={hero.sigil} size={56} />
+        <div className="hero-art hero-art-ceremony" style={{ ['--fc' as string]: f.colors.primary }} data-big="true">
+          <Plate src={HERO_ART_2X[p.heroId]} eager fallback={<Sigil id={hero.sigil} size={56} />} />
         </div>
         <h1 style={{ color: won ? 'var(--gold)' : 'var(--ink)' }}>{won ? 'Last Banner Standing' : ordinal(placement)}</h1>
         <div className="small dim">

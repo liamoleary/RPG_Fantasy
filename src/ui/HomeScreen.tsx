@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { HERO_ART, HERO_ART_2X } from '../data/art'
 import { FACTIONS, HEROES } from '../data/index'
 import type { FactionId } from '../data/types'
 import type { Difficulty } from '../engine/rivals'
 import { useGame } from '../state/store'
 import { KEYWORD_GLOSSARY } from './keywords'
+import { Plate } from './Plate'
 import { Sigil } from './Sigil'
 
 const DIFFICULTIES: { id: Difficulty; name: string; text: string }[] = [
@@ -92,17 +94,26 @@ export function HomeScreen() {
       <div style={{ display: 'grid', gap: 8 }}>
         {heroes.map((h) => {
           const locked = !heroUnlocked(h.unlockRenown)
+          const chosen = h.id === heroId
           return (
             <button
               key={h.id}
-              className="faction-card"
+              className="faction-card hero-card"
               style={{ ['--fc' as string]: 'var(--fx-primary)' }}
-              data-on={h.id === heroId}
+              data-on={chosen}
               data-locked={locked}
               onClick={() => !locked && setHeroId(h.id)}
             >
-              <span className="faction-icon">
-                <Sigil id={h.sigil} size={22} />
+              {/* The hero you have chosen gets the big plate; the rest stay
+                  thumbnails. Locked heroes still show their art behind the
+                  cost — seeing what you have not unlocked is the point. */}
+              <span className="hero-art" data-big={chosen} data-locked={locked}>
+                <Plate
+                  src={chosen ? HERO_ART_2X[h.id] : HERO_ART[h.id]}
+                  eager={chosen}
+                  fallback={<Sigil id={h.sigil} size={chosen ? 40 : 22} />}
+                />
+                {locked && <span className="hero-lock gold tiny">🔒 {h.unlockRenown}</span>}
               </span>
               <span className="grow">
                 <span style={{ fontWeight: 800, display: 'block' }}>
@@ -114,7 +125,7 @@ export function HomeScreen() {
                 <span className="tiny" style={{ display: 'block', color: 'var(--fx-secondary)' }}>
                   {h.spell.name} · {h.spell.text}
                 </span>
-                {locked && <span className="tiny gold">🔒 {h.unlockRenown} Renown to unlock</span>}
+                {locked && <span className="tiny gold">{h.unlockRenown} Renown to unlock</span>}
               </span>
             </button>
           )

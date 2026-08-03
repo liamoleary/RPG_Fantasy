@@ -1,6 +1,8 @@
+import { HERO_ART } from '../data/art'
 import { BOON_BY_ID, FACTION_BY_ID, HERO_BY_ID } from '../data/index'
 import { spellPower } from '../engine/battle'
 import { START_HP, heroState, opponentOf, type RunState, type Warlord } from '../engine/run'
+import { Plate } from './Plate'
 import { Sigil } from './Sigil'
 
 export function Ladder({ run, onInspect }: { run: RunState; onInspect: (id: string) => void }) {
@@ -28,7 +30,10 @@ function BannerChip({ w, you, foe, onClick }: { w: Warlord; you: boolean; foe: b
       onClick={onClick}
       aria-label={`${w.name}, ${w.hp} HP`}
     >
-      <Sigil id={hero?.sigil ?? 'shield'} size={15} />
+      {/* Face crop sits higher than the card crop — chips are tiny. */}
+      <span className="banner-face">
+        <Plate src={HERO_ART[w.heroId]} eager fallback={<Sigil id={hero?.sigil ?? 'shield'} size={13} />} />
+      </span>
       <span className="banner-hp" style={{ color: w.hp <= 8 ? 'var(--danger)' : undefined }}>
         {w.alive ? w.hp : '✕'}
       </span>
@@ -45,8 +50,8 @@ export function WarlordSheet({ run, id, onClose }: { run: RunState; id: string; 
     <div className="scrim" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="row">
-          <span className="faction-icon" style={{ ['--fc' as string]: f?.colors.primary }}>
-            <Sigil id={hero?.sigil ?? 'shield'} size={22} />
+          <span className="hero-art" style={{ ['--fc' as string]: f?.colors.primary }} data-big="true">
+            <Plate src={HERO_ART[w.heroId]} eager fallback={<Sigil id={hero?.sigil ?? 'shield'} size={30} />} />
           </span>
           <div className="grow">
             <h2>{w.name}</h2>

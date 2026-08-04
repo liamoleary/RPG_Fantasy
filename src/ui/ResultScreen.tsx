@@ -62,15 +62,16 @@ export function ResultScreen({ run }: { run: RunState }) {
   const mine = report ? spellReceipt(report.result.events, playerIsA ? 'a' : 'b') : null
   const theirs = report ? spellReceipt(report.result.events, playerIsA ? 'b' : 'a') : null
 
+  const [showLog, setShowLog] = useState(false)
   const eliminated = !p.alive
   const headline = tie ? 'Standstill' : won ? 'Victory' : 'Defeat'
 
   return (
     <div className="screen">
-      <div className="screen-body" style={{ overflowY: 'auto' }}>
+      <div className="screen-body">
       <Ladder run={run} onInspect={(id) => store.inspect(id)} />
 
-      <div className="center" style={{ marginTop: 18 }}>
+      <div className="center result-head" style={{ marginTop: 6 }}>
         <div className="eyebrow">Round {run.round}</div>
         <h1 style={{ color: won ? 'var(--good)' : tie ? 'var(--ink)' : 'var(--danger)' }}>{headline}</h1>
         {foe && <div className="small dim">against {foe.name}</div>}
@@ -79,15 +80,19 @@ export function ResultScreen({ run }: { run: RunState }) {
       <div className="panel row spread">
         <div>
           <div className="eyebrow">Your banner</div>
-          <div style={{ fontSize: 26, fontWeight: 800, color: p.hp <= 8 ? 'var(--danger)' : undefined }}>{Math.max(0, p.hp)} HP</div>
+          <div className="result-figures" style={{ fontSize: 26, fontWeight: 800, color: p.hp <= 8 ? 'var(--danger)' : undefined }}>
+            {Math.max(0, p.hp)} HP
+          </div>
         </div>
         <div className="center">
           <div className="eyebrow">Damage taken</div>
-          <div style={{ fontSize: 26, fontWeight: 800 }}>{won ? '0' : `−${damage}`}</div>
+          <div className="result-figures" style={{ fontSize: 26, fontWeight: 800 }}>{won ? '0' : `−${damage}`}</div>
         </div>
         <div className="center">
           <div className="eyebrow">Survivors</div>
-          <div style={{ fontSize: 26, fontWeight: 800 }}>{mySurvivors.reduce((n, s) => n + s.count, 0)}</div>
+          <div className="result-figures" style={{ fontSize: 26, fontWeight: 800 }}>
+            {mySurvivors.reduce((n, s) => n + s.count, 0)}
+          </div>
         </div>
       </div>
 
@@ -108,7 +113,7 @@ export function ResultScreen({ run }: { run: RunState }) {
       )}
 
       {won && (
-        <div className="small dim center">
+        <div className="small dim center result-tip">
           Hero damage is <strong>⌈round ÷ 2⌉ + the tiers of your surviving stacks</strong> — the bigger your board
           finishes, the harder they fall.
         </div>
@@ -122,19 +127,30 @@ export function ResultScreen({ run }: { run: RunState }) {
         </div>
       )}
 
-      {report && <HowItWent report={report} playerIsA={playerIsA} />}
+      {report && (
+        <HowItWent report={report} playerIsA={playerIsA} showLog={showLog} onToggleLog={() => setShowLog((v) => !v)} />
+      )}
 
-      <div className="panel" style={{ maxHeight: 150, overflowY: 'auto' }}>
+      {/* One flexible region, two things it can hold. The full battle log
+          REPLACES the lobby round-up rather than being added below it — that
+          is what keeps Continue on screen when you go looking for detail. */}
+      <div className="panel result-log">
         <div className="eyebrow" style={{ marginBottom: 4 }}>
-          This round across the lobby
+          {showLog ? 'Full battle log' : 'This round across the lobby'}
         </div>
-        {run.log
-          .filter((l) => l.startsWith(`R${run.round}:`))
-          .map((l, i) => (
-            <div key={i} className="tiny dim">
-              {l.replace(`R${run.round}: `, '')}
-            </div>
-          ))}
+        {showLog && report
+          ? report.result.events.map((e, i) => (
+              <div key={i} className="tiny dim">
+                {describeEvent(e, playerIsA)}
+              </div>
+            ))
+          : run.log
+              .filter((l) => l.startsWith(`R${run.round}:`))
+              .map((l, i) => (
+                <div key={i} className="tiny dim">
+                  {l.replace(`R${run.round}: `, '')}
+                </div>
+              ))}
       </div>
 
       </div>
@@ -153,8 +169,17 @@ export function ResultScreen({ run }: { run: RunState }) {
  * whole log on demand. This is the screen that permanently answers "what
  * killed me?" without a designer on call.
  */
-function HowItWent({ report, playerIsA }: { report: BattleReport; playerIsA: boolean }) {
-  const [full, setFull] = useState(false)
+function HowItWent({
+  report,
+  playerIsA,
+  showLog,
+  onToggleLog,
+}: {
+  report: BattleReport
+  playerIsA: boolean
+  showLog: boolean
+  onToggleLog: () => void
+}) {
   const moments = keyMoments(report.result, playerIsA)
   if (moments.length === 0) return null
   return (
@@ -165,16 +190,9 @@ function HowItWent({ report, playerIsA }: { report: BattleReport; playerIsA: boo
           <span className="moment-label">{m.label}</span> {m.text}
         </div>
       ))}
-      <button className="btn btn-sm btn-ghost" onClick={() => setFull((v) => !v)}>
-        {full ? 'Hide battle log' : 'See full battle log'}
+      <button className="btn btn-sm btn-ghost" onClick={onToggleLog}>
+        {showLog ? 'Back to the lobby round-up' : 'See full battle log'}
       </button>
-      {full && (
-        <div className="tiny dim" style={{ maxHeight: 190, overflowY: 'auto', display: 'grid', gap: 2 }}>
-          {report.result.events.map((e, i) => (
-            <div key={i}>{describeEvent(e, playerIsA)}</div>
-          ))}
-        </div>
-      )}
     </div>
   )
 }

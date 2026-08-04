@@ -80,7 +80,9 @@ export function canRecruit(unitId: string | null, board: BoardStack[], gold: num
  */
 export function buyLabel(plan: RecruitPlan): { text: string; sub: string | null } {
   if (!plan.target) return { text: `+${plan.added} NEW`, sub: null }
-  if (plan.stepsBehind === 0) return { text: `+${plan.added}`, sub: unit(plan.formId).name }
+  // Joining a stack of the form you are looking at needs no second name — the
+  // card above the button already says it.
+  if (plan.stepsBehind === 0) return { text: `+${plan.added}`, sub: null }
   return { text: `+${plan.added} →`, sub: unit(plan.formId).name }
 }
 
@@ -200,11 +202,15 @@ export function MusterScreen({ run }: { run: RunState }) {
       <div className="screen-body">
       <Ladder run={run} onInspect={(id) => store.inspect(id)} />
 
-      <div className="row spread">
-        <div>
+      {/* One header row, not two: every line here costs the camp height it
+          needs to keep Tier-up on screen. */}
+      <div className="row spread muster-head">
+        <div className="grow" style={{ minWidth: 0 }}>
           <span className="eyebrow">Round {run.round}</span>
-          <div className="row" style={{ gap: 6 }}>
-            <span style={{ fontWeight: 800 }}>{hero.name}</span>
+          <div className="row" style={{ gap: 5 }}>
+            {/* Just the name a player uses: the full title lives in the sheet,
+                and a truncated "Thane Be…" reads worse than "Berrik". */}
+            <span className="muster-hero">{hero.name.split(' ').slice(-1)[0]}</span>
             <span className="kw">Lv {level}</span>
             <button className="btn btn-sm btn-ghost" onClick={() => setHeroOpen(true)} aria-label="Your hero">
               ⓘ
@@ -212,27 +218,22 @@ export function MusterScreen({ run }: { run: RunState }) {
             <button className="btn btn-sm btn-ghost" onClick={() => setGlossary(true)} aria-label="Symbols and keywords">
               ?
             </button>
+            <button className="btn btn-sm btn-ghost" onClick={store.autoArrange} aria-label="Auto-arrange your board">
+              ⇄
+            </button>
           </div>
           <BoonStrip ids={p.boonsTaken} onOpen={() => setHeroOpen(true)} />
         </div>
         {foe && (
           <button className="btn btn-sm" onClick={() => store.setScouting(true)}>
             <Sigil id={HERO_BY_ID.get(foe.heroId)?.sigil ?? 'shield'} size={15} />
-            Scout {foe.name.split(' ')[0]}
+            <span className="scout-name">Scout</span>
           </button>
         )}
       </div>
 
       {/* ── your board ── */}
       <div>
-        <div className="row spread" style={{ marginBottom: 5 }}>
-          <span className="eyebrow">
-            {selectedStack ? 'Tap a glowing slot — or the raised card to cancel' : 'Your warband — tap a stack to inspect'}
-          </span>
-          <button className="btn btn-sm btn-ghost" onClick={store.autoArrange}>
-            Auto-arrange
-          </button>
-        </div>
         <Board
           board={p.board}
           selected={store.selected}
@@ -665,10 +666,11 @@ function OfferCard({
             : `Recruit ${def.name}: starts a new stack of ${plan.added} for ${RECRUIT_COST} gold`
         }
       >
-        <span className="buy-main">
-          {label.text} · {RECRUIT_COST}g
-        </span>
+        {/* One line: a second line here costs every offer card 14px of height,
+            and the height budget is what keeps the camp on screen. */}
+        <span className="buy-main">{label.text}</span>
         {label.sub && <span className="buy-sub">{label.sub}</span>}
+        <span className="buy-cost">{RECRUIT_COST}g</span>
       </button>
     </div>
   )

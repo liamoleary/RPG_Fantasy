@@ -34,112 +34,121 @@ export function HomeScreen() {
     if (first) setHeroId(first.id)
   }
 
+  const faction = FACTIONS.find((f) => f.id === factionId)!
+
   return (
-    <div className="screen" data-scroll="true">
-      <div className="title">BANNERFELL</div>
-      <div className="center small dim" style={{ marginTop: -8 }}>
-        Draft a warband. Outlast seven rival warlords.
-      </div>
-
-      <InstallCard runsFinished={save.stats.runs} />
-
-      <div className="row spread panel" style={{ padding: '8px 12px' }}>
+    <div className="screen">
+      <div className="screen-body">
         <div>
-          <div className="eyebrow">Renown</div>
-          <div className="gold" style={{ fontSize: 19 }}>
-            {save.renown}
+          <div className="title">BANNERFELL</div>
+          <div className="center tiny dim home-tagline">Draft a warband. Outlast seven rival warlords.</div>
+        </div>
+
+        <InstallCard runsFinished={save.stats.runs} />
+
+        <div className="row spread panel" style={{ padding: '6px 10px' }}>
+          <div>
+            <div className="eyebrow">Renown</div>
+            <div className="gold" style={{ fontSize: 17 }}>
+              {save.renown}
+            </div>
+          </div>
+          <div className="center">
+            <div className="eyebrow">Runs</div>
+            <div style={{ fontSize: 17, fontWeight: 800 }}>{save.stats.runs}</div>
+          </div>
+          <div className="center">
+            <div className="eyebrow">Victories</div>
+            <div style={{ fontSize: 17, fontWeight: 800 }}>{save.stats.wins}</div>
+          </div>
+          <button className="btn btn-sm btn-ghost" onClick={() => setShowSettings(true)} aria-label="Settings">
+            ⚙
+          </button>
+        </div>
+
+        {save.activeRun && !save.activeRun.finished && (
+          <button className="btn btn-gold" onClick={resume}>
+            Resume run — round {save.activeRun.round}
+          </button>
+        )}
+
+        {/* Three banners and two heroes fit across, so the whole choice is on
+            one screen and nothing important lives below the fold. */}
+        <div className="eyebrow">Choose your banner</div>
+        <div className="pick-row">
+          {FACTIONS.map((f) => (
+            <button
+              key={f.id}
+              className="pick-tile"
+              style={{ ['--fc' as string]: f.colors.primary }}
+              data-on={f.id === factionId}
+              onClick={() => pickFaction(f.id)}
+            >
+              <span className="faction-icon">
+                <Sigil id={f.id === 'vanguard' ? 'shield' : f.id === 'verdant' ? 'leaf' : 'fang'} size={20} />
+              </span>
+              <span className="pick-name">{f.name.replace(/^The /, '')}</span>
+            </button>
+          ))}
+        </div>
+        <div className="panel pick-blurb">
+          <div className="tiny dim blurb-flavour">{faction.blurb}</div>
+          <div className="tiny" style={{ color: faction.colors.accent, marginTop: 2 }}>
+            <strong>{faction.mechanic}</strong> — {faction.mechanicText}
           </div>
         </div>
-        <div className="center">
-          <div className="eyebrow">Runs</div>
-          <div style={{ fontSize: 19, fontWeight: 800 }}>{save.stats.runs}</div>
-        </div>
-        <div className="center">
-          <div className="eyebrow">Victories</div>
-          <div style={{ fontSize: 19, fontWeight: 800 }}>{save.stats.wins}</div>
-        </div>
-        <button className="btn btn-sm btn-ghost" onClick={() => setShowSettings(true)}>
-          ⚙
-        </button>
-      </div>
 
-      {save.activeRun && !save.activeRun.finished && (
-        <button className="btn btn-gold" onClick={resume}>
-          Resume run — round {save.activeRun.round}
-        </button>
-      )}
-
-      <div className="eyebrow">Choose your banner</div>
-      <div style={{ display: 'grid', gap: 8 }}>
-        {FACTIONS.map((f) => (
-          <button
-            key={f.id}
-            className="faction-card"
-            style={{ ['--fc' as string]: f.colors.primary }}
-            data-on={f.id === factionId}
-            onClick={() => pickFaction(f.id)}
-          >
-            <span className="faction-icon">
-              <Sigil id={f.id === 'vanguard' ? 'shield' : f.id === 'verdant' ? 'leaf' : 'fang'} size={22} />
+        <div className="eyebrow">Choose your hero</div>
+        <div className="pick-row">
+          {heroes.map((h) => {
+            const locked = !heroUnlocked(h.unlockRenown)
+            const chosen = h.id === heroId
+            return (
+              <button
+                key={h.id}
+                className="pick-tile pick-hero"
+                style={{ ['--fc' as string]: 'var(--fx-primary)' }}
+                data-on={chosen}
+                data-locked={locked}
+                onClick={() => !locked && setHeroId(h.id)}
+              >
+                {/* Locked heroes still show their art behind the cost — seeing
+                    what you have not unlocked is the point. */}
+                <span className="hero-art" data-locked={locked}>
+                  <Plate src={HERO_ART[h.id]} eager fallback={<Sigil id={h.sigil} size={22} />} />
+                  {locked && <span className="hero-lock gold tiny">🔒 {h.unlockRenown}</span>}
+                </span>
+                <span className="pick-name">{h.name}</span>
+              </button>
+            )
+          })}
+        </div>
+        <div className="panel pick-blurb">
+          <div className="row" style={{ gap: 8, alignItems: 'flex-start' }}>
+            <span className="hero-art hero-art-pick">
+              <Plate src={HERO_ART_2X[activeHero.id]} eager fallback={<Sigil id={activeHero.sigil} size={26} />} />
             </span>
             <span className="grow">
-              <span style={{ fontWeight: 800, display: 'block' }}>{f.name}</span>
-              <span className="tiny dim">{f.blurb}</span>
-              <span className="tiny" style={{ display: 'block', marginTop: 3, color: f.colors.accent }}>
-                {f.mechanic} — {f.mechanicText}
+              <span style={{ fontWeight: 800, display: 'block', fontSize: 13 }}>
+                {activeHero.name} {activeHero.title}
               </span>
+              <span className="tiny dim blurb-flavour" style={{ display: 'block' }}>
+                Passive · {activeHero.passive.text}
+              </span>
+              <span className="tiny" style={{ display: 'block', color: 'var(--fx-secondary)' }}>
+                {activeHero.spell.name} · {activeHero.spell.text}
+              </span>
+              {!canStart && <span className="tiny gold">{activeHero.unlockRenown} Renown to unlock</span>}
             </span>
-          </button>
-        ))}
+          </div>
+        </div>
       </div>
 
-      <div className="eyebrow">Choose your hero</div>
-      <div style={{ display: 'grid', gap: 8 }}>
-        {heroes.map((h) => {
-          const locked = !heroUnlocked(h.unlockRenown)
-          const chosen = h.id === heroId
-          return (
-            <button
-              key={h.id}
-              className="faction-card hero-card"
-              style={{ ['--fc' as string]: 'var(--fx-primary)' }}
-              data-on={chosen}
-              data-locked={locked}
-              onClick={() => !locked && setHeroId(h.id)}
-            >
-              {/* The hero you have chosen gets the big plate; the rest stay
-                  thumbnails. Locked heroes still show their art behind the
-                  cost — seeing what you have not unlocked is the point. */}
-              <span className="hero-art" data-big={chosen} data-locked={locked}>
-                <Plate
-                  src={chosen ? HERO_ART_2X[h.id] : HERO_ART[h.id]}
-                  eager={chosen}
-                  fallback={<Sigil id={h.sigil} size={chosen ? 40 : 22} />}
-                />
-                {locked && <span className="hero-lock gold tiny">🔒 {h.unlockRenown}</span>}
-              </span>
-              <span className="grow">
-                <span style={{ fontWeight: 800, display: 'block' }}>
-                  {h.name} {h.title}
-                </span>
-                <span className="tiny dim" style={{ display: 'block' }}>
-                  Passive · {h.passive.text}
-                </span>
-                <span className="tiny" style={{ display: 'block', color: 'var(--fx-secondary)' }}>
-                  {h.spell.name} · {h.spell.text}
-                </span>
-                {locked && <span className="tiny gold">{h.unlockRenown} Renown to unlock</span>}
-              </span>
-            </button>
-          )
-        })}
-      </div>
-
-      <button className="btn btn-primary" disabled={!canStart} onClick={() => start(factionId, activeHero.id, difficulty)}>
-        New Run
-      </button>
-      <div className="center tiny dim" style={{ paddingBottom: 12 }}>
-        8 warlords · 30 HP · ~20 minutes
+      <div className="action-bar">
+        <button className="btn btn-primary" disabled={!canStart} onClick={() => start(factionId, activeHero.id, difficulty)}>
+          New Run
+        </button>
+        <div className="center tiny dim">8 warlords · 30 HP · ~20 minutes</div>
       </div>
 
       {showSettings && (

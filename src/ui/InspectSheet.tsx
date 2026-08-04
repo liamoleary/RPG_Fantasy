@@ -158,9 +158,9 @@ export function InspectSheet({
           <Stat label="ATK" value={atk} className="chip-atk" buffed={atk > def.atk} />
           <Stat label="HP" value={hp} className="chip-hp" buffed={hp > def.hp} />
           <Stat label="Init" value={def.init} />
-          <Stat label="Per buy" value={`+${def.musterSize}`} />
+          <Stat label="Buy" value={`+${def.musterSize}`} />
           <Stat label="Tier" value={def.tier} />
-          {context && <Stat label="Count" value={context.count} />}
+          {context && <Stat label="Held" value={context.count} />}
         </div>
 
         {context?.stats && <Breakdown stats={context.stats} />}
@@ -192,7 +192,7 @@ export function InspectSheet({
               <ApexMeter charge={context?.apexCharge ?? 0} max={def.apex.charge} />
             </div>
             <div>{def.apex.text}</div>
-            <div className="tiny dim">
+            <div className="tiny dim blurb-flavour">
               Charges once when this stack attacks and once when it survives casualties; fires at {def.apex.charge}.
             </div>
           </div>
@@ -249,11 +249,16 @@ export function InspectSheet({
         {/* Banner Ranks (§3) land here in Phase B. */}
         {extra}
 
-        {actions && <div className="row wrap sheet-actions">{actions}</div>}
-
-        <button className="btn btn-ghost" onClick={onClose}>
-          Close
-        </button>
+        {/* Actions and Close share one row: a full-width Close of its own cost
+            the sheet 50px, which is a keyword block. */}
+        <div className="sheet-foot">
+          <div className="row wrap sheet-actions">
+            {actions}
+            <button className="btn btn-sm btn-ghost" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -336,7 +341,7 @@ export function RankProgress({
           </span>
         </span>
       </div>
-      <div className="tiny dim">Ranks are permanent for the run and survive promotion — they only ever go up.</div>
+      <div className="tiny dim blurb-flavour">Ranks are permanent for the run and survive promotion — they only ever go up.</div>
     </div>
   )
 }

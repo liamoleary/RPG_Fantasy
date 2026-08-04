@@ -24,6 +24,12 @@
   --fx-radius: 4px;
 
   --tap: 44px;
+  /* Cards are 4:5, so their WIDTH sets the height of every board row. Capping
+     it against the viewport is what keeps four rows, a hero and an action bar
+     on one screen without anything scrolling. Fluid rather than stepped: a
+     phone half an inch shorter should get slightly smaller cards, not the
+     same cards and a scrollbar. Calibrated so 740px lands on 64px. */
+  --card-max: clamp(36px, calc(58px + (100dvh - 740px) * 0.17), 84px);
   color-scheme: dark;
 }
 
@@ -180,8 +186,8 @@ h3 {
 .screen {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px;
+  gap: 10px;
+  padding: 12px;
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -196,7 +202,7 @@ h3 {
 .screen-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   flex: 1;
   min-height: 0;
 }
@@ -213,7 +219,7 @@ h3 {
 
 .title {
   /* Tracked-out caps overflow a 360px phone at a fixed size. */
-  font-size: clamp(26px, 8.5vw, 42px);
+  font-size: clamp(24px, 7.5vw, 38px);
   font-weight: 900;
   letter-spacing: 0.12em;
   text-align: center;
@@ -221,7 +227,7 @@ h3 {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  margin-top: 12px;
+  margin-top: 4px;
 }
 
 .faction-card {
@@ -251,6 +257,68 @@ h3 {
   border-radius: 50%;
   background: color-mix(in srgb, var(--fc) 30%, #000);
   color: var(--fc);
+  flex: none;
+}
+
+/* One line for the hero's name: wrapping it costs the camp 20px. */
+.muster-hero {
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+.muster-head {
+  align-items: flex-start;
+}
+
+/* Detail sheets: the plate leads, but not at the cost of the whole sheet.
+   A tall phone gets a big plate; a short one gets a legible thumbnail. */
+.sheet-art {
+  max-height: clamp(104px, 20dvh, 220px) !important;
+}
+
+/* Home fits on one screen (playtest): the whole choice is three banners and
+   two heroes across, with the detail for whichever is selected below them. */
+.pick-row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 8px;
+}
+.pick-tile {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  padding: 8px 4px;
+  border-radius: calc(var(--fx-radius) + 6px);
+  border: 1px solid var(--line);
+  background: linear-gradient(150deg, color-mix(in srgb, var(--fc) 22%, var(--panel)), var(--panel));
+  min-height: var(--tap);
+}
+.pick-tile[data-on='true'] {
+  border-color: var(--fc);
+  box-shadow: 0 0 0 1px var(--fc), 0 6px 22px -14px var(--fc);
+}
+.pick-tile[data-locked='true'] {
+  opacity: 0.55;
+}
+.pick-name {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  text-align: center;
+  line-height: 1.15;
+}
+.pick-hero .hero-art {
+  width: 46px;
+}
+.pick-blurb {
+  padding: 7px 9px;
+}
+.hero-art-pick {
+  width: 44px !important;
   flex: none;
 }
 
@@ -289,9 +357,131 @@ h3 {
   font-weight: 800;
 }
 
+/* Short phones (and landscape) give up the decorative lines first, so the
+   choice itself still never needs a scroll. */
+@media (max-height: 700px) {
+  /* Result: the headline and the three big numbers give up a size class so
+     the round-up and Continue keep their place. */
+  .result-head h1 {
+    font-size: 24px;
+  }
+  .result-figures {
+    font-size: 19px !important;
+  }
+  .moment {
+    font-size: 12px;
+  }
+  /* Result at phone height: the survivor strip and the panels lose their
+     breathing room before the round-up loses its place. */
+  .survivor {
+    width: 34px;
+  }
+  .result-head {
+    margin-top: 0 !important;
+  }
+  .panel {
+    padding: 9px 10px;
+  }
+  /* Settings and other choice sheets tighten rather than scroll. */
+  .sheet .boon {
+    padding: 8px 10px;
+    gap: 3px;
+  }
+  .sheet {
+    gap: 9px;
+    padding: 13px;
+  }
+  .survivor {
+    width: 36px;
+  }
+  .row-label-clause {
+    display: none;
+  }
+  .row-label {
+    min-height: 20px;
+    padding: 1px 0;
+  }
+  .camp-panel {
+    padding: 8px;
+    gap: 5px;
+  }
+  .offer {
+    gap: 4px;
+  }
+  .screen {
+    gap: 8px;
+    padding: 10px;
+  }
+  .screen-body {
+    gap: 8px;
+  }
+  .home-tagline {
+    display: none;
+  }
+  .title {
+    font-size: clamp(20px, 6vw, 30px);
+  }
+  .pick-tile {
+    padding: 6px 3px;
+  }
+  .pick-hero .hero-art {
+    width: 38px;
+  }
+  .faction-icon {
+    width: 34px;
+    height: 34px;
+  }
+}
+
+/* Smaller still: the flavour prose goes, the mechanics stay. Everything you
+   need to make the choice is still on screen, just terser. */
+@media (max-height: 780px) {
+  /* Explanatory footnotes are the first thing a detail sheet gives up. */
+  .sheet .blurb-flavour {
+    display: none;
+  }
+}
+@media (max-height: 660px) {
+  .blurb-flavour {
+    display: none;
+  }
+}
+@media (max-height: 600px) {
+  .tier-up {
+    min-height: 38px;
+  }
+  .offer-buy {
+    min-height: 26px;
+  }
+  .boon-strip {
+    display: none;
+  }
+  .screen {
+    gap: 6px;
+    padding: 8px;
+  }
+  .screen-body {
+    gap: 6px;
+  }
+  .hero-art-pick {
+    display: none;
+  }
+  .eyebrow {
+    font-size: 10px;
+  }
+  .panel {
+    padding: 8px;
+  }
+  /* The run's vital statistics are flavour next to the button itself. */
+  .action-bar > .center {
+    display: none;
+  }
+}
+
 /* ── ladder ─────────────────────────────────────────────────────────────── */
 
 .ladder {
+  flex: none;
   display: flex;
   gap: 5px;
   overflow-x: auto;
@@ -303,11 +493,11 @@ h3 {
 }
 .banner {
   flex: none;
-  width: 42px;
+  width: 40px;
   border-radius: 3px 3px 8px 8px;
   border: 1px solid var(--line);
   background: linear-gradient(180deg, color-mix(in srgb, var(--fc) 42%, var(--panel)), var(--panel));
-  padding: 4px 2px 5px;
+  padding: 2px 2px 3px;
   display: grid;
   place-items: center;
   gap: 2px;
@@ -325,12 +515,13 @@ h3 {
   border-color: var(--danger);
 }
 .banner-hp {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
+  line-height: 1.1;
 }
 .banner-face {
-  width: 26px;
-  height: 26px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--fc) 70%, transparent);
@@ -367,9 +558,13 @@ h3 {
 .board-row > .stack,
 .board-row > .stack-wrap,
 .board-row > .slot {
-  flex: 0 0 calc((100% - 18px) / 4);
+  flex: 0 0 min(calc((100% - 18px) / 4), var(--card-max));
   width: auto;
   min-width: 0;
+}
+/* Capped cards no longer fill the row, so both lines centre under each other. */
+.board-row {
+  justify-content: center;
 }
 .board-row[data-row='back'] {
   justify-content: center;
@@ -727,6 +922,7 @@ h3 {
   position: relative;
   width: 100%;
   aspect-ratio: 4 / 5;
+  max-height: calc(var(--card-max) * 1.25);
   overflow: hidden;
   background: #0b111d;
   margin-bottom: 2px;
@@ -1026,12 +1222,11 @@ h3 {
    and the Fight button never do. */
 .camp-panel {
   display: grid;
-  gap: 8px;
+  grid-template-rows: auto minmax(0, auto) auto auto;
+  gap: 6px;
   position: relative;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
 }
 
 /* Reroll and Freeze are furniture; they should read as furniture. */
@@ -1167,6 +1362,26 @@ h3 {
   animation: coverSaved 0.5s ease;
 }
 
+/* A sheet's actions never sit below its fold: they stick to the bottom while
+   the content behind them scrolls, so Close and Promote are always one tap
+   away however long the sheet is. */
+.sheet-foot {
+  position: sticky;
+  bottom: -16px;
+  z-index: 3;
+  margin: 0 -16px -16px;
+  padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
+  display: grid;
+  gap: 8px;
+  background: linear-gradient(180deg, transparent, var(--panel) 26%);
+}
+.sheet > .btn:last-child {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  box-shadow: 0 0 0 10px var(--panel);
+}
+
 /* ── glossary ───────────────────────────────────────────────────────────── */
 
 .glossary-row {
@@ -1299,14 +1514,16 @@ h3 {
   width: 100%;
   max-width: 460px;
   max-height: 88vh;
+  max-height: 88dvh;
   overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   animation: rise 0.2s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 
@@ -1314,8 +1531,9 @@ h3 {
 
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(58px, 1fr));
-  gap: 6px;
+  /* Six stats in one row rather than two: the second row costs a keyword. */
+  grid-template-columns: repeat(auto-fit, minmax(46px, 1fr));
+  gap: 5px;
 }
 .row-tag-inline {
   color: var(--ink);
@@ -1944,6 +2162,22 @@ h3 {
   max-width: 82%;
 }
 
+/* The result screen's flexible region. Everything else is fixed, so the
+   Continue button is always on screen whatever the battle produced. */
+.result-log {
+  flex: 1 1 auto;
+  min-height: 44px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* The damage-formula note is a tutorial line; a short phone spends that space
+   on the battle instead. */
+@media (max-height: 780px) {
+  .result-tip {
+    display: none;
+  }
+}
+
 /* Key moments: yours and theirs must be tellable apart at a glance. */
 .moment-label {
   font-weight: 800;
@@ -1961,20 +2195,36 @@ h3 {
   box-shadow: 0 0 24px -6px #ff8f7a;
 }
 
-/* The camp button prints exactly what the purchase does (DN04 §1.3). */
+/* The camp button prints exactly what the purchase does (DN04 §1.3), on one
+   line — a second line costs every offer card real height. */
+.offer-buy {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 3px;
+  min-height: 30px;
+}
 .buy-main {
-  display: block;
+  font-weight: 900;
+  white-space: nowrap;
 }
 .buy-sub {
-  display: block;
   font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   opacity: 0.75;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
+  min-width: 0;
+}
+.buy-cost {
+  font-size: 10px;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+.scout-name {
+  white-space: nowrap;
 }
 
 .log {

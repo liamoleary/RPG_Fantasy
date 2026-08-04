@@ -72,8 +72,9 @@ export function HomeScreen() {
           </button>
         )}
 
-        {/* Three banners and two heroes fit across, so the whole choice is on
-            one screen and nothing important lives below the fold. */}
+        {/* Three banners across; the hero gets a full-width portrait, because
+            the art is half of why you pick one. Both are sized against the
+            viewport so the whole choice still lands on one screen. */}
         <div className="eyebrow">Choose your banner</div>
         <div className="pick-row">
           {FACTIONS.map((f) => (
@@ -85,62 +86,55 @@ export function HomeScreen() {
               onClick={() => pickFaction(f.id)}
             >
               <span className="faction-icon">
-                <Sigil id={f.id === 'vanguard' ? 'shield' : f.id === 'verdant' ? 'leaf' : 'fang'} size={20} />
+                <Sigil id={f.id === 'vanguard' ? 'shield' : f.id === 'verdant' ? 'leaf' : 'fang'} size={18} />
               </span>
               <span className="pick-name">{f.name.replace(/^The /, '')}</span>
             </button>
           ))}
         </div>
-        <div className="panel pick-blurb">
-          <div className="tiny dim blurb-flavour">{faction.blurb}</div>
-          <div className="tiny" style={{ color: faction.colors.accent, marginTop: 2 }}>
-            <strong>{faction.mechanic}</strong> — {faction.mechanicText}
-          </div>
+        <div className="tiny faction-line" style={{ color: faction.colors.accent }}>
+          <strong>{faction.mechanic}</strong> — {faction.mechanicText}
         </div>
 
         <div className="eyebrow">Choose your hero</div>
-        <div className="pick-row">
-          {heroes.map((h) => {
-            const locked = !heroUnlocked(h.unlockRenown)
-            const chosen = h.id === heroId
-            return (
-              <button
-                key={h.id}
-                className="pick-tile pick-hero"
-                style={{ ['--fc' as string]: 'var(--fx-primary)' }}
-                data-on={chosen}
-                data-locked={locked}
-                onClick={() => !locked && setHeroId(h.id)}
-              >
-                {/* Locked heroes still show their art behind the cost — seeing
-                    what you have not unlocked is the point. */}
-                <span className="hero-art" data-locked={locked}>
-                  <Plate src={HERO_ART[h.id]} eager fallback={<Sigil id={h.sigil} size={22} />} />
-                  {locked && <span className="hero-lock gold tiny">🔒 {h.unlockRenown}</span>}
-                </span>
-                <span className="pick-name">{h.name}</span>
-              </button>
-            )
-          })}
+        <div className="hero-showcase" style={{ ['--fc' as string]: faction.colors.primary }}>
+          <Plate
+            src={HERO_ART_2X[activeHero.id]}
+            eager
+            priority
+            fallback={<Sigil id={activeHero.sigil} size={56} />}
+          />
+          <span className="showcase-scrim" aria-hidden="true" />
+          <span className="showcase-name">
+            <strong>{activeHero.name}</strong>
+            <span className="dim"> {activeHero.title}</span>
+          </span>
+          {/* The other banners' heroes stay one tap away, art and all. */}
+          <span className="showcase-switch">
+            {heroes.map((h) => {
+              const locked = !heroUnlocked(h.unlockRenown)
+              return (
+                <button
+                  key={h.id}
+                  className="hero-thumb"
+                  data-on={h.id === heroId}
+                  data-locked={locked}
+                  onClick={() => !locked && setHeroId(h.id)}
+                  aria-label={locked ? `${h.name} — ${h.unlockRenown} Renown to unlock` : h.name}
+                >
+                  <Plate src={HERO_ART[h.id]} eager fallback={<Sigil id={h.sigil} size={14} />} />
+                  {locked && <span className="thumb-lock">🔒</span>}
+                </button>
+              )
+            })}
+          </span>
         </div>
-        <div className="panel pick-blurb">
-          <div className="row" style={{ gap: 8, alignItems: 'flex-start' }}>
-            <span className="hero-art hero-art-pick">
-              <Plate src={HERO_ART_2X[activeHero.id]} eager fallback={<Sigil id={activeHero.sigil} size={26} />} />
-            </span>
-            <span className="grow">
-              <span style={{ fontWeight: 800, display: 'block', fontSize: 13 }}>
-                {activeHero.name} {activeHero.title}
-              </span>
-              <span className="tiny dim blurb-flavour" style={{ display: 'block' }}>
-                Passive · {activeHero.passive.text}
-              </span>
-              <span className="tiny" style={{ display: 'block', color: 'var(--fx-secondary)' }}>
-                {activeHero.spell.name} · {activeHero.spell.text}
-              </span>
-              {!canStart && <span className="tiny gold">{activeHero.unlockRenown} Renown to unlock</span>}
-            </span>
-          </div>
+        <div className="hero-kit">
+          <span className="tiny dim blurb-flavour">Passive · {activeHero.passive.text}</span>
+          <span className="tiny" style={{ color: 'var(--fx-secondary)' }}>
+            {activeHero.spell.name} · {activeHero.spell.text}
+          </span>
+          {!canStart && <span className="tiny gold">{activeHero.unlockRenown} Renown to unlock</span>}
         </div>
       </div>
 

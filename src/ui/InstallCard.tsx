@@ -78,9 +78,9 @@ export function InstallCard({ runsFinished }: { runsFinished: number }) {
         <span className="install-mark" aria-hidden="true">
           ⚑
         </span>
-        <div className="grow">
+        <div className="grow" style={{ minWidth: 0 }}>
           <strong>Install Bannerfell</strong>
-          <div className="tiny dim">Full screen, offline, and one tap from your home screen.</div>
+          <div className="tiny dim install-why">Full screen and offline.</div>
         </div>
         <button
           className="btn btn-sm btn-gold"

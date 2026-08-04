@@ -1713,6 +1713,56 @@ h3 {
   background: radial-gradient(circle at 50% 62%, #ffd0c880 0%, #d9534f40 45%, transparent 72%);
 }
 
+/* The caster lights up in its own flavour before the beam leaves it (§10). */
+.stack[data-casting] {
+  animation: castGlow 0.6s ease;
+}
+.stack[data-casting='holy'] {
+  --castc: #ffd07a;
+}
+.stack[data-casting='nature'] {
+  --castc: #9fe07f;
+}
+.stack[data-casting='storm'] {
+  --castc: #7fd4ff;
+}
+.stack[data-casting='arcane'] {
+  --castc: #bfa4ff;
+}
+.stack[data-casting='blood'] {
+  --castc: #ff8f7a;
+}
+
+/* Beams carry the caster's palette too, so a heal and a lightning arc never
+   read as the same power. */
+.cast-beam[data-fx='holy'] {
+  background: linear-gradient(90deg, #ffd07a, #fff6de);
+}
+.cast-beam[data-fx='nature'] {
+  background: linear-gradient(90deg, #7fd39a, #eaffd8);
+}
+.cast-beam[data-fx='storm'] {
+  background: linear-gradient(90deg, #6cc9ff, #eafaff);
+}
+.cast-beam[data-fx='arcane'] {
+  background: linear-gradient(90deg, #9a7ae0, #f0e6ff);
+}
+.cast-beam[data-fx='blood'] {
+  background: linear-gradient(90deg, #d9534f, #ffe2dc);
+}
+/* Motes ride the beam home — the receiving end of §10's "rising motes". */
+.cast-beam[data-fx]::after {
+  content: '';
+  position: absolute;
+  right: -2px;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, #ffffffcc 45%, transparent 72%);
+  opacity: 0.9;
+}
+
 /* ── hero stage and plaques ─────────────────────────────────────────────── */
 
 /* Your hero owns the dead space under your back line (§9). The portrait is
@@ -2212,6 +2262,17 @@ h3 {
   100% {
     opacity: 0;
     transform: scale(1.06);
+  }
+}
+@keyframes castGlow {
+  0% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  45% {
+    box-shadow: 0 0 0 1px var(--castc), 0 0 20px -2px var(--castc);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
   }
 }
 @keyframes stageFlare {

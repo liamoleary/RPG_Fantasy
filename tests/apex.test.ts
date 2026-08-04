@@ -11,6 +11,7 @@ import { simulateBattle, type BattleEvent, type BattleSide, type BoardStack, typ
  */
 
 const sylvaen = HERO_BY_ID.get('h_sylvaen')!
+const berrik = HERO_BY_ID.get('h_berrik')!
 
 function stack(unitId: string, count: number, slot: number, extra: Partial<BoardStack> = {}): BoardStack {
   return { uid: `${unitId}@${slot}`, unitId, count, slot, bonusAtk: 0, bonusHp: 0, growthTicks: 0, spent: 3, rank: 0, ...extra }
@@ -182,5 +183,82 @@ describe('determinism (§12.12)', () => {
       return apexes(simulateBattle(a, b, sylvaen, sylvaen, seed, { round: 4 }).events).length
     })
     expect(counts.every((n) => n > 0)).toBe(true)
+  })
+})
+
+/**
+ * Caster attribution (Design Notes 04 §10). The Battle Cleric's per-exchange
+ * heal was the most invisible power in the game: the event named who was
+ * healed but never who healed them, so the UI could only bloom light out of
+ * nowhere. Naming the source is what lets the magic travel.
+ */
+describe('caster attribution (§10)', () => {
+  /**
+   * The Cleric only heals someone else if it survives and someone else is
+   * hurt. Attacking into melee gets it retaliated to death, so the enemy front
+   * is Mule Carts (0 ATK, nothing to retaliate with) and the wounds come from
+   * a Crossbow Levy volleying over the top, which draws no retaliation either.
+   * Berrik on both sides: his spell grants Bulwark, so no hero heal is mixed in.
+   */
+  const clericBattle = () =>
+    simulateBattle(
+      { board: [stack('vg_cleric', 4, 4), stack('vg_mule', 20, 0)], hero: hero('h_berrik') },
+      { board: [stack('vg_mule', 60, 0), stack('vg_crossbow', 8, 4)], hero: hero('h_berrik') },
+      berrik,
+      berrik,
+      13,
+      { round: 1 },
+    )
+
+  const healsIn = (res: ReturnType<typeof simulateBattle>) =>
+    res.events.filter((e): e is Extract<BattleEvent, { t: 'heal' }> => e.t === 'heal')
+
+  it('a unit ability names the stack that cast it', () => {
+    const heals = healsIn(clericBattle())
+    const fromCleric = heals.filter((h) => h.src === 'vg_cleric@4')
+    expect(fromCleric.length).toBeGreaterThan(0)
+    expect(fromCleric[0].uid).toBe('vg_mule@0')
+    // The snapshot has to carry the caster too, or the replay cannot find the
+    // card the beam leaves from.
+    expect(fromCleric[0].snap.some((s) => s.uid === 'vg_cleric@4')).toBe(true)
+  })
+
+  it('never attributes a heal to its own recipient — that is a beam to nowhere', () => {
+    const heals = healsIn(clericBattle())
+    expect(heals.length).toBeGreaterThan(0)
+    for (const h of heals) expect(h.src).not.toBe(h.uid)
+    // Self-heals happen in this battle and carry no source at all.
+    expect(heals.some((h) => h.uid === 'vg_cleric@4' && h.src === undefined)).toBe(true)
+  })
+
+  it('a hero spell leaves it unset — it already beams from the portrait', () => {
+    // Sylvaen's Rejuvenate, with no Cleric on the field to muddy the log.
+    const res = simulateBattle(
+      { board: [stack('vg_mule', 20, 0)], hero: hero('h_sylvaen') },
+      { board: [stack('vg_mule', 60, 0), stack('vg_crossbow', 8, 4)], hero: hero('h_sylvaen') },
+      sylvaen,
+      sylvaen,
+      13,
+      { round: 6 },
+    )
+    const heals = healsIn(res)
+    expect(heals.length).toBeGreaterThan(0)
+    for (const h of heals) expect(h.src).toBeUndefined()
+  })
+
+  it('an ability buff names its caster so the beam has an origin', () => {
+    // Drummer Whelp rallies the warband at battle start.
+    const res = simulateBattle(
+      { board: [stack('st_drummer', 3, 4), stack('vg_mule', 20, 0)], hero: hero('h_berrik') },
+      { board: [stack('vg_mule', 40, 0)], hero: hero('h_berrik') },
+      berrik,
+      berrik,
+      7,
+      { round: 1 },
+    )
+    const buffs = res.events.filter((e): e is Extract<BattleEvent, { t: 'buff' }> => e.t === 'buff')
+    const fromDrummer = buffs.filter((b) => b.src === 'st_drummer@4')
+    expect(fromDrummer.length).toBeGreaterThan(0)
+    expect(fromDrummer[0].uids.length).toBeGreaterThan(1)
   })
 })

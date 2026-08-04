@@ -87,8 +87,9 @@ export type BattleEvent =
   | { t: 'cleave'; src: string; dst: string; dmg: number; killed: number; snap: StackSnap[] }
   | { t: 'venom'; uid: string; units: number; snap: StackSnap[] }
   | { t: 'cover'; src: string; saved: string; by: string; left: number; snap: StackSnap[] }
-  | { t: 'buff'; uids: string[]; text: string; snap: StackSnap[] }
-  | { t: 'heal'; uid: string; amount: number; revived: number; snap: StackSnap[] }
+  /** `src` is the stack that cast it, when a stack cast it (Design Notes 04 §10) */
+  | { t: 'buff'; uids: string[]; text: string; src?: string; snap: StackSnap[] }
+  | { t: 'heal'; uid: string; amount: number; revived: number; src?: string; snap: StackSnap[] }
   | { t: 'frenzy'; uid: string; atk: number; snap: StackSnap[] }
   | { t: 'lastStand'; uid: string; snap: StackSnap[] }
   | {
@@ -424,7 +425,12 @@ function applyDamage(ctx: Ctx, target: RStack, raw: number, opts: { siege?: bool
   return out
 }
 
-function healStack(ctx: Ctx, target: RStack, amount: number): { healed: number; revived: number } {
+/**
+ * `src` names the stack responsible, so the replay can draw the magic leaving
+ * the caster rather than blooming out of nowhere (§10). Hero spells leave it
+ * unset — they already beam from the hero's own portrait.
+ */
+function healStack(ctx: Ctx, target: RStack, amount: number, src?: RStack): { healed: number; revived: number } {
   if (!target.alive || amount <= 0) return { healed: 0, revived: 0 }
   const before = target.count
   const cur = pool(target)
@@ -433,7 +439,14 @@ function healStack(ctx: Ctx, target: RStack, amount: number): { healed: number; 
   target.wound = target.count * target.maxHp - next
   const res = { healed: next - cur, revived: target.count - before }
   if (res.healed > 0) {
-    ctx.events.push({ t: 'heal', uid: target.uid, amount: res.healed, revived: res.revived, snap: snaps(target) })
+    ctx.events.push({
+      t: 'heal',
+      uid: target.uid,
+      amount: res.healed,
+      revived: res.revived,
+      ...(src && src.uid !== target.uid ? { src: src.uid } : {}),
+      snap: src && src.uid !== target.uid ? snaps(target, src) : snaps(target),
+    })
   }
   return res
 }
@@ -564,12 +577,12 @@ function applyAbilityEffect(ctx: Ctx, s: RStack, e: AbilityEffect) {
   switch (e.type) {
     case 'alliesBulwark': {
       for (const a of allies) a.bulwark += e.x
-      ctx.events.push({ t: 'buff', uids: allies.map((a) => a.uid), text: `+${e.x} Bulwark`, snap: snaps(...allies) })
+      ctx.events.push({ t: 'buff', uids: allies.map((a) => a.uid), text: `+${e.x} Bulwark`, src: s.uid, snap: snaps(...allies) })
       break
     }
     case 'alliesAtk': {
       for (const a of allies) a.atk += e.x
-      ctx.events.push({ t: 'buff', uids: allies.map((a) => a.uid), text: `+${e.x} ATK`, snap: snaps(...allies) })
+      ctx.events.push({ t: 'buff', uids: allies.map((a) => a.uid), text: `+${e.x} ATK`, src: s.uid, snap: snaps(...allies) })
       break
     }
     case 'selfAtk': {
@@ -587,7 +600,7 @@ function applyAbilityEffect(ctx: Ctx, s: RStack, e: AbilityEffect) {
       if (wounded.length === 0) break
       let worst = wounded[0]
       for (const a of wounded) if (pool(a) / maxPool(a) < pool(worst) / maxPool(worst)) worst = a
-      healStack(ctx, worst, e.x * s.count)
+      healStack(ctx, worst, e.x * s.count, s)
       break
     }
     case 'damageRandom': {
@@ -692,7 +705,7 @@ function fireApex(ctx: Ctx, s: RStack, cycle: number) {
       for (const a of front) a.bulwark += 1
       if (front.length > 0) {
         touched.push(...front)
-        ctx.events.push({ t: 'buff', uids: front.map((a) => a.uid), text: '+1 Bulwark', snap: snaps(...front) })
+        ctx.events.push({ t: 'buff', uids: front.map((a) => a.uid), text: '+1 Bulwark', src: s.uid, snap: snaps(...front) })
       }
       break
     }
@@ -731,7 +744,7 @@ function fireApex(ctx: Ctx, s: RStack, cycle: number) {
       const mine = aliveOn(ctx, s.side)
       const hurt = mine.slice().sort((p, q) => pool(p) / maxPool(p) - pool(q) / maxPool(q))[0]
       if (overflow > 0 && hurt) {
-        healStack(ctx, hurt, overflow)
+        healStack(ctx, hurt, overflow, s)
         touched.push(hurt)
       }
       break

@@ -44,6 +44,8 @@ interface Frame {
       float?: { text: string; kind: 'dmg' | 'heal' | 'buff' | 'soak'; weight?: number }
       weight?: number
       bloom?: CastFx
+      /** this stack is the one casting — it glows in its own flavour (§10) */
+      glow?: CastFx
     }
   >
   banner: string | null
@@ -62,6 +64,8 @@ interface Frame {
   heavy: { uid: string; frac: number } | null
   /** a line-top form unleashing its ultimate: beams from the card (DN04 §3) */
   apex: { uid: string; targets: string[] } | null
+  /** a unit ability reaching its targets from the stack that cast it (§10) */
+  ability: { src: string; targets: string[]; fx: CastFx } | null
 }
 
 /**
@@ -85,6 +89,12 @@ function bloomOf(s: StackSnap | undefined, sides: Record<Side, FactionId>): Cast
   return own.castFx ?? castFxOfFaction(sides[s.side])
 }
 
+/** The flavour a named caster works in — its own, else its army's. */
+function castOf(s: StackSnap | undefined, sides: Record<Side, FactionId>): CastFx {
+  if (!s) return 'arcane'
+  return unit(s.unitId).castFx ?? castFxOfFaction(sides[s.side])
+}
+
 function buildFrames(result: BattleResult, playerIsA: boolean, sides: Record<Side, FactionId>): Frame[] {
   const boards: Record<string, StackSnap> = {}
   const frames: Frame[] = []
@@ -98,6 +108,7 @@ function buildFrames(result: BattleResult, playerIsA: boolean, sides: Record<Sid
     let cast: Frame['cast'] = null
     let pulse: Frame['pulse'] = null
     let apex: Frame['apex'] = null
+    let ability: Frame['ability'] = null
 
     // The heavy-hit threshold is a share of what the victim had BEFORE the
     // blow, so read the board one step ahead of applying the snapshot.
@@ -130,11 +141,18 @@ function buildFrames(result: BattleResult, playerIsA: boolean, sides: Record<Sid
       case 'cleave':
         fx[e.dst] = { state: 'hit', float: { text: `-${e.dmg}`, kind: 'dmg' } }
         break
-      case 'heal':
-        // A heal blooms on the recipient in its side's flavour (§10) — gold
-        // light for the Vanguard's Cleric, green for a Verdant grove.
-        fx[e.uid] = { float: { text: `+${e.amount}`, kind: 'heal' }, bloom: bloomOf(boards[e.uid], sides) }
+      case 'heal': {
+        // A heal blooms on the recipient in the CASTER's flavour (§10) — gold
+        // light from the Vanguard's Cleric, green from a Verdant grove — and
+        // the light travels, so you can see whose power it was.
+        const flavour: CastFx | undefined = e.src ? castOf(boards[e.src], sides) : bloomOf(boards[e.uid], sides)
+        fx[e.uid] = { float: { text: `+${e.amount}`, kind: 'heal' }, bloom: flavour }
+        if (e.src && flavour) {
+          fx[e.src] = { ...fx[e.src], glow: flavour }
+          ability = { src: e.src, targets: [e.uid], fx: flavour }
+        }
         break
+      }
       case 'frenzy':
         fx[e.uid] = { float: { text: `+${e.atk} ATK`, kind: 'buff' } }
         break
@@ -147,9 +165,18 @@ function buildFrames(result: BattleResult, playerIsA: boolean, sides: Record<Sid
         arc = { from: e.src, to: e.by, covered: true, shot: projectileOf(unit(boards[e.src].unitId)) }
         saved = e.saved
         break
-      case 'buff':
-        for (const uid of e.uids) fx[uid] = { float: { text: e.text, kind: 'buff' }, bloom: bloomOf(boards[uid], sides) }
+      case 'buff': {
+        const flavour = e.src ? castOf(boards[e.src], sides) : undefined
+        for (const uid of e.uids) {
+          fx[uid] = { float: { text: e.text, kind: 'buff' }, bloom: flavour ?? bloomOf(boards[uid], sides) }
+        }
+        if (e.src && flavour) {
+          fx[e.src] = { ...fx[e.src], glow: flavour }
+          const reach = e.uids.filter((uid) => uid !== e.src)
+          if (reach.length > 0) ability = { src: e.src, targets: reach, fx: flavour }
+        }
         break
+      }
       case 'root':
         fx[e.uid] = { float: { text: 'rooted', kind: 'soak' } }
         break
@@ -190,6 +217,7 @@ function buildFrames(result: BattleResult, playerIsA: boolean, sides: Record<Sid
       spent: { ...spent },
       heavy,
       apex,
+      ability,
     })
   }
   return frames
@@ -230,7 +258,7 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
     kind: Projectile
     key: number
   } | null>(null)
-  const [beams, setBeams] = useState<{ x1: number; y1: number; len: number; rot: number; key: number }[]>([])
+  const [beams, setBeams] = useState<{ x1: number; y1: number; len: number; rot: number; fx: CastFx | null; key: number }[]>([])
   /** a heavy hit shakes the field, at most once a second (§7) */
   const [shake, setShake] = useState(0)
   const lastShake = useRef(0)
@@ -282,8 +310,11 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
       ? field.querySelector(`[data-plaque="${frame.cast.side}"]`)
       : frame.apex
         ? card(frame.apex.uid)
-        : null
-    const rays = frame.cast?.targets ?? frame.apex?.targets
+        : frame.ability
+          ? card(frame.ability.src)
+          : null
+    const rays = frame.cast?.targets ?? frame.apex?.targets ?? frame.ability?.targets
+    const rayFx = frame.ability?.fx ?? null
     if (origin && rays) {
       const o = centre(origin)
       setBeams(
@@ -294,7 +325,14 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
             const t = centre(el)
             const dx = t.x - o.x
             const dy = t.y - o.y
-            return { x1: o.x, y1: o.y, len: Math.hypot(dx, dy), rot: (Math.atan2(dy, dx) * 180) / Math.PI, key: i * 100 + n }
+            return {
+              x1: o.x,
+              y1: o.y,
+              len: Math.hypot(dx, dy),
+              rot: (Math.atan2(dy, dx) * 180) / Math.PI,
+              fx: rayFx,
+              key: i * 100 + n,
+            }
           }),
       )
     } else {
@@ -327,7 +365,8 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
     if (peek || heroPeek || paused) return
     // A spell banner has to survive 2× speed, so it holds the frame for at
     // least ~600ms of real time (§1.2). Everything else follows the speed knob.
-    const ms = frames[i]?.cast ? Math.max(SPELL_MIN_MS, BASE_MS / store.speed) : BASE_MS / store.speed
+    const casting = frames[i]?.cast || frames[i]?.apex || frames[i]?.ability
+    const ms = casting ? Math.max(SPELL_MIN_MS, BASE_MS / store.speed) : BASE_MS / store.speed
     timer.current = window.setTimeout(() => setI((n) => n + 1), ms)
     return () => {
       if (timer.current) window.clearTimeout(timer.current)
@@ -420,6 +459,7 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
           <span
             key={b.key}
             className="cast-beam"
+            data-fx={b.fx ?? undefined}
             style={
               {
                 '--x1': `${b.x1}px`,
@@ -427,7 +467,9 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
                 '--len': `${b.len}px`,
                 '--rot': `${b.rot}deg`,
                 '--fc': (beamSide === mySide ? FACTION_BY_ID.get(p.factionId) : foeFaction)?.colors.accent,
-                '--ms': `${Math.round(420 / store.speed)}ms`,
+                // An ability beam is slower than a hero's: it has to be
+                // followed to the stack it healed, not just noticed (§10).
+                '--ms': `${Math.round((b.fx ? 560 : 420) / store.speed)}ms`,
               } as React.CSSProperties
             }
             aria-hidden="true"
@@ -646,6 +688,7 @@ function SnapBoard({
               float={f?.float ?? null}
               weight={f?.weight ?? 0}
               bloom={f?.bloom ?? null}
+              glow={f?.glow ?? null}
               savedByCover={saved === s.uid}
               apexFiring={apexUid === s.uid}
               onClick={() => onPeek(s)}

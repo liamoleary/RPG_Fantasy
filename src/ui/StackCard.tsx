@@ -111,6 +111,8 @@ interface Props {
   weight?: number
   /** a spell landing on this stack, in its caster's flavour (§10) */
   bloom?: CastFx | null
+  /** this stack is the caster — it lights up in its own flavour (§10) */
+  glow?: CastFx | null
   /** Muster: 'ready' = affordable promotion waiting, 'soon' = needs more gold */
   promote?: 'ready' | 'soon' | null
   /** tapping the badge promotes without opening the sheet (DN04 §8) */
@@ -150,6 +152,7 @@ export function StackCard({
   float,
   weight = 0,
   bloom,
+  glow,
   promote,
   onPromoteTap,
   cover = 0,
@@ -179,6 +182,7 @@ export function StackCard({
       data-apex={apexMax > 0 && apexCharge >= apexMax ? 'ready' : undefined}
       data-apex-firing={apexFiring ? 'true' : undefined}
       data-weight={weight >= 0.4 ? 'heavy' : weight > 0 ? 'light' : undefined}
+      data-casting={glow ?? undefined}
       data-hit={state === 'hit' ? 'true' : undefined}
       data-act={state === 'act' ? 'true' : undefined}
       data-dead={state === 'dead' ? 'true' : undefined}
@@ -258,6 +262,7 @@ export function SnapCard({
   float,
   weight,
   bloom,
+  glow,
   onClick,
   savedByCover,
   apexFiring,
@@ -267,6 +272,7 @@ export function SnapCard({
   float?: Props['float']
   weight?: number
   bloom?: CastFx | null
+  glow?: CastFx | null
   onClick?: () => void
   savedByCover?: boolean
   apexFiring?: boolean
@@ -286,6 +292,7 @@ export function SnapCard({
       float={float}
       weight={weight}
       bloom={bloom}
+      glow={glow}
       onClick={onClick}
       cover={snap.cover}
       apexCharge={snap.apexCharge}

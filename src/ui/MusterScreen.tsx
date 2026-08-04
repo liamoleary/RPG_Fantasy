@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { UNIT_ART } from '../data/art'
 import { BOON_BY_ID, FACTION_BY_ID, HERO_BY_ID, unit } from '../data/index'
 import { addMods, type BoonBranch, type BoonDef, type FactionId, type HeroDef, type HeroMods, type Row } from '../data/types'
@@ -245,6 +245,11 @@ export function MusterScreen({ run }: { run: RunState }) {
           owner={p}
           boonFx={boonFx}
           onPromoteTap={(uid) => setPromoteUid(uid)}
+          onDragStart={(uid) => store.select(uid)}
+          onDrop={(slot) => {
+            if (slot !== null) store.place(slot)
+            else store.select(null)
+          }}
           onRowInfo={setRowInfo}
           onStack={(uid) => (store.selected === uid ? store.select(null) : setStackUid(uid))}
           onSlot={(slot) => store.place(slot)}
@@ -501,6 +506,8 @@ export function Board({
   owner,
   boonFx,
   onPromoteTap,
+  onDragStart,
+  onDrop,
 }: {
   board: BoardStack[]
   selected?: string | null
@@ -523,9 +530,67 @@ export function Board({
   boonFx?: Record<string, string>
   /** Muster only: tapping a card's gold chevron promotes it in one step (§8) */
   onPromoteTap?: (uid: string) => void
+  /** Muster only: enables finger-dragging stacks between slots */
+  onDragStart?: (uid: string) => void
+  onDrop?: (slot: number | null) => void
 }) {
   const bySlot = new Map(board.map((s) => [s.slot, s]))
   const holding = selected !== undefined && selected !== null
+
+  /**
+   * Touch drag (playtest: "dragging still isn't working on my phone" — there
+   * was no drag, only tap-move). Pointer events, not HTML5 drag: mobile
+   * browsers don't do HTML5 drag at all. A press that travels past a thumb's
+   * jitter picks the stack up; a ghost follows the finger; release drops it on
+   * whatever cell is underneath. A press that never travels stays a tap, so
+   * inspect still works. `touch-action: none` on the cells is what stops the
+   * browser claiming the gesture for scrolling.
+   */
+  const dragRef = useRef<{ uid: string; x0: number; y0: number; active: boolean } | null>(null)
+  const justDragged = useRef(false)
+  const [ghost, setGhost] = useState<{ unitId: string; x: number; y: number } | null>(null)
+
+  const beginDrag = (uid: string) => (e: React.PointerEvent) => {
+    if (!onDragStart || !onDrop || e.button !== 0) return
+    dragRef.current = { uid, x0: e.clientX, y0: e.clientY, active: false }
+    const move = (ev: PointerEvent) => {
+      const d = dragRef.current
+      if (!d) return
+      if (!d.active) {
+        if (Math.hypot(ev.clientX - d.x0, ev.clientY - d.y0) < 12) return
+        d.active = true
+        onDragStart(d.uid)
+      }
+      const st = board.find((x) => x.uid === d.uid)
+      if (st) setGhost({ unitId: st.unitId, x: ev.clientX, y: ev.clientY })
+    }
+    const finish = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', finish)
+      window.removeEventListener('pointercancel', cancel)
+      const d = dragRef.current
+      dragRef.current = null
+      setGhost(null)
+      if (!d?.active) return
+      // Swallow the click that the browser fires after the release, or the
+      // drop would also open the inspect sheet.
+      justDragged.current = true
+      window.setTimeout(() => (justDragged.current = false), 150)
+      const cell = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('[data-slot]')
+      onDrop(cell ? Number((cell as HTMLElement).dataset.slot) : null)
+    }
+    const cancel = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', finish)
+      window.removeEventListener('pointercancel', cancel)
+      dragRef.current = null
+      setGhost(null)
+      onDrop(null)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', finish)
+    window.addEventListener('pointercancel', cancel)
+  }
   const render = (slots: number[], row: Row) => (
     <div className="board-line" key={row}>
       {labels === 'full' && (
@@ -546,6 +611,7 @@ export function Board({
               <div
                 key={slot}
                 className="slot"
+                data-slot={slot}
                 data-drop={droppable ? 'true' : undefined}
                 data-illegal={holding && !droppable ? 'true' : undefined}
                 onClick={() => droppable && onSlot?.(slot)}
@@ -578,8 +644,19 @@ export function Board({
                 ? () => onStack(st.uid)
                 : undefined
           return (
-            <StackCard
+            <span
               key={slot}
+              className="cell"
+              data-slot={slot}
+              onPointerDown={beginDrag(st.uid)}
+              onClickCapture={(e) => {
+                if (justDragged.current) {
+                  e.preventDefault()
+                  e.stopPropagation()
+                }
+              }}
+            >
+            <StackCard
               unitId={st.unitId}
               count={st.count}
               atk={stats ? stats.atk : def.atk + st.bonusAtk}
@@ -596,6 +673,7 @@ export function Board({
               illegal={holding && !held && !droppable}
               onClick={handle}
             />
+            </span>
           )
         })}
       </div>
@@ -606,9 +684,14 @@ export function Board({
     // battlefield exactly (Design Notes 03 §3, correcting DN01 §1.3). DN01 put
     // the back line on top everywhere, which drew the enemy's front line
     // bearing down on YOUR back line and implied the back row was the wall.
-    <div className="board" style={compact ? { opacity: 0.95 } : undefined}>
+    <div className="board" data-draggable={onDragStart ? 'true' : undefined} style={compact ? { opacity: 0.95 } : undefined}>
       {render([0, 1, 2, 3], 'front')}
       {render([4, 5, 6], 'back')}
+      {ghost && (
+        <span className="drag-ghost" style={{ left: ghost.x, top: ghost.y }} aria-hidden="true">
+          <Plate src={UNIT_ART[ghost.unitId]} eager fallback={<Sigil id={unit(ghost.unitId).sigil} size={20} />} />
+        </span>
+      )}
     </div>
   )
 }
@@ -864,7 +947,9 @@ function BoonModal({
 }) {
   const picks = branchPicks(taken)
   return (
-    <div className="scrim">
+    // Solid, not translucent: the pick arrives straight off the result screen,
+    // and the camp flashing through a see-through scrim reads as a glitch.
+    <div className="scrim scrim-solid">
       <div className="sheet">
         <div className="center">
           <div className="eyebrow">Level {level}</div>

@@ -2,7 +2,7 @@ import { HERO_ART_2X, UNIT_ART } from '../data/art'
 import { FACTION_BY_ID, HERO_BY_ID, unit } from '../data/index'
 import { useState } from 'react'
 import type { BattleEvent, Side, SpellOutcome } from '../engine/battle'
-import { RENOWN_BY_PLACEMENT, ordinal, player, type BattleReport, type RunState } from '../engine/run'
+import { RENOWN_BY_PLACEMENT, ordinal, player, type BattleReport, type RunState, type Warlord } from '../engine/run'
 import { useGame } from '../state/store'
 import { Ladder } from './Ladder'
 import { Plate } from './Plate'
@@ -38,6 +38,31 @@ function spellReceipt(events: BattleEvent[], side: Side): string | null {
   return bits.join(', ')
 }
 
+/** One duellist on the result screen: portrait, name, remaining banner HP. */
+function DuelPortrait({ warlord, you, win, dim }: { warlord: Warlord; you?: boolean; win?: boolean; dim?: boolean }) {
+  const hero = HERO_BY_ID.get(warlord.heroId)
+  const faction = FACTION_BY_ID.get(warlord.factionId)
+  return (
+    <div
+      className="duel-portrait"
+      data-win={win ? 'true' : undefined}
+      data-dim={dim ? 'true' : undefined}
+      style={{ ['--fc' as string]: faction?.colors.accent }}
+    >
+      <Plate src={HERO_ART_2X[warlord.heroId]} eager fallback={<Sigil id={hero?.sigil ?? 'shield'} size={26} />} />
+      <span className="duel-scrim" aria-hidden="true" />
+      {/* The lobby log names warlords, so the loser's card does too. */}
+      <span className="duel-name">{you ? 'You' : warlord.name}</span>
+      <span className="duel-hp">{Math.max(0, warlord.hp)}</span>
+      {win && (
+        <span className="duel-crown" aria-hidden="true">
+          ♛
+        </span>
+      )}
+    </div>
+  )
+}
+
 export function ResultScreen({ run }: { run: RunState }) {
   const store = useGame()
   const p = player(run)
@@ -71,10 +96,16 @@ export function ResultScreen({ run }: { run: RunState }) {
       <div className="screen-body">
       <Ladder run={run} onInspect={(id) => store.inspect(id)} />
 
-      <div className="center result-head" style={{ marginTop: 6 }}>
-        <div className="eyebrow">Round {run.round}</div>
-        <h1 style={{ color: won ? 'var(--good)' : tie ? 'var(--ink)' : 'var(--danger)' }}>{headline}</h1>
-        {foe && <div className="small dim">against {foe.name}</div>}
+      {/* The duel, not a headline: winner lit and ringed, loser in grey. */}
+      <div className="duel result-head">
+        <DuelPortrait warlord={p} you win={won} dim={!won && !tie} />
+        <div className="duel-mid">
+          <div className="eyebrow">Round {run.round}</div>
+          <div className="duel-word" data-tone={won ? 'win' : tie ? 'tie' : 'loss'}>
+            {headline}
+          </div>
+        </div>
+        {foe && <DuelPortrait warlord={foe} win={!won && !tie} dim={won} />}
       </div>
 
       <div className="panel row spread">

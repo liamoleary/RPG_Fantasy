@@ -476,6 +476,10 @@ h3 {
   .result-head {
     margin-top: 0 !important;
   }
+  .duel-portrait {
+    height: clamp(66px, 10vh, 100px);
+    height: clamp(66px, 10dvh, 100px);
+  }
   .panel {
     padding: 9px 10px;
   }
@@ -644,10 +648,40 @@ h3 {
 }
 .board-row > .stack,
 .board-row > .stack-wrap,
+.board-row > .cell,
 .board-row > .slot {
   flex: 0 0 min(calc((100% - 18px) / 4), var(--card-max));
   width: auto;
   min-width: 0;
+}
+.cell {
+  display: block;
+  position: relative;
+}
+/* Without this the browser claims the press for scrolling and the drag never
+   starts — the number one reason "drag doesn't work on my phone". */
+.board[data-draggable='true'] .cell,
+.board[data-draggable='true'] .slot {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.board[data-draggable='true'] .plate {
+  -webkit-user-drag: none;
+}
+/* The card in flight under the finger. */
+.drag-ghost {
+  position: fixed;
+  z-index: 90;
+  width: 56px;
+  aspect-ratio: 4 / 5;
+  margin: -66px 0 0 -28px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--gold);
+  box-shadow: 0 10px 28px -8px #000, 0 0 0 1px var(--gold);
+  pointer-events: none;
+  opacity: 0.92;
 }
 /* Capped cards no longer fill the row, so both lines centre under each other. */
 .board-row {
@@ -1590,6 +1624,12 @@ h3 {
   z-index: 50;
   animation: fade 0.16s ease;
 }
+/* A full-screen moment (the boon pick): nothing bleeds through, no fade-in. */
+.scrim-solid {
+  background: radial-gradient(120% 80% at 50% 0%, var(--bg-2) 0%, var(--bg) 60%);
+  animation: none;
+}
+
 .sheet {
   width: 100%;
   max-width: 460px;
@@ -1897,14 +1937,9 @@ h3 {
 .battlefield {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   flex: 1;
   justify-content: center;
-}
-.side-label {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
 }
 
 .stack[data-hit='true'] {
@@ -2062,6 +2097,14 @@ h3 {
   opacity: 0.9;
 }
 
+/* Empty slots stay rendered in battle so nothing ever reflows — but they are
+   terrain, not shop cells, so they fade back. */
+.battlefield .slot {
+  opacity: 0.35;
+  border-style: solid;
+  border-color: #ffffff0d;
+}
+
 /* ── hero stage and plaques ─────────────────────────────────────────────── */
 
 /* Your hero owns the dead space under your back line (§9). The portrait is
@@ -2073,7 +2116,8 @@ h3 {
   gap: 10px;
   width: 100%;
   min-height: 62px;
-  padding: 4px 10px;
+  /* The HP chip owns a corner; nothing else may sit under it. */
+  padding: 4px 58px 4px 10px;
   overflow: hidden;
   border-radius: 10px;
   /* Centre stage, literally (§9) — the glow pools under the portrait rather
@@ -2083,6 +2127,40 @@ h3 {
 }
 .hero-stage[data-flare='true'] {
   animation: stageFlare 0.6s ease;
+}
+/* The enemy's stage flips so the two portraits face each other across the
+   field, and its glow pools from the top edge instead of the bottom. */
+.hero-stage[data-mirror='true'] {
+  flex-direction: row-reverse;
+  align-items: flex-start;
+  padding: 4px 10px 4px 58px;
+  background: radial-gradient(80% 120% at 50% 0%, color-mix(in srgb, var(--fc) 20%, transparent), transparent 70%);
+}
+.hero-stage[data-mirror='true'] .stage-body {
+  padding-bottom: 0;
+  padding-top: 6px;
+  justify-items: end;
+}
+.stage-hp {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  min-width: 34px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 900;
+  color: #fff;
+  background: #0b0d14d8;
+  border: 1px solid var(--fc);
+  box-shadow: 0 0 10px -3px var(--fc);
+}
+.hero-stage[data-mirror='true'] .stage-hp {
+  right: auto;
+  left: 8px;
+  bottom: auto;
+  top: 8px;
 }
 .stage-art {
   flex: none;
@@ -2120,66 +2198,7 @@ h3 {
 
 /* ── hero plaques ───────────────────────────────────────────────────────── */
 
-.plaque-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 34px;
-  /* Reversed so the enemy plaque keeps the top-right corner and its passive
-     label grows inward, rather than shoving the portrait off the corner. */
-  flex-direction: row-reverse;
-  justify-content: flex-start;
-}
-.plaque-row[data-mine='true'] {
-  flex-direction: row;
-}
 
-.hero-plaque {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 8px 3px 3px;
-  border: 1px solid #ffffff1f;
-  border-radius: 999px;
-  background: #10131be0;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-  max-width: 62%;
-}
-.hero-plaque[data-flare='true'] {
-  border-color: var(--fc);
-  animation: plaqueFlare 0.6s ease;
-}
-.plaque-art {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  overflow: hidden;
-  flex: none;
-  border: 1px solid var(--fc);
-  display: grid;
-  place-items: center;
-  background: #0b0d14;
-}
-/* 26px of face — crop tighter than a card does, as the ladder chips do. */
-.plaque-art .plate {
-  object-position: 50% 5% !important;
-}
-.plaque-body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.plaque-name {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .plaque-pips {
   display: flex;
   gap: 3px;
@@ -2204,7 +2223,7 @@ h3 {
   background: #0b0d14d0;
   border-radius: 6px;
   padding: 2px 6px;
-  max-width: 52%;
+  max-width: 36%;
   animation: fade 0.9s ease forwards;
 }
 
@@ -2243,11 +2262,102 @@ h3 {
   max-width: 82%;
 }
 
+/* The duel header: two portraits face to face, the outcome between them. */
+.duel {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 8px;
+  align-items: stretch;
+}
+.duel-portrait {
+  position: relative;
+  height: clamp(74px, 11vh, 118px);
+  height: clamp(74px, 11dvh, 118px);
+  border-radius: calc(var(--fx-radius) + 6px);
+  border: 1px solid var(--line);
+  overflow: hidden;
+  background: #0b111d;
+  display: grid;
+  place-items: center;
+  color: var(--fc);
+}
+.duel-portrait .plate {
+  position: absolute;
+  inset: 0;
+  object-position: 50% 8% !important;
+}
+.duel-portrait[data-win='true'] {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold), 0 8px 26px -12px var(--gold);
+}
+.duel-portrait[data-dim='true'] {
+  filter: grayscale(0.85) brightness(0.7);
+}
+.duel-scrim {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 52%;
+  background: linear-gradient(transparent, rgba(6, 10, 18, 0.94));
+  pointer-events: none;
+}
+.duel-name {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 2px 6px #000;
+}
+.duel-hp {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 26px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 900;
+  background: #0b0d14d8;
+  border: 1px solid var(--fc);
+}
+.duel-crown {
+  position: absolute;
+  top: 2px;
+  left: 6px;
+  font-size: 16px;
+  color: var(--gold);
+  text-shadow: 0 2px 6px #000;
+}
+.duel-mid {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 2px;
+  min-width: 74px;
+}
+.duel-word {
+  font-size: 19px;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+}
+.duel-word[data-tone='win'] {
+  color: var(--good);
+}
+.duel-word[data-tone='loss'] {
+  color: var(--danger);
+}
+
 /* The result screen's flexible region. Everything else is fixed, so the
    Continue button is always on screen whatever the battle produced. */
 .result-log {
   flex: 1 1 auto;
-  min-height: 44px;
+  min-height: 40px;
   overflow-y: auto;
   overscroll-behavior: contain;
 }

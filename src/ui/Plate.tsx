@@ -42,6 +42,9 @@ export function Plate({
       className={`plate${className ? ` ${className}` : ''}`}
       src={src}
       alt={alt}
+      // Native image-drag steals pointer events mid-gesture (pointercancel),
+      // which killed the board's finger-drag dead on desktop and Android.
+      draggable={false}
       decoding="async"
       loading={eager ? 'eager' : 'lazy'}
       // Lowercase so React 18 passes it through untouched rather than warning.

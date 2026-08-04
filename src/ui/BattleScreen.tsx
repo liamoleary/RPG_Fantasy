@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { HERO_ART, HERO_ART_2X } from '../data/art'
+import { HERO_ART_2X } from '../data/art'
 import { FACTION_BY_ID, HERO_BY_ID, unit } from '../data/index'
 import type { CastFx, FactionId, Projectile } from '../data/types'
 import type { BattleResult, Side, StackSnap } from '../engine/battle'
@@ -7,7 +7,6 @@ import { player, type RunState, type Warlord } from '../engine/run'
 import { useGame } from '../state/store'
 import { HeroSheet } from './HeroSheet'
 import { InspectSheet, RankProgress } from './InspectSheet'
-import { Ladder } from './Ladder'
 import { Plate } from './Plate'
 import { Sigil } from './Sigil'
 import { describe, HEAVY_HIT_FRACTION, poolOf, spellSummary } from './battleLog'
@@ -417,24 +416,8 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
 
   return (
     <div className="screen">
-      {/* HP is already applied when the replay starts, so the ladder would
-          spoil the outcome — hold its space until the fight has played out. */}
-      {done ? (
-        <Ladder run={run} onInspect={() => {}} />
-      ) : (
-        <div className="row center dim tiny" style={{ height: 52, justifyContent: 'center' }}>
-          Round {run.round}
-        </div>
-      )}
-
-      <div className="side-label">
-        <span className="eyebrow" style={{ color: foeFaction?.colors.accent }}>
-          {foe?.name ?? 'Rival'}
-        </span>
-        <span className="tiny dim">
-          {foeFaction?.name}
-          {foe ? ` · ${foe.hp} HP` : ''}
-        </span>
+      <div className="center dim tiny" style={{ height: 20 }}>
+        Round {run.round}
       </div>
 
       <div className="battlefield" data-shake={shake === i ? 'true' : undefined} style={{ position: 'relative' }} ref={fieldRef}>
@@ -499,9 +482,11 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
           </div>
         )}
         {foe && (
-          <HeroPlaque
+          <HeroStage
             warlord={foe}
             side={foeSide}
+            hp={foe.hp}
+            mirror
             casts={totals[foeSide]}
             spent={frame.spent[foeSide]}
             flare={frame.cast?.side === foeSide}
@@ -515,6 +500,7 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
         <HeroStage
           warlord={p}
           side={mySide}
+          hp={p.hp}
           casts={totals[mySide]}
           spent={frame.spent[mySide]}
           flare={frame.cast?.side === mySide}
@@ -572,6 +558,8 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
 function HeroStage({
   warlord,
   side,
+  hp,
+  mirror,
   casts,
   spent,
   flare,
@@ -580,6 +568,10 @@ function HeroStage({
 }: {
   warlord: Warlord
   side: Side
+  /** the hero's remaining banner HP, on screen for both duellists */
+  hp: number
+  /** the enemy's stage, flipped so the two portraits face each other */
+  mirror?: boolean
   casts: number
   spent: number
   flare?: boolean
@@ -592,10 +584,11 @@ function HeroStage({
     <button
       className="hero-stage"
       data-plaque={side}
+      data-mirror={mirror ? 'true' : undefined}
       data-flare={flare ? 'true' : undefined}
       style={{ ['--fc' as string]: faction?.colors.accent }}
       onClick={onTap}
-      aria-label={`${hero?.name ?? warlord.name} — pause and inspect`}
+      aria-label={`${hero?.name ?? warlord.name}, ${hp} HP — pause and inspect`}
     >
       <span className="stage-art">
         <Plate src={HERO_ART_2X[warlord.heroId]} eager fallback={<Sigil id={hero?.sigil ?? 'shield'} size={30} />} />
@@ -608,55 +601,9 @@ function HeroStage({
           ))}
         </span>
       </span>
+      <span className="stage-hp">{hp}</span>
       {pulse && <span className="plaque-pulse">{pulse}</span>}
     </button>
-  )
-}
-
-/**
- * A hero on the battlefield: portrait, name, and one pip per cast this battle
- * holds — spent pips hollow out as the fight runs (§1.1). Tapping it pauses the
- * replay and opens their sheet (§1.3), which is also the screen's pause button.
- */
-function HeroPlaque({
-  warlord,
-  side,
-  mine,
-  casts,
-  spent,
-  flare,
-  pulse,
-  onTap,
-}: {
-  warlord: Warlord
-  side: Side
-  /** yours sits bottom-left under your board; the enemy's top-right over theirs */
-  mine?: boolean
-  casts: number
-  spent: number
-  flare?: boolean
-  pulse?: string | null
-  onTap: () => void
-}) {
-  const hero = HERO_BY_ID.get(warlord.heroId)
-  const faction = FACTION_BY_ID.get(warlord.factionId)
-  return (
-    <div className="plaque-row" data-mine={mine ? 'true' : undefined} style={{ ['--fc' as string]: faction?.colors.accent }}>
-      <button className="hero-plaque" data-plaque={side} data-flare={flare ? 'true' : undefined} onClick={onTap}>
-        <span className="plaque-art">
-          <Plate src={HERO_ART[warlord.heroId]} eager fallback={<Sigil id={hero?.sigil ?? 'shield'} size={16} />} />
-        </span>
-        <span className="plaque-body">
-          <span className="plaque-name">{hero?.name ?? warlord.name}</span>
-          <span className="plaque-pips" aria-label={`${Math.max(0, casts - spent)} of ${casts} casts left`}>
-            {Array.from({ length: casts }, (_, k) => (
-              <i key={k} data-spent={k < spent ? 'true' : undefined} />
-            ))}
-          </span>
-        </span>
-      </button>
-      {pulse && <span className="plaque-pulse">{pulse}</span>}
-    </div>
   )
 }
 
@@ -684,8 +631,8 @@ function SnapBoard({
     return s ? s.alive || Boolean(fx[s.uid]?.state) : false
   }
   const row = (slots: number[], name: 'front' | 'back') => {
-    // A row nobody occupies is dead space on a phone — drop it entirely.
-    if (!slots.some(visible)) return null
+    // Both rows render even when empty: dropping one reflows the whole
+    // battlefield mid-fight, and everything above it jumps.
     return (
       <div className="board-row" data-row={name} data-tag="true">
         <span className="row-tag">{name}</span>

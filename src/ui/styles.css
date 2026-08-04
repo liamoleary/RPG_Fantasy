@@ -1164,6 +1164,16 @@ h3 {
   place-items: center;
   color: color-mix(in srgb, var(--sc) 70%, #fff);
 }
+/* The plates are full-body 4:5 paintings and this box is 4:5 too, so `cover`
+   has no overflow to trim — object-position is inert here and the whole figure
+   shrinks to a 34px smudge, which makes the three forms of a line look
+   identical. Zoom into the head instead, anchored where the faces actually sit
+   (a little above centre, dryad through matriarch), so the row reads as three
+   faces rather than three green stamps. */
+.line-form-art .plate {
+  transform: scale(1.9);
+  transform-origin: 50% 32%;
+}
 
 /* ── Cover (Design Notes 02 §3) ──────────────────────────────────────────── */
 

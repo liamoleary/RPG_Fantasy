@@ -70,13 +70,14 @@ interface Frame {
 
 /**
  * Armour that decays silently is why "unkillable" flips to "one-shot" with no
- * warning (§2.1) — when Bulwark eats part of a blow, the float shows the whole
- * sum, not just what got through.
+ * warning (§2.1) — but the full equation wraps to three lines on a phone card.
+ * Glyph and number carry it: "◈2 −1" is two soaked, one through. The complete
+ * arithmetic stays in the result screen's battle log.
  */
 function hitFloat(dmg: number, absorbed: number, weight = 0): Frame['fx'][string]['float'] {
-  if (absorbed > 0 && dmg > 0) return { text: `${dmg + absorbed} −${absorbed}◈ = ${dmg}`, kind: 'dmg', weight }
-  if (absorbed > 0) return { text: `${absorbed} −${absorbed}◈ = 0`, kind: 'soak' }
-  if (dmg > 0) return { text: `-${dmg}`, kind: 'dmg', weight }
+  if (absorbed > 0 && dmg > 0) return { text: `◈${absorbed} −${dmg}`, kind: 'dmg', weight }
+  if (absorbed > 0) return { text: `◈${absorbed}`, kind: 'soak' }
+  if (dmg > 0) return { text: `−${dmg}`, kind: 'dmg', weight }
   return undefined
 }
 
@@ -205,11 +206,23 @@ function buildFrames(result: BattleResult, playerIsA: boolean, sides: Record<Sid
         break
     }
 
+    // Hearthstone rule: numbers and art carry the routine blows — the damage
+    // float already says what the ticker used to. Words are reserved for the
+    // beats that change how you read the fight.
+    const speaks =
+      e.t === 'spellCast' ||
+      e.t === 'apex' ||
+      e.t === 'cover' ||
+      e.t === 'lastStand' ||
+      e.t === 'passive' ||
+      e.t === 'battleStart' ||
+      e.t === 'battleEnd' ||
+      heavy !== null
     frames.push({
       boards: { ...boards },
       fx,
       banner,
-      line: describe(e, playerIsA),
+      line: speaks ? describe(e, playerIsA) : '',
       arc,
       saved,
       cast,

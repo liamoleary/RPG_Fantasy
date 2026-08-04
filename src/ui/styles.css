@@ -29,6 +29,9 @@
      on one screen without anything scrolling. Fluid rather than stepped: a
      phone half an inch shorter should get slightly smaller cards, not the
      same cards and a scrollbar. Calibrated so 740px lands on 64px. */
+  /* vh first, dvh where the browser knows it — phones without dvh otherwise
+     drop the rule entirely, the app gets auto height, and the page scrolls. */
+  --card-max: clamp(38px, calc(64px + (100vh - 740px) * 0.2), 104px);
   --card-max: clamp(38px, calc(64px + (100dvh - 740px) * 0.2), 104px);
   color-scheme: dark;
 }
@@ -70,7 +73,9 @@ button {
 .app {
   max-width: 520px;
   margin: 0 auto;
+  height: 100vh;
   height: 100dvh;
+  max-height: 100vh;
   max-height: 100dvh;
   overflow: hidden;
   display: flex;
@@ -205,6 +210,8 @@ h3 {
   gap: 10px;
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* Pinned to the bottom of the viewport, always reachable by a thumb. */
@@ -276,87 +283,91 @@ h3 {
 /* Detail sheets: the plate leads, but not at the cost of the whole sheet.
    A tall phone gets a big plate; a short one gets a legible thumbnail. */
 .sheet-art {
+  max-height: clamp(104px, 20vh, 220px) !important;
   max-height: clamp(104px, 20dvh, 220px) !important;
 }
 
-/* Home fits on one screen (playtest) without giving up the art: three banner
-   tiles, then the chosen hero at full width with the alternates as thumbs on
-   the plate itself. The portrait is sized against the viewport, so a tall
-   phone gets a big one and a short phone still gets a real one. */
-.hero-showcase {
-  position: relative;
-  /* The portrait takes whatever the rest of the screen does not: a player with
-     no install card and no run in progress gets a big one, and it gives way
-     first when they do. */
+/* Home: the hero choice IS the layout — two portraits side by side, the
+   chosen one lit and ringed in gold, the other at half-light. Sized against
+   the viewport so the pair takes whatever height the screen can spare. */
+.hero-duo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
   flex: 1 1 auto;
-  /* Below about this height a wide crop of a 4:5 plate stops being a portrait
-     and starts being a band of armour, so the decoration around it goes first. */
-  min-height: clamp(100px, 19dvh, 160px);
-  max-height: 38dvh;
-  border-radius: calc(var(--fx-radius) + 6px);
-  border: 1px solid color-mix(in srgb, var(--fc) 55%, var(--line));
-  overflow: hidden;
-  background: #0b111d;
-  display: grid;
-  place-items: center;
-  color: var(--fc);
+  min-height: clamp(110px, 17vh, 170px);
+  min-height: clamp(110px, 17dvh, 170px);
+  max-height: 34vh;
+  max-height: 34dvh;
 }
-.hero-showcase .plate {
-  /* Faces sit high in these plates, so anchor near the top of the crop. */
-  object-position: 50% 5% !important;
-}
-.showcase-scrim {
-  position: absolute;
-  inset: auto 0 0 0;
-  height: 58%;
-  background: linear-gradient(transparent, rgba(6, 10, 18, 0.94));
-  pointer-events: none;
-}
-.showcase-name {
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: 7px;
-  font-size: 14px;
-  line-height: 1.15;
-  text-shadow: 0 2px 6px #000;
-}
-.showcase-switch {
-  /* Top corner, not bottom: on a squeezed portrait the bottom corner is the
-     hero's face. */
-  position: absolute;
-  right: 7px;
-  top: 7px;
-  display: flex;
-  gap: 5px;
-}
-.hero-thumb {
+.hero-choice {
   position: relative;
-  width: 34px;
-  aspect-ratio: 4 / 5;
-  border-radius: 4px;
-  border: 1px solid #ffffff33;
+  border-radius: calc(var(--fx-radius) + 6px);
+  border: 1px solid var(--line);
   overflow: hidden;
   background: #0b111d;
   display: grid;
   place-items: center;
   color: var(--fc);
-  opacity: 0.6;
+  opacity: 0.55;
+  filter: saturate(0.7);
+  transition: opacity 0.15s ease, filter 0.15s ease;
 }
-.hero-thumb[data-on='true'] {
-  border-color: var(--gold);
-  box-shadow: 0 0 0 1px var(--gold);
+.hero-choice[data-on='true'] {
   opacity: 1;
+  filter: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold), 0 8px 24px -12px var(--gold);
 }
-.hero-thumb[data-locked='true'] .plate {
-  filter: grayscale(1) brightness(0.45);
-}
-.thumb-lock {
+.hero-choice .plate {
   position: absolute;
   inset: 0;
+  object-position: 50% 8% !important;
+}
+.hero-choice[data-locked='true'] .plate {
+  filter: grayscale(1) brightness(0.45);
+}
+.choice-scrim {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 46%;
+  background: linear-gradient(transparent, rgba(6, 10, 18, 0.95));
+  pointer-events: none;
+}
+.choice-name {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 6px;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+  text-shadow: 0 2px 6px #000;
+}
+.choice-lock {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(6, 10, 18, 0.85);
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 800;
+}
+.choice-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
   display: grid;
   place-items: center;
+  border-radius: 50%;
+  background: var(--gold);
+  color: #23180a;
   font-size: 12px;
+  font-weight: 900;
 }
 .hero-kit {
   display: grid;
@@ -367,7 +378,7 @@ h3 {
   line-height: 1.3;
 }
 
-/* The banner tiles. */
+/* The banner tiles. *//* The banner tiles. */
 .pick-row {
   display: grid;
   grid-auto-flow: column;
@@ -398,17 +409,6 @@ h3 {
   text-align: center;
   line-height: 1.15;
 }
-.pick-hero .hero-art {
-  width: 46px;
-}
-.pick-blurb {
-  padding: 7px 9px;
-}
-.hero-art-pick {
-  width: 44px !important;
-  flex: none;
-}
-
 /* Hero select: art you have not unlocked yet is still art you can see. */
 .hero-card {
   align-items: flex-start;
@@ -491,10 +491,7 @@ h3 {
   .survivor {
     width: 36px;
   }
-  .row-label-clause {
-    display: none;
-  }
-  .row-label {
+    .row-label {
     min-height: 20px;
     padding: 1px 0;
   }
@@ -523,9 +520,6 @@ h3 {
   }
   .pick-tile {
     padding: 6px 3px;
-  }
-  .pick-hero .hero-art {
-    width: 38px;
   }
   .faction-icon {
     width: 34px;
@@ -562,9 +556,6 @@ h3 {
   }
   .screen-body {
     gap: 6px;
-  }
-  .hero-art-pick {
-    display: none;
   }
   .eyebrow {
     font-size: 10px;
@@ -706,13 +697,6 @@ h3 {
 .row-label-name {
   flex: none;
   color: var(--ink);
-}
-.row-label-clause {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
 }
 .row-label-info {
   flex: none;
@@ -1934,6 +1918,7 @@ h3 {
 }
 
 .float {
+  white-space: nowrap;
   position: absolute;
   z-index: 4;
   top: 6px;

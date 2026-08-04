@@ -259,6 +259,10 @@ export function MusterScreen({ run }: { run: RunState }) {
           <span className="gold">{p.gold} gold</span>
         </div>
 
+        {/* The upgrade lives at the top, beside the tier it raises — buried
+            under the offers, playtesters never found it. */}
+        <TierUpButton tier={p.camp.tier} cost={tCost} gold={p.gold} onBuy={store.tierUp} />
+
         <div className="offer" style={{ gridTemplateColumns: `repeat(${Math.min(5, Math.max(3, p.camp.offer.length))}, 1fr)` }}>
           {p.camp.offer.map((unitId, i) => (
             <OfferCard
@@ -281,8 +285,6 @@ export function MusterScreen({ run }: { run: RunState }) {
             {p.camp.frozen ? '❄ Frozen' : 'Freeze'}
           </button>
         </div>
-
-        <TierUpButton tier={p.camp.tier} cost={tCost} gold={p.gold} onBuy={store.tierUp} />
       </div>
       </div>
 
@@ -454,8 +456,7 @@ function TierUpButton({ tier, cost, gold, onBuy }: { tier: number; cost: number 
       <div className="tier-up" data-max="true">
         <span className="tier-shield">{ROMAN[tier]}</span>
         <span className="tier-body">
-          <span className="tier-title">Camp Tier {ROMAN[tier]}</span>
-          <span className="tier-sub">The camp can grow no further.</span>
+          <span className="tier-title">Tier {ROMAN[tier]} — max</span>
         </span>
       </div>
     )
@@ -475,8 +476,8 @@ function TierUpButton({ tier, cost, gold, onBuy }: { tier: number; cost: number 
     >
       <span className="tier-shield">{ROMAN[tier + 1]}</span>
       <span className="tier-body">
-        <span className="tier-title">Raise the War Camp</span>
-        <span className="tier-sub">Tier {ROMAN[tier + 1]} unlocks its recruits</span>
+        <span className="tier-title">Upgrade → Tier {ROMAN[tier + 1]}</span>
+        <span className="tier-sub">new recruits unlock</span>
       </span>
       <span className="tier-cost">{cost}g</span>
     </button>
@@ -530,9 +531,8 @@ export function Board({
       {labels === 'full' && (
         <button className="row-label" onClick={() => onRowInfo?.(row)}>
           <span className="row-label-name">
-            {rowGlyph(row)} {ROW_INFO[row].label}
+            {rowGlyph(row)} {row === 'front' ? 'FRONT' : 'BACK'}
           </span>
-          <span className="row-label-clause"> — {ROW_INFO[row].clause}</span>
           <span className="row-label-info">ⓘ</span>
         </button>
       )}

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { HERO_ART, HERO_ART_2X } from '../data/art'
+import { HERO_ART_2X } from '../data/art'
 import { InstallCard } from './InstallCard'
 import { FACTIONS, HEROES } from '../data/index'
 import type { FactionId } from '../data/types'
@@ -39,10 +39,7 @@ export function HomeScreen() {
   return (
     <div className="screen">
       <div className="screen-body">
-        <div>
-          <div className="title">BANNERFELL</div>
-          <div className="center tiny dim home-tagline">Draft a warband. Outlast seven rival warlords.</div>
-        </div>
+        <div className="title">BANNERFELL</div>
 
         <InstallCard runsFinished={save.stats.runs} />
 
@@ -72,10 +69,7 @@ export function HomeScreen() {
           </button>
         )}
 
-        {/* Three banners across; the hero gets a full-width portrait, because
-            the art is half of why you pick one. Both are sized against the
-            viewport so the whole choice still lands on one screen. */}
-        <div className="eyebrow">Choose your banner</div>
+        <div className="eyebrow">Banner</div>
         <div className="pick-row">
           {FACTIONS.map((f) => (
             <button
@@ -96,38 +90,34 @@ export function HomeScreen() {
           <strong>{faction.mechanic}</strong> — {faction.mechanicText}
         </div>
 
-        <div className="eyebrow">Choose your hero</div>
-        <div className="hero-showcase" style={{ ['--fc' as string]: faction.colors.primary }}>
-          <Plate
-            src={HERO_ART_2X[activeHero.id]}
-            eager
-            priority
-            fallback={<Sigil id={activeHero.sigil} size={56} />}
-          />
-          <span className="showcase-scrim" aria-hidden="true" />
-          <span className="showcase-name">
-            <strong>{activeHero.name}</strong>
-            <span className="dim"> {activeHero.title}</span>
-          </span>
-          {/* The other banners' heroes stay one tap away, art and all. */}
-          <span className="showcase-switch">
-            {heroes.map((h) => {
-              const locked = !heroUnlocked(h.unlockRenown)
-              return (
-                <button
-                  key={h.id}
-                  className="hero-thumb"
-                  data-on={h.id === heroId}
-                  data-locked={locked}
-                  onClick={() => !locked && setHeroId(h.id)}
-                  aria-label={locked ? `${h.name} — ${h.unlockRenown} Renown to unlock` : h.name}
-                >
-                  <Plate src={HERO_ART[h.id]} eager fallback={<Sigil id={h.sigil} size={14} />} />
-                  {locked && <span className="thumb-lock">🔒</span>}
-                </button>
-              )
-            })}
-          </span>
+        {/* Two portraits side by side: the choice IS the layout. The picked
+            hero wears the gold ring, the other waits at half-light. */}
+        <div className="eyebrow">Hero</div>
+        <div className="hero-duo" style={{ ['--fc' as string]: faction.colors.primary }}>
+          {heroes.map((h) => {
+            const locked = !heroUnlocked(h.unlockRenown)
+            const chosen = h.id === heroId
+            return (
+              <button
+                key={h.id}
+                className="hero-choice"
+                data-on={chosen}
+                data-locked={locked}
+                onClick={() => !locked && setHeroId(h.id)}
+                aria-label={locked ? `${h.name} — ${h.unlockRenown} Renown to unlock` : h.name}
+              >
+                <Plate src={HERO_ART_2X[h.id]} eager priority fallback={<Sigil id={h.sigil} size={34} />} />
+                <span className="choice-scrim" aria-hidden="true" />
+                <span className="choice-name">{h.name}</span>
+                {locked && <span className="choice-lock">🔒 {h.unlockRenown}</span>}
+                {chosen && !locked && (
+                  <span className="choice-check" aria-hidden="true">
+                    ✓
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </div>
         <div className="hero-kit">
           <span className="tiny dim blurb-flavour">Passive · {activeHero.passive.text}</span>
@@ -142,7 +132,6 @@ export function HomeScreen() {
         <button className="btn btn-primary" disabled={!canStart} onClick={() => start(factionId, activeHero.id, difficulty)}>
           New Run
         </button>
-        <div className="center tiny dim">8 warlords · 30 HP · ~20 minutes</div>
       </div>
 
       {showSettings && (

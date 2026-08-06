@@ -2943,6 +2943,50 @@ h3 {
   line-height: 1;
 }
 
+/* ── Account screen (Launch Plan §1) ─────────────────────────────────────── */
+
+.account-sheet {
+  gap: 8px;
+  max-height: 86vh;
+  max-height: 86dvh;
+  overflow-y: auto;
+}
+.acct-input {
+  font-size: 15px;
+  font-weight: 700;
+  padding: 8px 10px;
+}
+
+/* The one credential a player ever sees. Big, spaced, unmistakably typeable. */
+.link-code {
+  text-align: center;
+  font-size: clamp(18px, 6vw, 26px);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+  border-radius: var(--fx-radius);
+  padding: 10px 6px;
+  user-select: all;
+}
+
+/* Sits under the title before a first run: tells you who you are, invites a
+   change, and blocks nothing. */
+.name-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  background: #ffffff06;
+  border: 1px solid var(--line);
+  border-radius: var(--fx-radius);
+  padding: 5px 8px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
 /* ── Update toast (Launch Plan §6) ───────────────────────────────────────── */
 
 /* Pinned above the action bar, never a modal: a tester mid-run must not be
@@ -2964,3 +3008,17 @@ h3 {
   cursor: pointer;
 }
 
+/* ── Tester FAQ (Launch Plan §11.7) ──────────────────────────────────────── */
+
+/* Three lines, per §8 step 7. Small and grey: read once on the first visit,
+   invisible thereafter, and never in the way of New Run. */
+.faq {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--dim);
+  opacity: 0.75;
+  padding: 0 2px;
+}

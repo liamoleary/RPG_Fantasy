@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { AccountSheet, NamePrompt } from './AccountSheet'
+import { FeedbackSheet } from './Feedback'
 import { HERO_ART_2X } from '../data/art'
 import { InstallCard } from './InstallCard'
 import { FACTIONS, HEROES } from '../data/index'
@@ -22,6 +24,8 @@ export function HomeScreen() {
   const [difficulty, setDifficulty] = useState<Difficulty>(save.settings.difficulty)
   const [showSettings, setShowSettings] = useState(false)
   const [showKeywords, setShowKeywords] = useState(false)
+  const [showAccount, setShowAccount] = useState(false)
+  const [showFeedback, setShowFeedback] = useState(false)
 
   const heroes = HEROES.filter((h) => h.faction === factionId)
   const heroUnlocked = (renown: number) => renown === 0 || save.renown >= renown
@@ -41,6 +45,8 @@ export function HomeScreen() {
       <div className="screen-body">
         <div className="title">BANNERFELL</div>
 
+        <NamePrompt onOpen={() => setShowAccount(true)} />
+
         <InstallCard runsFinished={save.stats.runs} />
 
         <div className="row spread panel" style={{ padding: '6px 10px' }}>
@@ -58,6 +64,12 @@ export function HomeScreen() {
             <div className="eyebrow">Victories</div>
             <div style={{ fontSize: 17, fontWeight: 800 }}>{save.stats.wins}</div>
           </div>
+          <button className="btn btn-sm btn-ghost" onClick={() => setShowFeedback(true)} aria-label="Send feedback">
+            ✒
+          </button>
+          <button className="btn btn-sm btn-ghost" onClick={() => setShowAccount(true)} aria-label="Your banner">
+            ☰
+          </button>
           <button className="btn btn-sm btn-ghost" onClick={() => setShowSettings(true)} aria-label="Settings">
             ⚙
           </button>
@@ -119,6 +131,12 @@ export function HomeScreen() {
             )
           })}
         </div>
+        <div className="faq">
+          <span>No sign-up — you're already playing.</span>
+          <span>☰ moves your account to another phone.</span>
+          <span>✒ tells us what you think. Please do.</span>
+        </div>
+
         <div className="hero-kit">
           <span className="tiny dim blurb-flavour">Passive · {activeHero.passive.text}</span>
           <span className="tiny" style={{ color: 'var(--fx-secondary)' }}>
@@ -184,6 +202,11 @@ export function HomeScreen() {
       )}
 
       {showKeywords && <GlossarySheet onClose={() => setShowKeywords(false)} />}
+
+      {/* §11.7 / §8 step 7: the three lines a tester needs, and no more.
+          Sits under the hero kit so it is read once and then ignored. */}
+      {showAccount && <AccountSheet onClose={() => setShowAccount(false)} />}
+      {showFeedback && <FeedbackSheet onClose={() => setShowFeedback(false)} />}
     </div>
   )
 }

@@ -28,12 +28,37 @@ export function readAccount(): DeviceAccount | null {
   }
 }
 
+/**
+ * The account arrives *after* first paint — it is created by a background
+ * request — so anything rendering it has to be told when that happens. Without
+ * this, a component that read localStorage during the first render shows
+ * nothing forever.
+ */
+type AccountListener = (account: DeviceAccount | null) => void
+const listeners = new Set<AccountListener>()
+
+export function onAccountChanged(fn: AccountListener): () => void {
+  listeners.add(fn)
+  return () => void listeners.delete(fn)
+}
+
+function announce(account: DeviceAccount | null): void {
+  for (const fn of listeners) {
+    try {
+      fn(account)
+    } catch {
+      // One bad subscriber must not stop the others.
+    }
+  }
+}
+
 export function writeAccount(account: DeviceAccount): void {
   try {
     localStorage.setItem(ACCOUNT_KEY, JSON.stringify(account))
   } catch {
     // Private-mode Safari. The session still works; it just won't survive a reload.
   }
+  announce(account)
 }
 
 export function clearAccount(): void {

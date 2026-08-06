@@ -20,8 +20,14 @@ const LINK_CODE_TTL_MS = 15 * 60 * 1000
 /* §1 caps account creation at 5/hour/IP so the endpoint can't be farmed. The
    link limiter is not in the spec but follows from it: a code is ~1.5M
    combinations and lives 15 minutes, which is only out of reach if guessing is
-   slow. Ten attempts an hour makes it so. */
-export const createAccountLimiter = createLimiter({ limit: 5, windowMs: 60 * 60 * 1000, key: byIp, name: 'account creation' })
+   slow. Ten attempts an hour makes it so.
+
+   ACCOUNT_RATE_LIMIT raises the first of these. §1's 5 is the right default
+   against farming, but it counts by IP: several testers behind one office or
+   household NAT on the same afternoon hit it and see a blank first load with no
+   explanation. An operator who knows that is happening needs a lever. */
+const ACCOUNT_LIMIT = Number(process.env.ACCOUNT_RATE_LIMIT) || 5
+export const createAccountLimiter = createLimiter({ limit: ACCOUNT_LIMIT, windowMs: 60 * 60 * 1000, key: byIp, name: 'account creation' })
 export const linkAttemptLimiter = createLimiter({ limit: 10, windowMs: 60 * 60 * 1000, key: byIp, name: 'link' })
 
 /** Uniform answer when the service is up but has no database (§2). */

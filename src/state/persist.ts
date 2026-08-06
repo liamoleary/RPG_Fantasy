@@ -33,9 +33,34 @@ export const DEFAULT_SAVE: SaveData = {
   activeRun: null,
 }
 
+/**
+ * A run saved before the War Council (DN05) stores `boonsTaken` on each warlord
+ * and no talent state at all. Resuming one crashes the moment a level-up lands,
+ * and there is no honest conversion: a warlord three boons deep does not
+ * correspond to any position on a ladder, and handing them six fresh points on
+ * top would be a different game.
+ *
+ * So the run is dropped and the meta-progression — renown, unlocks, feats,
+ * stats, everything the player actually keeps — is preserved untouched. One
+ * abandoned run at the version boundary; nothing else lost.
+ *
+ * SAVE_VERSION deliberately does not move: the *synced* payload (§2's meta
+ * slice) is byte-identical before and after, and bumping it would make every
+ * client reject the server copy it already has and quietly stop restoring
+ * progress.
+ */
+function dropPreWarCouncilRun(raw: SaveData): SaveData['activeRun'] {
+  const run = raw.activeRun
+  if (!run) return null
+  const warlords = (run as { warlords?: { talentsTaken?: unknown }[] }).warlords
+  if (!Array.isArray(warlords)) return null
+  const usesTalents = warlords.every((w) => Array.isArray(w?.talentsTaken))
+  return usesTalents ? run : null
+}
+
 function migrate(raw: SaveData): SaveData {
   // Future schema bumps land here, keyed off `version`.
-  return { ...DEFAULT_SAVE, ...raw, version: SAVE_VERSION }
+  return { ...DEFAULT_SAVE, ...raw, activeRun: dropPreWarCouncilRun(raw), version: SAVE_VERSION }
 }
 
 export function loadSave(): SaveData {

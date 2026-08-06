@@ -7,7 +7,7 @@
  * that promise across 65 hand-written nodes is to check every one against the
  * boon it names.
  */
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BOONS, BOON_BY_ID, HEROES } from '../src/data/index'
 import {
   ALL_TALENTS,
@@ -33,6 +33,7 @@ import {
   treeForWarlord,
 } from '../src/engine/talents'
 import { applyTalent, newRun, player } from '../src/engine/run'
+import { SAVE_KEY, SAVE_VERSION, loadSave } from '../src/state/persist'
 
 const BRANCHES: Branch[] = ['might', 'magic', 'command']
 const berrik = () => treeForWarlord('vanguard', 'h_berrik')
@@ -346,5 +347,56 @@ describe('determinism of the run (§6)', () => {
     // looking — otherwise the test fails on its own explanation.
     const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
     expect(code).not.toMatch(/Math\.random|\brng\b|from '\.\/rng'/)
+  })
+})
+
+describe('upgrading a save from before the War Council', () => {
+  const store = new Map<string, string>()
+  beforeEach(() => {
+    store.clear()
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, String(v)),
+      removeItem: (k: string) => void store.delete(k),
+    })
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  const oldSave = (activeRun: unknown) => ({
+    version: 1,
+    renown: 137,
+    unlocks: ['h_yseult'],
+    feats: { first_win: true },
+    stats: { runs: 9, wins: 2, bestPlacementByHero: { h_berrik: 1 } },
+    settings: { speedDefault: 1, reducedMotion: false, difficulty: 'standard' },
+    activeRun,
+  })
+
+  it('drops a run that predates talents rather than crashing on resume', () => {
+    const legacyRun = { seed: 5, round: 4, warlords: [{ id: 'w0', boonsTaken: ['b_sharpened'] }] }
+    localStorage.setItem(SAVE_KEY, JSON.stringify(oldSave(legacyRun)))
+    expect(loadSave().activeRun).toBeNull()
+  })
+
+  it('keeps every scrap of meta-progression while doing it', () => {
+    const legacyRun = { seed: 5, round: 4, warlords: [{ id: 'w0', boonsTaken: [] }] }
+    localStorage.setItem(SAVE_KEY, JSON.stringify(oldSave(legacyRun)))
+    const save = loadSave()
+    expect(save.renown).toBe(137)
+    expect(save.unlocks).toEqual(['h_yseult'])
+    expect(save.feats).toEqual({ first_win: true })
+    expect(save.stats).toEqual({ runs: 9, wins: 2, bestPlacementByHero: { h_berrik: 1 } })
+  })
+
+  it('keeps a run that already uses talents', () => {
+    const modernRun = { seed: 5, round: 4, warlords: [{ id: 'w0', talentsTaken: ['t_vg_might1'] }] }
+    localStorage.setItem(SAVE_KEY, JSON.stringify(oldSave(modernRun)))
+    expect(loadSave().activeRun).not.toBeNull()
+  })
+
+  it('leaves the synced payload version alone, so server saves still load', () => {
+    // Bumping SAVE_VERSION would make the client reject the copy the server
+    // already holds and silently stop restoring progress (LAUNCH_PLAN §2).
+    expect(SAVE_VERSION).toBe(1)
   })
 })

@@ -27,6 +27,7 @@ import {
   type RunState,
 } from '../engine/run'
 import { markRunEnd } from '../net/sync'
+import { buildRunReport, emptyTally, submitRun, tallyBattle, type RunTally } from '../net/telemetry'
 import { withMeta, type MetaSave } from './meta'
 import { DEFAULT_SAVE, loadSave, writeSave, type SaveData } from './persist'
 
@@ -45,6 +46,8 @@ interface Store {
   playerBattle: BattleResult | null
   speed: 1 | 2
   renownEarned: number
+  /** §4 counters that are events rather than state, accumulated as the run goes. */
+  tally: RunTally
 
   // lifecycle
   start: (factionId: FactionId, heroId: string, difficulty: Difficulty) => void
@@ -93,6 +96,7 @@ export const useGame = create<Store>((set, get) => ({
   playerBattle: null,
   speed: 1,
   renownEarned: 0,
+  tally: emptyTally(),
 
   start: (factionId, heroId, difficulty) => {
     resetUid(0)
@@ -100,7 +104,7 @@ export const useGame = create<Store>((set, get) => ({
     const run = newRun({ seed, factionId, heroId, difficulty })
     const save = { ...get().save, settings: { ...get().save.settings, difficulty } }
     persist(save, run)
-    set({ run, save, screen: 'muster', selected: null, rankFlash: null, playerBattle: null, renownEarned: 0, speed: save.settings.speedDefault })
+    set({ run, save, screen: 'muster', selected: null, rankFlash: null, playerBattle: null, renownEarned: 0, speed: save.settings.speedDefault, tally: emptyTally() })
   },
 
   applyMeta: (meta) => {
@@ -200,7 +204,8 @@ export const useGame = create<Store>((set, get) => ({
       p.camp = { ...p.camp, offer: [...p.camp.offer, ...rolled.slice(0, added)] }
     }
     persist(get().save, run)
-    set({ run: { ...run }, rankFlash: null })
+    // §4: the camp tier curve is a sequence of decisions, not a final number.
+    set({ run: { ...run }, rankFlash: null, tally: { ...get().tally, tierCurve: [...get().tally.tierCurve, tier] } })
   },
 
   promote: (uid) => {
@@ -212,7 +217,7 @@ export const useGame = create<Store>((set, get) => ({
     p.board = res.board
     p.gold = res.gold
     persist(get().save, run)
-    set({ run: { ...run }, selected: null, rankFlash: null })
+    set({ run: { ...run }, selected: null, rankFlash: null, tally: { ...get().tally, promotions: get().tally.promotions + 1 } })
   },
 
   sell: (uid) => {
@@ -279,6 +284,7 @@ export const useGame = create<Store>((set, get) => ({
     persist(get().save, run)
     set({
       run: { ...run },
+      tally: tallyBattle(get().tally, report?.result ?? null, report?.aId === p.id),
       playerBattle: report?.result ?? null,
       screen: 'battle',
       selected: null,
@@ -313,6 +319,10 @@ export const useGame = create<Store>((set, get) => ({
       // before writeSave fires the sync listener.
       markRunEnd()
       writeSave(save)
+      // §4: one report per finished run, fire-and-forget. Built before the run
+      // is cleared, since it reads the final board off it.
+      const report = buildRunReport(run, get().tally)
+      if (report) void submitRun(report)
       set({ save, screen: 'runover', renownEarned: earned, playerBattle: null })
       return
     }

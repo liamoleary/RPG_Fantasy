@@ -2,7 +2,7 @@
    itself is network-first — index.html points at hashed bundles, and serving a
    stale copy would pin returning players to an old deploy forever.
    Bump CACHE to invalidate. */
-const CACHE = 'bannerfell-v3'
+const CACHE = 'bannerfell-v4'
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg']
 
 self.addEventListener('install', (e) => {
@@ -44,6 +44,11 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(request.url)
   if (url.origin !== self.location.origin) return
   if (url.pathname === '/healthz') return
+  /* The API is never cached. The handler below is cache-first, which for
+     /api/save means the first "no save yet" 404 would be replayed forever and
+     a player's progress would never come back from the server. Sync owns its
+     own offline story (Launch Plan §2); it does not want help from here. */
+  if (url.pathname.startsWith('/api/')) return
 
   // The document: fresh if we can reach the network, cached if we can't.
   if (request.mode === 'navigate' || url.pathname === '/index.html') {

@@ -7,7 +7,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { closeDb, DbUnavailable, dbEnabled, dbHealth, initDb, query, sslFor } from '../server/db.js'
 // @ts-expect-error — as above.
 import { runMigrations } from '../server/migrate.js'
-import { itDb, TEST_DB_URL, truncateAll } from './helpers/db'
+import { isolatedSchema, itDb, TEST_DB_URL, truncateAll } from './helpers/db'
+
+/** This file's private schema, so parallel test files cannot truncate each other. */
+const SCHEMA = 't_db'
 
 describe('db module without a database', () => {
   it('reports itself disabled when DATABASE_URL is absent', () => {
@@ -57,7 +60,7 @@ describe('sslFor', () => {
 describe('migrations against a real database', () => {
   beforeAll(async () => {
     if (!TEST_DB_URL) return
-    initDb(TEST_DB_URL)
+    initDb(await isolatedSchema(SCHEMA))
     await runMigrations()
   })
   afterAll(async () => {
@@ -67,8 +70,9 @@ describe('migrations against a real database', () => {
   itDb('creates exactly the five tables §7 names', async () => {
     const { rows } = await query(
       `SELECT table_name FROM information_schema.tables
-        WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+        WHERE table_schema = $1 AND table_type = 'BASE TABLE'
         ORDER BY table_name`,
+      [SCHEMA],
     )
     expect(rows.map((r: { table_name: string }) => r.table_name)).toEqual([
       'accounts',

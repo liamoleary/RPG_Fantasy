@@ -26,6 +26,8 @@ import {
   resolveBattles,
   type RunState,
 } from '../engine/run'
+import { markRunEnd } from '../net/sync'
+import { withMeta, type MetaSave } from './meta'
 import { DEFAULT_SAVE, loadSave, writeSave, type SaveData } from './persist'
 
 export type Screen = 'home' | 'muster' | 'battle' | 'result' | 'runover'
@@ -47,6 +49,9 @@ interface Store {
   // lifecycle
   start: (factionId: FactionId, heroId: string, difficulty: Difficulty) => void
   resume: () => void
+  /** Adopt meta-progression pulled from the server (§2). Local-only fields —
+   *  the active run and settings — are untouched. */
+  applyMeta: (meta: MetaSave) => void
   abandon: () => void
   goHome: () => void
 
@@ -96,6 +101,12 @@ export const useGame = create<Store>((set, get) => ({
     const save = { ...get().save, settings: { ...get().save.settings, difficulty } }
     persist(save, run)
     set({ run, save, screen: 'muster', selected: null, rankFlash: null, playerBattle: null, renownEarned: 0, speed: save.settings.speedDefault })
+  },
+
+  applyMeta: (meta) => {
+    const save = withMeta(get().save, meta)
+    writeSave({ ...save, activeRun: get().run ?? save.activeRun ?? null })
+    set({ save })
   },
 
   resume: () => {
@@ -297,6 +308,10 @@ export const useGame = create<Store>((set, get) => ({
         },
         activeRun: null,
       }
+      // §2: mark this as a run-end write before persisting. It is the one kind
+      // of write allowed to lower stored renown, so the flag has to be set
+      // before writeSave fires the sync listener.
+      markRunEnd()
       writeSave(save)
       set({ save, screen: 'runover', renownEarned: earned, playerBattle: null })
       return

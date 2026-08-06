@@ -50,10 +50,28 @@ export function loadSave(): SaveData {
   }
 }
 
+/**
+ * Anyone who wants to know when the save changed. Exists so the sync layer
+ * (§2) can watch every write from one place instead of the store having to
+ * remember to announce each of its twenty-odd persist points — and so that
+ * localStorage stays the source of truth whether or not sync is running.
+ */
+type SaveListener = (data: SaveData) => void
+let listener: SaveListener | null = null
+
+export function onSaveWritten(fn: SaveListener | null) {
+  listener = fn
+}
+
 export function writeSave(data: SaveData) {
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify(data))
   } catch {
     // Private-mode Safari and quota errors must never break a run.
+  }
+  try {
+    listener?.(data)
+  } catch {
+    // A sync failure is never allowed to break a local save.
   }
 }

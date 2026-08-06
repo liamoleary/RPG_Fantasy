@@ -18,8 +18,11 @@ import { createLimiter } from '../server/lib/ratelimit.js'
 import { bearerFrom } from '../server/lib/auth.js'
 // @ts-expect-error — as above.
 import { createAccountLimiter, linkAttemptLimiter } from '../server/routes/account.js'
-import { itDb, TEST_DB_URL, truncateAll } from './helpers/db'
+import { isolatedSchema, itDb, TEST_DB_URL, truncateAll } from './helpers/db'
 import { startTestServer, type TestServer } from './helpers/server'
+
+/** This file's private schema, so parallel test files cannot truncate each other. */
+const SCHEMA = 't_account'
 
 describe('tokens and codes', () => {
   it('mints 128-bit tokens, not JWTs', () => {
@@ -131,7 +134,7 @@ describe('account API', () => {
 
   beforeAll(async () => {
     if (!TEST_DB_URL) return
-    initDb(TEST_DB_URL)
+    initDb(await isolatedSchema(SCHEMA))
     await runMigrations()
     server = await startTestServer()
   })
@@ -326,8 +329,8 @@ describe('account API', () => {
   itDb('stores no password field anywhere (§10.8)', async () => {
     await server.api('POST', '/api/account', { body: {} })
     const { rows } = await query(
-      `SELECT column_name FROM information_schema.columns
-        WHERE table_schema = 'public'`,
+      `SELECT column_name FROM information_schema.columns WHERE table_schema = $1`,
+      [SCHEMA],
     )
     const columns = rows.map((r: { column_name: string }) => r.column_name.toLowerCase())
     for (const forbidden of ['password', 'password_hash', 'email', 'phone', 'address']) {

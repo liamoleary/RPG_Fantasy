@@ -9,15 +9,16 @@
  * median run <= 14 rounds, p95 <= 16, no unit with a >8% win delta.
  */
 import { ALL_UNITS, FACTIONS, HEROES, UNIT_BY_ID } from '../src/data/index'
-import { ALL_TALENTS } from '../src/data/talents/index'
+import type { FactionId } from '../src/data/types'
+import { ALL_TALENTS, TALENT_BY_ID, type TalentNode } from '../src/data/talents/index'
 import { FRONT_SLOTS } from '../src/engine/battle'
 import { HARD_CAP_ROUND, advanceRound, newRun, resolveBattles, type RunState } from '../src/engine/run'
 import { boardPower, rivalMuster, NOISE, type Difficulty } from '../src/engine/rivals'
-import { isLevelUpRound, rivalPick } from '../src/engine/talents'
+import { MAX_TALENT_POINTS, isLevelUpRound, scoreNode, type TalentOffer } from '../src/engine/talents'
 import { applyTalent } from '../src/engine/run'
 import { lineOf } from '../src/engine/camp'
 import { lineRootOf, thresholdsFor } from '../src/engine/ranks'
-import { hashSeed, makeRng } from '../src/engine/rng'
+import { hashSeed, makeRng, type RNG } from '../src/engine/rng'
 
 interface Args {
   runs: number
@@ -185,6 +186,31 @@ function collectRankDuels(run: RunState) {
 }
 
 /** The player seat is driven by a rival policy so every seat is comparable. */
+/**
+ * How the *simulated* player spends a point.
+ *
+ * Rivals are deterministic — that is the game (§5, §6). The simulated player
+ * must not be, or §7's guardrails measure nothing: a single deterministic
+ * scorer walks one path per hero and every fork reads 100/0, which says the
+ * policy has a favourite, not that the tree is solved. To ask "is any path
+ * dominant" you have to sample the space of builds a room full of people would
+ * actually produce.
+ *
+ * So this samples proportional to how good each option looks, off the seeded
+ * per-run stream. That is harness randomness, not game randomness — nothing
+ * here runs in the app, and engine/talents.ts stays free of RNG.
+ */
+function simPlayerPick(offers: TalentOffer[], archetype: string, rng: RNG): TalentNode | null {
+  const options = offers.flatMap((o) => o.options).filter((n) => !n.unlockedByFeat)
+  if (options.length === 0) return null
+  const scores = options.map((n) => Math.max(0.01, scoreNode(n, archetype)))
+  const top = Math.max(...scores)
+  // Sharpened enough that a plainly better node is usually taken, soft enough
+  // that a close second is taken often — which is how people actually choose.
+  const weights = scores.map((x) => Math.pow(x / top, 3))
+  return rng.weighted(options, weights)
+}
+
 function playRunHeadless(run: RunState): RunState {
   let guard = 0
   while (!run.finished && guard++ < HARD_CAP_ROUND + 4) {
@@ -192,9 +218,7 @@ function playRunHeadless(run: RunState): RunState {
     if (p.alive) {
       const rng = makeRng(hashSeed(`sim|${run.seed}|${run.round}|player`))
       if (isLevelUpRound(run.round) && run.talentOffer.length > 0) {
-        // The simulated player walks the trees by the same deterministic policy
-        // rivals use, so §7's path stats measure the trees, not a dice roll.
-        const chosen = rivalPick(run.talentOffer, p.archetype)
+        const chosen = simPlayerPick(run.talentOffer, p.archetype, rng)
         if (chosen) applyTalent(p, chosen)
         run.talentOffer = []
       }
@@ -223,6 +247,48 @@ function playRunHeadless(run: RunState): RunState {
     advanceRound(run)
   }
   return run
+}
+
+/* ── DN05 §7 guardrails ─────────────────────────────────────────────────────
+   Four questions the trees have to answer: is one path solved, is one branch
+   eating every point, do runs reach a capstone, and is each fork a real
+   choice. All four are counted per warlord, per run. */
+const pathCounts = new Map<string, { n: number; wins: number }>()   // hero|id>id>… → runs
+const branchPoints = new Map<string, number>()                      // branch → points placed
+const forkPicks = new Map<string, Map<string, number>>()            // slot → nodeId → picks
+let capstoneRuns = 0
+let talentRuns = 0
+
+function collectTalents(w: { heroId: string; factionId: FactionId; talentsTaken: string[]; placement: number | null }) {
+  talentRuns++
+  const placement = w.placement ?? 1
+
+  // Path concentration is measured on the *full* six-pick sequence, in order —
+  // §7's "no exact 6-pick sequence above 25% of wins".
+  if (w.talentsTaken.length === MAX_TALENT_POINTS) {
+    const key = `${w.heroId}|${w.talentsTaken.join('>')}`
+    const b = pathCounts.get(key) ?? { n: 0, wins: 0 }
+    b.n++
+    if (placement === 1) b.wins++
+    pathCounts.set(key, b)
+  }
+
+  let reachedCapstone = false
+  for (const id of w.talentsTaken) {
+    const node = TALENT_BY_ID.get(id)
+    if (!node) continue
+    branchPoints.set(node.branch, (branchPoints.get(node.branch) ?? 0) + 1)
+    if (node.tier === 5) reachedCapstone = true
+    if (node.fork) {
+      // A fork is identified by faction+branch+tier: the same slot across every
+      // run of that faction, whichever side was taken.
+      const slot = `${w.factionId} ${node.branch} T${node.tier}`
+      const inner = forkPicks.get(slot) ?? new Map<string, number>()
+      inner.set(node.id, (inner.get(node.id) ?? 0) + 1)
+      forkPicks.set(slot, inner)
+    }
+  }
+  if (reachedCapstone) capstoneRuns++
 }
 
 interface Bucket {
@@ -301,6 +367,9 @@ function main() {
       bump(byFaction, w.factionId, placement)
       bump(byHero, w.heroId, placement)
       bump(byArchetype, w.archetype, placement)
+      // §7 asks about players' builds; rivals are deterministic by design and
+      // would swamp every distribution with one path per archetype.
+      if (w.isPlayer) collectTalents(w)
       if (w.board.length > 0) {
         rankBoards++
         const best = w.board.reduce((n, s) => Math.max(n, s.rank ?? 0), 0)
@@ -636,6 +705,77 @@ function main() {
         [String(rec.drafted).padStart(8), Math.abs(delta) > 0.08 ? '  ⚠' : ''],
       ] as [string, string][]
     }).filter((r): r is [string, string][] => r !== null),
+  )
+
+  // ── DN05 §7 guardrails ───────────────────────────────────────────────────
+  const totalPoints = [...branchPoints.values()].reduce((a, b) => a + b, 0)
+  const totalWins = [...pathCounts.values()].reduce((a, b) => a + b.wins, 0)
+
+  table(
+    'PATH CONCENTRATION            runs    win%   share of wins   target ≤25%',
+    [...pathCounts.entries()]
+      .sort((a, b) => b[1].wins - a[1].wins)
+      .slice(0, 8)
+      .map(([key, b]) => {
+        const share = totalWins > 0 ? b.wins / totalWins : 0
+        const [hero, path] = key.split('|')
+        const short = path
+          .split('>')
+          .map((id) => TALENT_BY_ID.get(id)?.name.split(' ')[0] ?? id)
+          .join('>')
+        return [
+          [`${hero.replace('h_', '').padEnd(9)} ${short}`.slice(0, 44).padEnd(44), ''],
+          [String(b.n).padStart(6), ''],
+          [pct(b.wins / b.n).padStart(8), ''],
+          [pct(share).padStart(9), share > 0.25 ? '  ⚠' : ''],
+        ] as [string, string][]
+      }),
+  )
+
+  table(
+    'BRANCH DISTRIBUTION   points   share    target ≤50%',
+    [...branchPoints.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([branch, n]) => {
+        const share = n / totalPoints
+        return [
+          [branch.padEnd(20), ''],
+          [String(n).padStart(7), ''],
+          [pct(share).padStart(8), share > 0.5 ? '  ⚠' : ''],
+        ] as [string, string][]
+      }),
+  )
+
+  const capRate = talentRuns > 0 ? capstoneRuns / talentRuns : 0
+  console.log(
+    `\nCAPSTONE RATE  ${pct(capRate)} of runs reach a capstone (target 30–50%)${capRate < 0.3 || capRate > 0.5 ? '  ⚠' : ''}`,
+  )
+
+  const forkRows = [...forkPicks.entries()].sort()
+  let healthy = 0
+  table(
+    'FORK HEALTH                        option A / option B      target 30–70%',
+    forkRows.map(([slot, inner]) => {
+      const options = [...inner.entries()].sort()
+      const total = options.reduce((a, [, n]) => a + n, 0)
+      const shares = options.map(([, n]) => n / total)
+      // A fork only counts as healthy if BOTH sides land in the band, which for
+      // a two-option fork is the same statement made twice — but a feat-widened
+      // fork can have three, and then it matters.
+      const ok = shares.length > 1 && shares.every((x) => x >= 0.3 && x <= 0.7)
+      if (ok) healthy++
+      const label = options
+        .map(([id, n]) => `${TALENT_BY_ID.get(id)?.name.split(' ')[0] ?? id} ${pct(n / total)}`)
+        .join(' / ')
+      return [
+        [slot.padEnd(30), ''],
+        [label.padEnd(30), ok ? '' : '  ⚠'],
+      ] as [string, string][]
+    }),
+  )
+  const healthyShare = forkRows.length > 0 ? healthy / forkRows.length : 0
+  console.log(
+    `\nFORK HEALTH    ${healthy}/${forkRows.length} forks inside 30–70% (${pct(healthyShare)}; §8.7 wants ≥80%)${healthyShare < 0.8 ? '  ⚠' : ''}`,
   )
 
   console.log(`BATTLES      ${rd.battles} resolved · ${pct(rd.ties / rd.battles)} ties`)

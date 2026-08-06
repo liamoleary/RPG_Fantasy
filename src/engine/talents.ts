@@ -11,7 +11,7 @@
  * same addMods pipeline — §6 is explicit that this is a re-plumbing of
  * selection, not of effects.
  */
-import { nodesAt, treeFor, type Branch, type TalentNode, type Tier } from '../data/talents/index'
+import { ALL_TALENTS, nodesAt, treeFor, type Branch, type TalentNode, type Tier } from '../data/talents/index'
 import { BRANCHES, TIER_WEIGHT } from '../data/talents/index'
 import type { FactionId, HeroMods } from '../data/types'
 
@@ -112,15 +112,62 @@ const TALENT_WEIGHTS: Record<string, Partial<Record<keyof HeroMods, number>>> = 
   economy: { income: 12, rerollDiscount: 7, freeRerollsPerRound: 6, extraOfferSlots: 7, sellBonus: 4, campTierUp: 8, allAtk: 4 },
 }
 
-export function scoreNode(node: TalentNode, archetype: string): number {
+/**
+ * Rough power per point of each mod, for every key. The archetype tables above
+ * are *preferences* layered on top of this; without a base, eleven of the
+ * twenty-five keys fell through to a flat 3 and the picker judged Overwatch
+ * and Vengeance purely on the size of their integers.
+ */
+const BASE_WEIGHTS: Record<keyof HeroMods, number> = {
+  allAtk: 8, allHp: 5,
+  frontAtk: 5, backAtk: 5, volleyAtk: 5,
+  frontBulwark: 5, frontCover: 8, retaliationAtk: 4, firstStrikeBulwark: 3,
+  t12CountBonus: 5, t45CountBonus: 8, frenzyAtk: 5, growthBonus: 7,
+  chargeAll: 14, lifestealAll: 12, cleaveFront: 12,
+  spellPower: 3, spellExtraCasts: 12, spellCadenceReduction: 10,
+  spellSplash: 10, spellPowerPerLevel: 6,
+  income: 6, rerollDiscount: 6, freeRerollsPerRound: 4, tierUpDiscount: 4,
+  promoteDiscount: 4, extraOfferSlots: 7, sellBonus: 3, campTierUp: 10,
+}
+
+function rawScore(node: TalentNode, archetype: string): number {
   let score = 0
   for (const [key, value] of Object.entries(node.mods)) {
-    const weight = TALENT_WEIGHTS[archetype]?.[key as keyof HeroMods] ?? 3
+    const k = key as keyof HeroMods
+    const weight = TALENT_WEIGHTS[archetype]?.[k] ?? BASE_WEIGHTS[k] ?? 3
     score += (typeof value === 'boolean' ? (value ? 1 : 0) : value) * weight
   }
-  // §2.2's ladder shape: a deeper node is worth reaching for, which is what
-  // makes a rival commit to a branch instead of spreading one point everywhere.
-  return score * TIER_WEIGHT[node.tier]
+  return score
+}
+
+/**
+ * The mean raw score of every node on a rung, so a node can be judged against
+ * its peers instead of against the whole game.
+ *
+ * Without this the picker compares magnitudes in incompatible units — "+7 spell
+ * power" outscores "+2 ATK to every stack" seven to one on the strength of the
+ * integer alone — and Magic eats every point. Memoised; the tables are static.
+ */
+const baselines = new Map<string, number>()
+function rungBaseline(branch: Branch, tier: Tier, archetype: string): number {
+  const key = `${branch}|${tier}|${archetype}`
+  const hit = baselines.get(key)
+  if (hit !== undefined) return hit
+  const peers = ALL_TALENTS.filter((n) => n.branch === branch && n.tier === tier)
+  const mean = peers.length > 0 ? peers.reduce((a, n) => a + rawScore(n, archetype), 0) / peers.length : 1
+  const value = Math.max(0.01, mean)
+  baselines.set(key, value)
+  return value
+}
+
+/**
+ * How much a rival wants this node: how good it is *for its rung*, times the
+ * §2.2 power weight of that rung. Depth is counted once, by TIER_WEIGHT, rather
+ * than twice — deeper nodes already carry bigger payloads, and multiplying the
+ * two together made a tier-5 Magic node score sixteen times a tier-5 Might one.
+ */
+export function scoreNode(node: TalentNode, archetype: string): number {
+  return (rawScore(node, archetype) / rungBaseline(node.branch, node.tier, archetype)) * TIER_WEIGHT[node.tier]
 }
 
 /**

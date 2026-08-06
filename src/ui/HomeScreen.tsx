@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { AccountSheet, NamePrompt } from './AccountSheet'
+import { AccountSheet } from './AccountSheet'
+import { IdentityBar } from './IdentityBar'
 import { FeedbackSheet } from './Feedback'
 import { HERO_ART_2X } from '../data/art'
 import { InstallCard } from './InstallCard'
@@ -45,11 +46,17 @@ export function HomeScreen() {
       <div className="screen-body">
         <div className="title">BANNERFELL</div>
 
-        <NamePrompt onOpen={() => setShowAccount(true)} />
+        {/* Name always on screen, and the three actions in one row rather than
+            wedged into the stats panel. */}
+        <IdentityBar
+          onAccount={() => setShowAccount(true)}
+          onFeedback={() => setShowFeedback(true)}
+          onSettings={() => setShowSettings(true)}
+        />
 
         <InstallCard runsFinished={save.stats.runs} />
 
-        <div className="row spread panel" style={{ padding: '6px 10px' }}>
+        <div className="row spread panel stats-row" style={{ padding: '6px 10px' }}>
           <div>
             <div className="eyebrow">Renown</div>
             <div className="gold" style={{ fontSize: 17 }}>
@@ -64,15 +71,6 @@ export function HomeScreen() {
             <div className="eyebrow">Victories</div>
             <div style={{ fontSize: 17, fontWeight: 800 }}>{save.stats.wins}</div>
           </div>
-          <button className="btn btn-sm btn-ghost" onClick={() => setShowFeedback(true)} aria-label="Send feedback">
-            ✒
-          </button>
-          <button className="btn btn-sm btn-ghost" onClick={() => setShowAccount(true)} aria-label="Your banner">
-            ☰
-          </button>
-          <button className="btn btn-sm btn-ghost" onClick={() => setShowSettings(true)} aria-label="Settings">
-            ⚙
-          </button>
         </div>
 
         {save.activeRun && !save.activeRun.finished && (
@@ -133,8 +131,8 @@ export function HomeScreen() {
         </div>
         <div className="faq">
           <span>No sign-up — you're already playing.</span>
-          <span>☰ moves your account to another phone.</span>
-          <span>✒ tells us what you think. Please do.</span>
+          <span>Tap your name to play on another device.</span>
+          <span>Send feedback any time. Please do.</span>
         </div>
 
         <div className="hero-kit">

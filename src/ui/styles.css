@@ -3022,3 +3022,85 @@ h3 {
   opacity: 0.75;
   padding: 0 2px;
 }
+
+/* ── Identity bar ────────────────────────────────────────────────────────── */
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Name on the left, growing; actions pinned right. */
+.identity-who {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  background: #ffffff08;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 12px 5px 6px;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+.identity-who:active {
+  background: #ffffff12;
+}
+.identity-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--gold) 22%, transparent);
+  color: var(--gold);
+}
+.identity-name {
+  font-weight: 800;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Signed out: the one state that should draw the eye. */
+.identity-signin {
+  border-color: color-mix(in srgb, var(--gold) 55%, transparent);
+  background: color-mix(in srgb, var(--gold) 12%, transparent);
+}
+.identity-signin .identity-name {
+  color: var(--gold);
+}
+
+.identity-actions {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+/* Three identical squares. Fixed box, centred glyph — the previous text icons
+   were sized by whatever font drew them and never lined up. */
+.icon-btn {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #ffffff08;
+  color: var(--dim);
+  cursor: pointer;
+}
+.icon-btn:hover {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--gold) 40%, var(--line));
+}
+.icon-btn:active {
+  background: #ffffff14;
+}

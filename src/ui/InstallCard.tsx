@@ -32,6 +32,18 @@ function isIos(): boolean {
   return /iphone|ipad|ipod/i.test(navigator.userAgent) && !/crios|fxios/i.test(navigator.userAgent)
 }
 
+/**
+ * Desktop Chrome and Edge will happily install this as a windowed app, and
+ * `beforeinstallprompt` fires there too — but Bannerfell is a phone game, and
+ * "Install" on a machine with a browser window already open buys nothing and
+ * costs a row of the home screen. Coarse pointer is the honest test for "this
+ * is the device the install is for".
+ */
+function isTouchPrimary(): boolean {
+  if (typeof window === 'undefined') return false
+  return window.matchMedia?.('(pointer: coarse)').matches === true
+}
+
 export function InstallCard({ runsFinished }: { runsFinished: number }) {
   const [deferred, setDeferred] = useState<InstallEvent | null>(null)
   const [sheet, setSheet] = useState(false)
@@ -60,7 +72,7 @@ export function InstallCard({ runsFinished }: { runsFinished: number }) {
 
   const ios = isIos()
   // Earn it first: nothing until a run has been played through.
-  if (runsFinished < 1 || dismissed || isStandalone()) return null
+  if (runsFinished < 1 || dismissed || isStandalone() || !isTouchPrimary()) return null
   if (!deferred && !ios) return null
 
   const close = () => {

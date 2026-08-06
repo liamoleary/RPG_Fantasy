@@ -11,8 +11,7 @@
  */
 import { useEffect, useState } from 'react'
 import { NAME_MAX } from '../data/nameRules'
-import { onAccountChanged, readAccount, redeemLinkCode, renameAccount, requestLinkCode, type DeviceAccount } from '../net/account'
-import { useGame } from '../state/store'
+import { readAccount, redeemLinkCode, renameAccount, requestLinkCode } from '../net/account'
 
 type Mode = 'idle' | 'saving' | 'saved' | 'failed'
 
@@ -127,27 +126,5 @@ export function AccountSheet({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </div>
-  )
-}
-
-/**
- * Shown once, under the title, until the player has named themselves. This is
- * the closest thing to a signup step and it is skippable by ignoring it — §10.1
- * requires reaching faction select in under ten seconds with no signup.
- */
-export function NamePrompt({ onOpen }: { onOpen: () => void }) {
-  // Subscribed, not read once: the account is created by a background request
-  // after first paint, so a plain read here would always come back empty.
-  const [account, setAccount] = useState<DeviceAccount | null>(() => readAccount())
-  useEffect(() => onAccountChanged(setAccount), [])
-
-  const named = useGame((s) => s.save.stats.runs) > 0
-  if (!account || named) return null
-  return (
-    <button className="name-prompt" onClick={onOpen}>
-      <span className="tiny dim">Playing as</span>
-      <strong>{account.displayName}</strong>
-      <span className="tiny gold">change</span>
-    </button>
   )
 }

@@ -13,6 +13,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { dbHealth } from './db.js'
 import { accountRoutes } from './routes/account.js'
+import { feedbackRoutes } from './routes/feedback.js'
 import { saveRoutes } from './routes/save.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -63,6 +64,7 @@ export function createApp({ dist = DIST } = {}) {
 
   app.use('/api', accountRoutes())
   app.use('/api', saveRoutes())
+  app.use('/api', feedbackRoutes())
 
   // Unmatched /api paths must 404 as JSON rather than falling through to the
   // SPA — a client fetching a typo'd endpoint should not get index.html back.

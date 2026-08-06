@@ -35,6 +35,7 @@ import { unitArtFor, usePreloadArt } from './preload'
 import { Ladder, WarlordSheet } from './Ladder'
 import { Sigil } from './Sigil'
 import { StackCard, rowGlyph, unitColor } from './StackCard'
+import { FeedbackButton } from './Feedback'
 
 /** The one place the two rows are explained in full (§1.2 row info tap). */
 export const ROW_INFO: Record<Row, { label: string; clause: string; text: string }> = {
@@ -261,7 +262,10 @@ export function MusterScreen({ run }: { run: RunState }) {
         {campFx && <span className="float float-buff camp-float">{campFx}</span>}
         <div className="row spread">
           <span className="eyebrow">War Camp · Tier {p.camp.tier}</span>
-          <span className="gold">{p.gold} gold</span>
+          <span className="row" style={{ gap: 6, alignItems: 'center' }}>
+            <span className="gold">{p.gold} gold</span>
+            <FeedbackButton />
+          </span>
         </div>
 
         {/* The upgrade lives at the top, beside the tier it raises — buried

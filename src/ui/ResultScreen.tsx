@@ -9,6 +9,7 @@ import { Plate } from './Plate'
 import { Sigil } from './Sigil'
 import { describe as describeEvent, keyMoments } from './battleLog'
 import { unitColor } from './StackCard'
+import { FeedbackPrompt } from './Feedback'
 
 /** How a spell's tally reads on the receipt (Design Notes 03 §2.6). */
 const OUTCOME_WORD: Record<SpellOutcome, string> = {
@@ -161,6 +162,9 @@ export function ResultScreen({ run }: { run: RunState }) {
       {report && (
         <HowItWent report={report} playerIsA={playerIsA} showLog={showLog} onToggleLog={() => setShowLog((v) => !v)} />
       )}
+
+      {/* §3: the moment the run is freshest. One line, five stars. */}
+      <FeedbackPrompt />
 
       {/* One flexible region, two things it can hold. The full battle log
           REPLACES the lobby round-up rather than being added below it — that

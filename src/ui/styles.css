@@ -2841,3 +2841,104 @@ h3 {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ── Feedback widget (Launch Plan §3) ────────────────────────────────────── */
+
+/* Stars are the whole interaction on the Result screen, so they are big enough
+   to hit with a thumb and carry no label. */
+.stars {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+}
+.star {
+  background: none;
+  border: 0;
+  padding: 2px 4px;
+  line-height: 1;
+  color: #ffffff26;
+  cursor: pointer;
+  transition: color 0.12s ease, transform 0.12s ease;
+}
+.star[data-on='true'] {
+  color: var(--gold);
+}
+.star:active {
+  transform: scale(0.9);
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+.fb-chip {
+  border: 1px solid var(--line);
+  background: #ffffff08;
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.fb-chip[data-on='true'] {
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 16%, transparent);
+  color: var(--gold);
+}
+
+.fb-text {
+  width: 100%;
+  resize: none;
+  border-radius: var(--fx-radius);
+  border: 1px solid var(--line);
+  background: #00000030;
+  color: var(--ink);
+  padding: 8px;
+  font: inherit;
+  font-size: 13px;
+}
+.fb-text:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+/* The sheet is short by construction; cap it so a small phone keyboard can
+   never push Send off-screen — the one rule this project keeps relearning. */
+.feedback-sheet {
+  gap: 10px;
+  max-height: 86vh;
+  max-height: 86dvh;
+  overflow-y: auto;
+}
+
+.feedback-thanks {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  padding: 18px 0;
+}
+.feedback-tick {
+  font-size: 34px;
+  color: var(--gold);
+  line-height: 1;
+}
+
+/* Result screen: one line, five stars, no paragraph. */
+.fb-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--fx-radius);
+  border: 1px solid var(--line);
+  background: #ffffff06;
+}
+
+.fb-quill {
+  font-size: 15px;
+  line-height: 1;
+}

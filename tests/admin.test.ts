@@ -68,7 +68,7 @@ describe('buildRunReport (§4)', () => {
       {
         id: 'w0', isPlayer: true, heroId: 'h_sylvaen', factionId: 'verdant',
         hp: 0, placement: 3, wins: 5, losses: 4, gold: 2,
-        boonsTaken: [], camp: { tier: 4 },
+        talentsTaken: [], camp: { tier: 4 },
         board: [{ unitId: 'vd_dryad', count: 4, slot: 3, rank: 2 }, { unitId: 'vd_sapling', count: 2, slot: 0, rank: 1 }],
       },
       { id: 'w1', isPlayer: false, heroId: 'h_berrik', factionId: 'vanguard', archetype: 'bulwark', placement: 1 },

@@ -8,12 +8,13 @@
  * like failing tests. Targets: faction avg placement 4.2–4.8, hero 4.0–5.0,
  * median run <= 14 rounds, p95 <= 16, no unit with a >8% win delta.
  */
-import { ALL_UNITS, BOONS, FACTIONS, HEROES, UNIT_BY_ID } from '../src/data/index'
+import { ALL_UNITS, FACTIONS, HEROES, UNIT_BY_ID } from '../src/data/index'
+import { ALL_TALENTS } from '../src/data/talents/index'
 import { FRONT_SLOTS } from '../src/engine/battle'
 import { HARD_CAP_ROUND, advanceRound, newRun, resolveBattles, type RunState } from '../src/engine/run'
-import { boardPower, rivalMuster, NOISE, pickBoon, type Difficulty } from '../src/engine/rivals'
-import { isLevelUpRound } from '../src/engine/boons'
-import { applyBoon } from '../src/engine/run'
+import { boardPower, rivalMuster, NOISE, type Difficulty } from '../src/engine/rivals'
+import { isLevelUpRound, rivalPick } from '../src/engine/talents'
+import { applyTalent } from '../src/engine/run'
 import { lineOf } from '../src/engine/camp'
 import { lineRootOf, thresholdsFor } from '../src/engine/ranks'
 import { hashSeed, makeRng } from '../src/engine/rng'
@@ -42,7 +43,7 @@ function parseArgs(): Args {
 
 /**
  * Run the lobby as it was before Design Notes 02: strip the Cover keyword from
- * every unit and remove the Overwatch boon from the pool. Mutating the data
+ * every unit and neutralise the Overwatch talent. Mutating the data
  * here rather than diffing against an older commit keeps the seeds, the rival
  * policies and the RNG stream identical, so the only difference measured is
  * the interception itself.
@@ -52,8 +53,11 @@ function disableCover() {
     const i = u.keywords.findIndex((k) => k.k === 'cover')
     if (i >= 0) u.keywords.splice(i, 1)
   }
-  const b = BOONS.findIndex((x) => x.id === 'b_overwatch')
-  if (b >= 0) BOONS.splice(b, 1)
+  // Overwatch is now a talent node rather than a pool entry, and the ladder
+  // has no gap to remove it into — zeroing its payload is the equivalent that
+  // keeps every seed, policy and RNG stream identical.
+  const node = ALL_TALENTS.find((n) => n.id === 't_vg_might4a')
+  if (node) node.mods = {}
 }
 
 /**
@@ -187,9 +191,12 @@ function playRunHeadless(run: RunState): RunState {
     const p = run.warlords.find((w) => w.isPlayer)!
     if (p.alive) {
       const rng = makeRng(hashSeed(`sim|${run.seed}|${run.round}|player`))
-      if (isLevelUpRound(run.round) && run.boonOffer.length > 0) {
-        applyBoon(p, pickBoon(run.boonOffer, p.archetype, NOISE[run.difficulty], rng))
-        run.boonOffer = []
+      if (isLevelUpRound(run.round) && run.talentOffer.length > 0) {
+        // The simulated player walks the trees by the same deterministic policy
+        // rivals use, so §7's path stats measure the trees, not a dice roll.
+        const chosen = rivalPick(run.talentOffer, p.archetype)
+        if (chosen) applyTalent(p, chosen)
+        run.talentOffer = []
       }
       const out = rivalMuster(
         {

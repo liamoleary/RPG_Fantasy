@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import { BOON_BY_ID } from '../data/index'
 import type { FactionId } from '../data/types'
 import type { BattleResult } from '../engine/battle'
 import {
@@ -18,7 +17,7 @@ import type { Difficulty } from '../engine/rivals'
 import { hashSeed, makeRng } from '../engine/rng'
 import {
   advanceRound,
-  applyBoon,
+  choosePlayerTalent,
   autoArrangePlayer,
   newRun,
   player,
@@ -68,7 +67,7 @@ interface Store {
   select: (uid: string | null) => void
   place: (slot: number) => void
   autoArrange: () => void
-  chooseBoon: (boonId: string) => void
+  chooseTalent: (nodeId: string) => void
   setScouting: (v: boolean) => void
   inspect: (id: string | null) => void
 
@@ -251,14 +250,10 @@ export const useGame = create<Store>((set, get) => ({
     set({ run: { ...run }, selected: null, rankFlash: null })
   },
 
-  chooseBoon: (boonId) => {
+  chooseTalent: (nodeId) => {
     const { run } = get()
     if (!run) return
-    const boon = BOON_BY_ID.get(boonId)
-    if (!boon || !run.boonOffer.some((b) => b.id === boonId)) return
-    applyBoon(player(run), boon)
-    run.boonOffer = []
-    run.phase = 'muster'
+    choosePlayerTalent(run, nodeId)
     persist(get().save, run)
     set({ run: { ...run } })
   },

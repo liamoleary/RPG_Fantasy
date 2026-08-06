@@ -1,12 +1,13 @@
 /** The lobby: 8 warlords, paired auto-battles, hero attrition, placements. */
-import { BOON_BY_ID, FACTIONS, HERO_BY_ID, faction, heroesOfFaction, unit } from '../data/index'
-import type { BoonDef, FactionId, HeroDef, HeroMods } from '../data/types'
+import { FACTIONS, HERO_BY_ID, faction, heroesOfFaction, unit } from '../data/index'
+import type { TalentNode } from '../data/talents/index'
+import type { FactionId, HeroDef, HeroMods } from '../data/types'
 import { ZERO_MODS, addMods } from '../data/types'
 import { economyGold, simulateBattle, type BattleResult, type BoardStack, type HeroState, type Survivor } from './battle'
-import { heroLevel, isLevelUpRound, offerBoons } from './boons'
+import { canTake, heroLevel, isLevelUpRound, offersFor, rivalPick, treeForWarlord, type TalentOffer } from './talents'
 import { MAX_CAMP_TIER, income, newCamp, rollOffer, type CampState } from './camp'
 import { applyRankProgress, rankDefOf, refreshRanks } from './ranks'
-import { autoPosition, NOISE, pickBoon, rivalMuster, type Archetype, type Difficulty } from './rivals'
+import { autoPosition, NOISE, rivalMuster, type Archetype, type Difficulty } from './rivals'
 import { hashSeed, makeRng, type RNG } from './rng'
 
 export const LOBBY_SIZE = 8
@@ -30,7 +31,8 @@ export interface Warlord {
   board: BoardStack[]
   camp: CampState
   mods: HeroMods
-  boonsTaken: string[]
+  /** §6: the ordered pick sequence — replay-safe, and exactly what §7 needs. */
+  talentsTaken: string[]
   archetype: Archetype
   lastOpponentId: string | null
   wins: number
@@ -62,8 +64,8 @@ export interface RunState {
   playerId: string
   pairings: Pairing[]
   reports: BattleReport[]
-  /** boons offered to the player this round (levelup phase only) */
-  boonOffer: BoonDef[]
+  /** the player's three branch offers this round (levelup phase only) */
+  talentOffer: TalentOffer[]
   ghostBoards: Record<string, BoardStack[]>
   finished: boolean
   placementCounter: number
@@ -155,7 +157,7 @@ export function newRun(opts: NewRunOptions): RunState {
     playerId,
     pairings: [],
     reports: [],
-    boonOffer: [],
+    talentOffer: [],
     ghostBoards: {},
     finished: false,
     placementCounter: LOBBY_SIZE,
@@ -188,7 +190,7 @@ function makeWarlord(
     board: [],
     camp: newCamp(),
     mods: { ...ZERO_MODS },
-    boonsTaken: [],
+    talentsTaken: [],
     archetype,
     lastOpponentId: null,
     wins: 0,
@@ -205,7 +207,7 @@ export function beginRound(run: RunState) {
   for (const w of run.warlords) {
     if (!w.alive) continue
     applyGrowth(w)
-    // Anything that moved a count since the last Muster — Growth, boons,
+    // Anything that moved a count since the last Muster — Growth, talents,
     // hero passives — can have crossed a Banner Rank threshold (§3.1).
     refreshRanks(w.board)
     w.gold = income(run.round, w.mods) + economyGold(w.board)
@@ -220,11 +222,9 @@ export function beginRound(run: RunState) {
   for (const w of run.warlords) {
     if (!w.alive || w.isPlayer) continue
     if (isLevelUpRound(run.round)) {
-      const offers = offerBoons(run.round, w.heroId, w.factionId, new Set(w.boonsTaken), rng.fork(hashSeed(`b${w.id}`)))
-      if (offers.length > 0) {
-        const chosen = pickBoon(offers, w.archetype, NOISE[run.difficulty], rng.fork(hashSeed(`p${w.id}`)))
-        applyBoon(w, chosen)
-      }
+      // §5: rivals walk the same trees, by archetype policy and with no RNG.
+      const chosen = rivalPick(offersFor(treeForWarlord(w.factionId, w.heroId), w.talentsTaken), w.archetype)
+      if (chosen) applyTalent(w, chosen)
     }
     const out = rivalMuster(
       {
@@ -248,10 +248,10 @@ export function beginRound(run: RunState) {
 
   const p = player(run)
   if (p.alive && isLevelUpRound(run.round)) {
-    run.boonOffer = offerBoons(run.round, p.heroId, p.factionId, new Set(p.boonsTaken), roundRng(run, 3))
-    run.phase = run.boonOffer.length > 0 ? 'levelup' : 'muster'
+    run.talentOffer = offersFor(treeForWarlord(p.factionId, p.heroId), p.talentsTaken)
+    run.phase = run.talentOffer.length > 0 ? 'levelup' : 'muster'
   } else {
-    run.boonOffer = []
+    run.talentOffer = []
     run.phase = 'muster'
   }
 }
@@ -278,19 +278,27 @@ function applyGrowth(w: Warlord) {
   }
 }
 
-export function applyBoon(w: Warlord, boon: BoonDef) {
-  w.boonsTaken.push(boon.id)
-  w.mods = addMods(w.mods, boon.mods)
-  if (boon.mods.campTierUp) {
-    w.camp = { ...w.camp, tier: Math.min(MAX_CAMP_TIER, w.camp.tier + boon.mods.campTierUp), tierDiscount: 0 }
+/**
+ * The effect-application layer, unchanged from applyBoon in every respect that
+ * touches the engine (§6): push the id, add the mods, honour campTierUp. Only
+ * the name and the shape of the thing being applied moved.
+ */
+export function applyTalent(w: Warlord, node: TalentNode) {
+  w.talentsTaken.push(node.id)
+  w.mods = addMods(w.mods, node.mods)
+  if (node.mods.campTierUp) {
+    w.camp = { ...w.camp, tier: Math.min(MAX_CAMP_TIER, w.camp.tier + node.mods.campTierUp), tierDiscount: 0 }
   }
 }
 
-export function choosePlayerBoon(run: RunState, boonId: string) {
-  const boon = BOON_BY_ID.get(boonId)
-  if (!boon || !run.boonOffer.some((b) => b.id === boonId)) return
-  applyBoon(player(run), boon)
-  run.boonOffer = []
+export function choosePlayerTalent(run: RunState, nodeId: string) {
+  const p = player(run)
+  const tree = treeForWarlord(p.factionId, p.heroId)
+  if (!canTake(tree, p.talentsTaken, nodeId)) return
+  const node = tree.find((n) => n.id === nodeId)
+  if (!node) return
+  applyTalent(p, node)
+  run.talentOffer = []
   run.phase = 'muster'
 }
 

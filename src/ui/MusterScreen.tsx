@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { UNIT_ART } from '../data/art'
-import { BOON_BY_ID, FACTION_BY_ID, HERO_BY_ID, unit } from '../data/index'
-import { addMods, type BoonBranch, type BoonDef, type FactionId, type HeroDef, type HeroMods, type Row } from '../data/types'
+import { FACTION_BY_ID, HERO_BY_ID, unit } from '../data/index'
+import { addMods, type BoonBranch, type FactionId, type HeroDef, type HeroMods, type Row } from '../data/types'
 import {
   FRONT_SLOTS,
   rowOfSlot,
@@ -24,7 +24,7 @@ import {
   tierUpCost,
   type RecruitPlan,
 } from '../engine/camp'
-import { heroLevel } from '../engine/boons'
+import { heroLevel } from '../engine/talents'
 import { opponentOf, player, type RunState } from '../engine/run'
 import { useGame } from '../state/store'
 import { InspectSheet, RankProgress, promoteBlock } from './InspectSheet'
@@ -36,6 +36,7 @@ import { Ladder, WarlordSheet } from './Ladder'
 import { Sigil } from './Sigil'
 import { StackCard, rowGlyph, unitColor } from './StackCard'
 import { FeedbackButton } from './Feedback'
+import { TALENT_BY_ID, type TalentNode } from '../data/talents/index'
 
 /** The one place the two rows are explained in full (§1.2 row info tap). */
 export const ROW_INFO: Record<Row, { label: string; clause: string; text: string }> = {
@@ -135,14 +136,14 @@ export function MusterScreen({ run }: { run: RunState }) {
    * touches the thing it changed within a second (§2.2).
    */
   const pickBoon = (id: string) => {
-    const boon = BOON_BY_ID.get(id)
+    const boon = TALENT_BY_ID.get(id)
     const fx: Record<string, string> = {}
     if (boon) {
       const after = addMods(p.mods, boon.mods)
-      const taken = [...p.boonsTaken, id]
+      const taken = [...p.talentsTaken, id]
       for (const st of p.board) {
         const row = rowOfSlot(st.slot)
-        const b0 = stackStats(st, row, p.mods, p.boonsTaken)
+        const b0 = stackStats(st, row, p.mods, p.talentsTaken)
         const b1 = stackStats(st, row, after, taken)
         const bits: string[] = []
         if (b1.atk !== b0.atk) bits.push(`${b1.atk > b0.atk ? '+' : ''}${b1.atk - b0.atk} ATK`)
@@ -154,10 +155,10 @@ export function MusterScreen({ run }: { run: RunState }) {
         if (bits.length > 0) fx[st.uid] = bits.join(' ')
       }
     }
-    store.chooseBoon(id)
+    store.chooseTalent(id)
     // "Your Magic is now Expert" — the pick advances a named rank (§11).
     if (boon) {
-      const to = pathTitle(branchPicks(p.boonsTaken)[boon.branch] + 1)
+      const to = pathTitle(branchPicks(p.talentsTaken)[boon.branch] + 1)
       setPathToast({ branch: boon.branch, title: to })
       window.setTimeout(() => setPathToast(null), 1900)
     }
@@ -223,7 +224,7 @@ export function MusterScreen({ run }: { run: RunState }) {
               ⇄
             </button>
           </div>
-          <BoonStrip ids={p.boonsTaken} onOpen={() => setHeroOpen(true)} />
+          <BoonStrip ids={p.talentsTaken} onOpen={() => setHeroOpen(true)} />
         </div>
         {foe && (
           <button className="btn btn-sm" onClick={() => store.setScouting(true)}>
@@ -349,7 +350,7 @@ export function MusterScreen({ run }: { run: RunState }) {
           gold={p.gold}
           context={{
             count: inspectedStack.count,
-            stats: stackStats(inspectedStack, rowOfSlot(inspectedStack.slot), p.mods, p.boonsTaken),
+            stats: stackStats(inspectedStack, rowOfSlot(inspectedStack.slot), p.mods, p.talentsTaken),
           }}
           extra={<RankProgress unitId={inspectedStack.unitId} count={inspectedStack.count} rank={inspectedStack.rank} />}
           onClose={() => setStackUid(null)}
@@ -435,14 +436,14 @@ export function MusterScreen({ run }: { run: RunState }) {
           Your {pathToast.branch} is now <strong>{pathToast.title}</strong>
         </div>
       )}
-      {run.phase === 'levelup' && run.boonOffer.length > 0 && (
+      {run.phase === 'levelup' && run.talentOffer.length > 0 && (
         <BoonModal
-          offers={run.boonOffer}
+          offers={run.talentOffer.flatMap((o) => o.options)}
           level={level}
           hero={hero}
           mods={p.mods}
           round={run.round}
-          taken={p.boonsTaken}
+          taken={p.talentsTaken}
           onPick={pickBoon}
         />
       )}
@@ -529,7 +530,7 @@ export function Board({
   /** Muster only: Cover charges this stack starts each battle with */
   coverOf?: (stack: BoardStack) => number
   /** whose army this is — without it the cards print base stats only (§2.1) */
-  owner?: { mods: HeroMods; boonsTaken: string[] }
+  owner?: { mods: HeroMods; talentsTaken: string[] }
   /** uid → float text, for the beat right after a boon lands (§2.2) */
   boonFx?: Record<string, string>
   /** Muster only: tapping a card's gold chevron promotes it in one step (§8) */
@@ -633,7 +634,7 @@ export function Board({
           }
           // The slot decides the row, not the unit's preference: a Row-any unit
           // standing in the back gets the back-row boons, exactly as in battle.
-          const stats = owner ? stackStats(st, rowOfSlot(slot), owner.mods, owner.boonsTaken) : null
+          const stats = owner ? stackStats(st, rowOfSlot(slot), owner.mods, owner.talentsTaken) : null
           const def = unit(st.unitId)
           const held = selected === st.uid
           // While a stack is held, an occupied slot either swaps (legal) or is
@@ -823,7 +824,7 @@ function ScoutSheet({ run, foeId, onClose }: { run: RunState; foeId: string; onC
       {peeked && (
         <InspectSheet
           unitId={peeked.unitId}
-          context={{ count: peeked.count, stats: stackStats(peeked, rowOfSlot(peeked.slot), foe.mods, foe.boonsTaken) }}
+          context={{ count: peeked.count, stats: stackStats(peeked, rowOfSlot(peeked.slot), foe.mods, foe.talentsTaken) }}
           extra={<RankProgress unitId={peeked.unitId} count={peeked.count} rank={peeked.rank} />}
           onClose={() => setPeek(null)}
         />
@@ -913,7 +914,7 @@ const SPELL_VERB: Record<string, string> = {
  * shows the before → after it is buying (§2.4). Same numbers the battle banner
  * then proves — pick, preview, proof.
  */
-function MagicPreview({ hero, mods, round, boon }: { hero: HeroDef; mods: HeroMods; round: number; boon: BoonDef }) {
+function MagicPreview({ hero, mods, round, boon }: { hero: HeroDef; mods: HeroMods; round: number; boon: TalentNode }) {
   const base: HeroState = { heroId: hero.id, name: hero.name, factionId: hero.faction as FactionId, level: heroLevel(round), mods }
   const next: HeroState = { ...base, mods: addMods(mods, boon.mods) }
   const bits: string[] = []
@@ -941,7 +942,7 @@ function BoonModal({
   taken,
   onPick,
 }: {
-  offers: BoonDef[]
+  offers: TalentNode[]
   level: number
   hero: HeroDef
   mods: HeroMods
@@ -959,12 +960,12 @@ function BoonModal({
           <div className="eyebrow">Level {level}</div>
           <h2>Choose a path</h2>
         </div>
-        <PathColumns boonsTaken={taken} />
+        <PathColumns talentsTaken={taken} />
         {offers.map((b) => (
           <button key={b.id} className="boon" style={{ ['--bc' as string]: branchColor(b.branch) }} onClick={() => onPick(b.id)}>
             <span className="boon-branch">
               {b.branch}
-              {b.capstone ? ' \u00b7 capstone' : ''}
+              {b.tier === 5 ? ' \u00b7 capstone' : ''}
             </span>
             <span className="boon-advance">
               advances {b.branch} to {pathTitle(picks[b.branch] + 1)}

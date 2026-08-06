@@ -1,13 +1,14 @@
-import { BOON_BY_ID, FACTION_BY_ID, HERO_BY_ID } from '../data/index'
+import { FACTION_BY_ID, HERO_BY_ID } from '../data/index'
 import type { BoonBranch } from '../data/types'
 import { spellPower } from '../engine/battle'
-import { heroLevel } from '../engine/boons'
+import { heroLevel } from '../engine/talents'
 import { heroState, type Warlord } from '../engine/run'
 import { Sigil } from './Sigil'
+import { TALENT_BY_ID } from '../data/talents/index'
 
 /**
  * Boons are a path you walk (Design Notes 04 §11). The M&M feel — Basic to
- * Advanced to Expert — is pure presentation over `boonsTaken`, so this is the
+ * Advanced to Expert — is pure presentation over `talentsTaken`, so this is the
  * only place the arithmetic lives and there is no engine change behind it.
  */
 export const PATH_TITLES = ['—', 'Basic', 'Advanced', 'Expert', 'Master'] as const
@@ -17,10 +18,10 @@ export function pathTitle(picks: number): string {
 }
 
 /** How many boons this warlord has taken in each branch. */
-export function branchPicks(boonsTaken: readonly string[]): Record<BoonBranch, number> {
+export function branchPicks(talentsTaken: readonly string[]): Record<BoonBranch, number> {
   const out: Record<BoonBranch, number> = { might: 0, magic: 0, command: 0 }
-  for (const id of boonsTaken) {
-    const b = BOON_BY_ID.get(id)
+  for (const id of talentsTaken) {
+    const b = TALENT_BY_ID.get(id)
     if (b) out[b.branch] += 1
   }
   return out
@@ -42,8 +43,8 @@ export function PathPips({ branch, picks }: { branch: BoonBranch; picks: number 
 }
 
 /** The three paths side by side — the level-up screen and the hero sheet. */
-export function PathColumns({ boonsTaken }: { boonsTaken: readonly string[] }) {
-  const picks = branchPicks(boonsTaken)
+export function PathColumns({ talentsTaken }: { talentsTaken: readonly string[] }) {
+  const picks = branchPicks(talentsTaken)
   return (
     <div className="paths">
       {(['might', 'magic', 'command'] as BoonBranch[]).map((b) => (
@@ -97,16 +98,16 @@ export function HeroSheet({ warlord, round, onClose }: { warlord: Warlord; round
           <div className="tiny dim">Currently X = {x}.</div>
         </div>
         <div className="eyebrow">Paths</div>
-        <PathColumns boonsTaken={warlord.boonsTaken} />
+        <PathColumns talentsTaken={warlord.talentsTaken} />
 
-        <div className="eyebrow">Boons taken ({warlord.boonsTaken.length})</div>
-        {warlord.boonsTaken.length === 0 && (
+        <div className="eyebrow">Boons taken ({warlord.talentsTaken.length})</div>
+        {warlord.talentsTaken.length === 0 && (
           <div className="small dim">
             {warlord.isPlayer ? 'None yet — your first choice comes on round 2.' : 'None yet.'}
           </div>
         )}
-        {warlord.boonsTaken.map((id) => {
-          const b = BOON_BY_ID.get(id)
+        {warlord.talentsTaken.map((id) => {
+          const b = TALENT_BY_ID.get(id)
           return b ? (
             <div key={id} className="panel small">
               <span className="boon-branch" style={{ ['--bc' as string]: branchColor(b.branch) }}>

@@ -227,9 +227,9 @@ describe('hero damage', () => {
 describe('stackStats — the one place effective ATK/HP is worked out', () => {
   const back = stack('vg_arbalest', 3, 4)
 
-  it('names the boons behind a buffed number, and the parts sum to the total', () => {
+  it('names the talents behind a buffed number, and the parts sum to the total', () => {
     const mods = { ...ZERO_MODS, backAtk: 2, allHp: 3 }
-    const st = stackStats(back, 'back', mods, ['b_marksmen', 'b_unbroken_line'])
+    const st = stackStats(back, 'back', mods, ['t_vd_might4a', 't_vg_might3_yseult'])
     const def = unit('vg_arbalest')
     expect(st.atk).toBe(def.atk + 2)
     expect(st.hp).toBe(def.hp + 3)
@@ -238,16 +238,16 @@ describe('stackStats — the one place effective ATK/HP is worked out', () => {
     expect(st.parts.map((p) => p.label)).toEqual(['base', 'Marksmen', 'The Unbroken Line'])
   })
 
-  it('gives the row its own boons — the same stack scores differently up front', () => {
+  it('gives the row its own talents — the same stack scores differently up front', () => {
     const mods = { ...ZERO_MODS, frontAtk: 2 }
     expect(stackStats(back, 'front', mods).atk).toBe(unit('vg_arbalest').atk + 2)
     expect(stackStats(back, 'back', mods).atk).toBe(unit('vg_arbalest').atk)
   })
 
-  it('credits an unattributable mod to a plain "boons" remainder rather than losing it', () => {
+  it('credits an unattributable mod to a plain "talents" remainder rather than losing it', () => {
     const st = stackStats(back, 'back', { ...ZERO_MODS, allAtk: 1 }, [])
     expect(st.atk).toBe(unit('vg_arbalest').atk + 1)
-    expect(st.parts.at(-1)).toEqual({ label: 'boons', atk: 1, hp: 0 })
+    expect(st.parts.at(-1)).toEqual({ label: 'talents', atk: 1, hp: 0 })
   })
 
   it('agrees with what the simulator fights with', () => {

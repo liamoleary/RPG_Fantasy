@@ -10,7 +10,7 @@
  * device info, no location, nothing about the player except the display name
  * they typed.
  */
-import { BOON_BY_ID } from '../data/index'
+import { TALENT_BY_ID } from '../data/talents/index'
 import type { BattleResult } from '../engine/battle'
 import { player, type RunState } from '../engine/run'
 import { BUILD_ID } from '../build'
@@ -74,10 +74,10 @@ export interface RunReport {
 export function buildRunReport(run: RunState, tally: RunTally, now = Date.now()): RunReport | null {
   try {
     const me = player(run)
-    const boonBranches: Record<string, number> = {}
-    for (const boonId of me.boonsTaken) {
-      const branch = BOON_BY_ID.get(boonId)?.branch ?? 'unknown'
-      boonBranches[branch] = (boonBranches[branch] ?? 0) + 1
+    const branchCounts: Record<string, number> = {}
+    for (const nodeId of me.talentsTaken) {
+      const branch = TALENT_BY_ID.get(nodeId)?.branch ?? 'unknown'
+      branchCounts[branch] = (branchCounts[branch] ?? 0) + 1
     }
 
     return {
@@ -92,8 +92,8 @@ export function buildRunReport(run: RunState, tally: RunTally, now = Date.now())
       hp: me.hp,
       details: {
         board: me.board.map((s) => ({ unitId: s.unitId, count: s.count, slot: s.slot, rank: s.rank ?? 0 })),
-        boonsTaken: [...me.boonsTaken],
-        boonBranches,
+        talentsTaken: [...me.talentsTaken],
+        branchCounts,
         campTier: me.camp.tier,
         tierCurve: [...tally.tierCurve],
         promotions: tally.promotions,

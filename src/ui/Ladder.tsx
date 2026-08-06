@@ -1,9 +1,10 @@
 import { HERO_ART } from '../data/art'
-import { BOON_BY_ID, FACTION_BY_ID, HERO_BY_ID } from '../data/index'
+import { FACTION_BY_ID, HERO_BY_ID } from '../data/index'
 import { spellPower } from '../engine/battle'
 import { START_HP, heroState, opponentOf, type RunState, type Warlord } from '../engine/run'
 import { Plate } from './Plate'
 import { Sigil } from './Sigil'
+import { TALENT_BY_ID } from '../data/talents/index'
 
 export function Ladder({ run, onInspect }: { run: RunState; onInspect: (id: string) => void }) {
   const foeId = opponentOf(run, run.playerId)
@@ -81,10 +82,10 @@ export function WarlordSheet({ run, id, onClose }: { run: RunState; id: string; 
             <div>{hero.spell.text.replace(/\bX\b/g, String(spellPower(hero, heroState(w, run.round))))}</div>
           </div>
         )}
-        <div className="eyebrow">Boons taken ({w.boonsTaken.length})</div>
-        {w.boonsTaken.length === 0 && <div className="small dim">None yet.</div>}
-        {w.boonsTaken.map((id) => {
-          const b = BOON_BY_ID.get(id)
+        <div className="eyebrow">Boons taken ({w.talentsTaken.length})</div>
+        {w.talentsTaken.length === 0 && <div className="small dim">None yet.</div>}
+        {w.talentsTaken.map((id) => {
+          const b = TALENT_BY_ID.get(id)
           return b ? (
             <div key={id} className="panel small">
               <strong style={{ display: 'block' }}>{b.name}</strong>

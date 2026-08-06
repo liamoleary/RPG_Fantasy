@@ -22,7 +22,7 @@ export interface FeedbackContext {
   heroId: string | null
   factionId: string | null
   difficulty: string | null
-  boonsTaken: string[]
+  talentsTaken: string[]
   board: { unitId: string; count: number; slot: number; rank: number }[]
   gold: number | null
   hp: number | null
@@ -84,7 +84,7 @@ export function buildContext(input: {
     heroId: null,
     factionId: null,
     difficulty: null,
-    boonsTaken: [],
+    talentsTaken: [],
     board: [],
     gold: null,
     hp: null,
@@ -101,7 +101,7 @@ export function buildContext(input: {
       base.heroId = me.heroId
       base.factionId = me.factionId
       base.difficulty = input.run.difficulty
-      base.boonsTaken = [...me.boonsTaken]
+      base.talentsTaken = [...me.talentsTaken]
       base.board = boardOf(me.board)
       base.gold = me.gold
       base.hp = me.hp

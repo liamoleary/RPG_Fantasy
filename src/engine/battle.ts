@@ -6,10 +6,11 @@
  * Every event that changes the board carries a `snap` of the affected stacks,
  * so the renderer stays a dumb projector of the log.
  */
-import { BOON_BY_ID, UNIT_BY_ID } from '../data/index'
+import { UNIT_BY_ID } from '../data/index'
 import type { AbilityEffect, ApexDef, FactionId, HeroDef, HeroMods, KeywordId, Row, UnitDef } from '../data/types'
 import { rankDefOf } from './ranks'
 import { makeRng, type RNG } from './rng'
+import { TALENT_BY_ID } from '../data/talents/index'
 
 export const MAX_EXCHANGES = 200
 export const FRONT_SLOTS = 4
@@ -255,10 +256,10 @@ export const rowOfSlot = (slot: number): Row => (slot < FRONT_SLOTS ? 'front' : 
  * see (§2). This is the one place the sum lives: `buildStack` takes its numbers
  * from here, so the card, the sheet and the simulator can never disagree.
  *
- * `boonsTaken` is only used to *name* the contributions — the totals always come
- * from `m`, and any difference lands in a single unnamed remainder.
+ * `talentsTaken` is only used to *name* the contributions — the totals always
+ * come from `m`, and any difference lands in a single unnamed remainder.
  */
-export function stackStats(bs: BoardStack, row: Row, m: HeroMods, boonsTaken: readonly string[] = []): StatBreakdown {
+export function stackStats(bs: BoardStack, row: Row, m: HeroMods, talentsTaken: readonly string[] = []): StatBreakdown {
   const def = UNIT_BY_ID.get(bs.unitId)
   if (!def) throw new Error(`unknown unit ${bs.unitId}`)
   const rank = bs.rank ?? 0
@@ -276,13 +277,13 @@ export function stackStats(bs: BoardStack, row: Row, m: HeroMods, boonsTaken: re
     parts.push({ label: 'Honored', atk: honored.atk ?? 0, hp: honored.hp ?? 0 })
   }
 
-  // What the boons are worth in total, and who to credit it to.
+  // What the talents are worth in total, and who to credit it to.
   const modAtk = m.allAtk + (row === 'front' ? m.frontAtk : m.backAtk) + (volley ? m.volleyAtk : 0)
   const modHp = m.allHp
   let namedAtk = 0
   let namedHp = 0
-  for (const id of boonsTaken) {
-    const b = BOON_BY_ID.get(id)
+  for (const id of talentsTaken) {
+    const b = TALENT_BY_ID.get(id)
     if (!b) continue
     const a =
       (b.mods.allAtk ?? 0) + (row === 'front' ? (b.mods.frontAtk ?? 0) : (b.mods.backAtk ?? 0)) + (volley ? (b.mods.volleyAtk ?? 0) : 0)
@@ -293,7 +294,7 @@ export function stackStats(bs: BoardStack, row: Row, m: HeroMods, boonsTaken: re
     parts.push({ label: b.name, atk: a, hp: h })
   }
   if (modAtk - namedAtk !== 0 || modHp - namedHp !== 0) {
-    parts.push({ label: 'boons', atk: modAtk - namedAtk, hp: modHp - namedHp })
+    parts.push({ label: 'talents', atk: modAtk - namedAtk, hp: modHp - namedHp })
   }
 
   const atk = parts.reduce((n, pt) => n + pt.atk, 0)

@@ -185,7 +185,7 @@ const OVERRIDES: TalentNode[] = [
     id: 't_st_magic4a_zhala',
     heroId: 'h_zhala',
     name: 'Nine Winds',
-    text: 'Your battle spell casts two extra times and recurs 1 exchange sooner.',
+    text: 'Your battle spell casts 2 extra times and recurs 1 exchange sooner.',
     branch: 'magic',
     tier: 4,
     fork: 'a',

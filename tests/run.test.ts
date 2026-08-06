@@ -10,10 +10,10 @@ import {
   resolveBattles,
   type RunState,
 } from '../src/engine/run'
-import { isLevelUpRound, heroLevel, offerBoons } from '../src/engine/boons'
+import { isLevelUpRound, heroLevel, offersFor, rivalPick, treeForWarlord } from '../src/engine/talents'
 import { income, musterCount, newCamp, promote, recruit, rollOffer, sell, tierUpCost } from '../src/engine/camp'
-import { NOISE, pickBoon, rivalMuster } from '../src/engine/rivals'
-import { applyBoon } from '../src/engine/run'
+import { NOISE, rivalMuster } from '../src/engine/rivals'
+import { applyTalent } from '../src/engine/run'
 import { makeRng } from '../src/engine/rng'
 
 function playHeadless(run: RunState): RunState {
@@ -22,9 +22,10 @@ function playHeadless(run: RunState): RunState {
     const p = player(run)
     if (p.alive) {
       const rng = makeRng(1000 + run.round)
-      if (run.boonOffer.length > 0) {
-        applyBoon(p, pickBoon(run.boonOffer, p.archetype, NOISE.standard, rng))
-        run.boonOffer = []
+      if (run.talentOffer.length > 0) {
+        const chosen = rivalPick(run.talentOffer, p.archetype)
+        if (chosen) applyTalent(p, chosen)
+        run.talentOffer = []
       }
       const out = rivalMuster(
         { board: p.board, gold: p.gold, camp: p.camp, mods: p.mods, round: run.round, archetype: p.archetype, factionId: p.factionId, noise: NOISE.standard },
@@ -156,39 +157,19 @@ describe('economy', () => {
   })
 })
 
-describe('boons', () => {
+describe('level-up cadence', () => {
   it('levels the hero on rounds 2, 4, 6, 8, 10 and 12', () => {
     expect([1, 2, 3, 4, 12, 13].map(isLevelUpRound)).toEqual([false, true, false, true, true, false])
     expect(heroLevel(1)).toBe(1)
     expect(heroLevel(12)).toBe(7)
   })
 
-  it('offers one boon from each branch and never repeats a taken boon', () => {
-    const rng = makeRng(9)
-    const taken = new Set<string>()
-    for (const round of [2, 4, 6, 8, 10, 12]) {
-      const offer = offerBoons(round, 'h_berrik', 'vanguard', taken, rng)
-      expect(offer.length).toBe(3)
-      expect(new Set(offer.map((b) => b.branch)).size).toBe(3)
-      for (const b of offer) expect(taken.has(b.id)).toBe(false)
-      taken.add(offer[0].id)
-    }
-  })
-
-  it('gates capstones to round 10 and later', () => {
-    const rng = makeRng(11)
-    for (const round of [2, 4, 6, 8]) {
-      const offer = offerBoons(round, 'h_zhala', 'stormtide', new Set(), rng)
-      expect(offer.some((b) => b.capstone)).toBe(false)
-    }
-  })
-
-  it('never offers another hero-s signature boon', () => {
-    const rng = makeRng(13)
-    for (let i = 0; i < 60; i++) {
-      const offer = offerBoons(12, 'h_berrik', 'vanguard', new Set(), rng)
-      for (const b of offer) expect(b.heroId === undefined || b.heroId === 'h_berrik').toBe(true)
-    }
+  it('offers all three branches at a level-up, and no random draw', () => {
+    const tree = treeForWarlord('vanguard', 'h_berrik')
+    const offers = offersFor(tree, [])
+    expect(offers.map((o) => o.branch)).toEqual(['might', 'magic', 'command'])
+    // Same call, same answer — the whole point of the redesign.
+    expect(JSON.stringify(offersFor(tree, []))).toBe(JSON.stringify(offers))
   })
 })
 

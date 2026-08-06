@@ -184,7 +184,7 @@ const OVERRIDES: TalentNode[] = [
     id: 't_vd_magic4b_maravel',
     heroId: 'h_maravel',
     name: 'Bramble Field',
-    text: 'Bramble Coil casts two extra times per battle.',
+    text: 'Bramble Coil casts 2 extra times per battle.',
     branch: 'magic',
     tier: 4,
     fork: 'b',

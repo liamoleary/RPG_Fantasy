@@ -56,11 +56,11 @@ export function IdentityBar({
       )}
 
       <div className="identity-actions">
-        <button className="icon-btn" onClick={onFeedback} aria-label="Send feedback">
-          <UiIcon id="feedback" />
-        </button>
-        <button className="icon-btn" onClick={onAccount} aria-label="Your banner">
-          <UiIcon id="account" />
+        {/* Labelled and gold, not a third anonymous square: feedback is the one
+            thing this playtest actually needs testers to find. */}
+        <button className="icon-btn icon-btn-label fb-cta" onClick={onFeedback}>
+          <UiIcon id="feedback" size={16} />
+          <span>Feedback</span>
         </button>
         <button className="icon-btn" onClick={onSettings} aria-label="Settings">
           <UiIcon id="settings" />

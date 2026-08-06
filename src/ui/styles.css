@@ -3104,3 +3104,45 @@ h3 {
 .icon-btn:active {
   background: #ffffff14;
 }
+
+/* Feedback is the one control a playtest cannot afford testers to miss, so it
+   gets a word and the gold. Everything else stays a quiet square. */
+.icon-btn-label {
+  width: auto;
+  gap: 6px;
+  grid-auto-flow: column;
+  padding: 0 11px;
+  font-size: 12px;
+  font-weight: 800;
+}
+.fb-cta {
+  color: var(--gold);
+  border-color: color-mix(in srgb, var(--gold) 55%, transparent);
+  background: color-mix(in srgb, var(--gold) 14%, transparent);
+}
+.fb-cta:hover {
+  color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 22%, transparent);
+}
+
+/* The end-of-run ask: stars plus an explicit way to write, because stars on
+   their own read as a rating and nothing more. */
+.fb-prompt-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fb-prompt[data-prominent] {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 10px 12px;
+  border-color: color-mix(in srgb, var(--gold) 45%, transparent);
+  background: color-mix(in srgb, var(--gold) 8%, transparent);
+}
+.fb-prompt[data-prominent] .fb-prompt-row {
+  justify-content: space-between;
+}
+.fb-note {
+  white-space: nowrap;
+}

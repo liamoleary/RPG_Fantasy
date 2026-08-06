@@ -271,6 +271,10 @@ export function RunOverScreen({ run }: { run: RunState }) {
         </div>
       </div>
 
+      {/* The end of the whole run — the single best moment to ask, and the one
+          screen that had no way to say anything at all. */}
+      <FeedbackPrompt prominent />
+
       <div className="panel">
         <div className="eyebrow" style={{ marginBottom: 6 }}>
           Renown by placement

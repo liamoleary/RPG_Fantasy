@@ -124,14 +124,26 @@ export function FeedbackButton() {
   )
 }
 
-/** The prominent form — Result screen (§3: "How was that run?"). */
-export function FeedbackPrompt() {
+/**
+ * The prominent form — Result and Run Over screens (§3: "How was that run?").
+ *
+ * Stars alone read as a rating widget and nothing else; testers tapped them and
+ * never realised they could say why. The explicit note button is the affordance
+ * that makes the free-text box discoverable, which is the half of §3 that
+ * actually produces "my cleric did nothing???".
+ */
+export function FeedbackPrompt({ prominent = false }: { prominent?: boolean }) {
   const [openAt, setOpenAt] = useState<number | null>(null)
   return (
     <>
-      <div className="fb-prompt">
+      <div className="fb-prompt" data-prominent={prominent || undefined}>
         <span className="eyebrow">How was that run?</span>
-        <Stars value={0} size={26} onPick={(n) => setOpenAt(n)} />
+        <div className="fb-prompt-row">
+          <Stars value={0} size={prominent ? 30 : 26} onPick={(n) => setOpenAt(n)} />
+          <button className="btn btn-sm fb-note" onClick={() => setOpenAt(0)}>
+            Write a note
+          </button>
+        </div>
       </div>
       {openAt !== null && <FeedbackSheet initialRating={openAt} onClose={() => setOpenAt(null)} />}
     </>

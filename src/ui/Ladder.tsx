@@ -5,6 +5,7 @@ import { START_HP, heroState, opponentOf, type RunState, type Warlord } from '..
 import { Plate } from './Plate'
 import { Sigil } from './Sigil'
 import { TALENT_BY_ID } from '../data/talents/index'
+import { PathColumns } from './HeroSheet'
 
 export function Ladder({ run, onInspect }: { run: RunState; onInspect: (id: string) => void }) {
   const foeId = opponentOf(run, run.playerId)
@@ -82,7 +83,11 @@ export function WarlordSheet({ run, id, onClose }: { run: RunState; id: string; 
             <div>{hero.spell.text.replace(/\bX\b/g, String(spellPower(hero, heroState(w, run.round))))}</div>
           </div>
         )}
-        <div className="eyebrow">Boons taken ({w.talentsTaken.length})</div>
+        {/* §5: reading "she is two picks from her capstone" is threat
+            information randomness could never have provided. */}
+        <div className="eyebrow">War Council</div>
+        <PathColumns talentsTaken={w.talentsTaken} />
+        <div className="eyebrow">Path taken ({w.talentsTaken.length}/6)</div>
         {w.talentsTaken.length === 0 && <div className="small dim">None yet.</div>}
         {w.talentsTaken.map((id) => {
           const b = TALENT_BY_ID.get(id)

@@ -5,16 +5,19 @@ import { heroLevel } from '../engine/talents'
 import { heroState, type Warlord } from '../engine/run'
 import { Sigil } from './Sigil'
 import { TALENT_BY_ID } from '../data/talents/index'
+import { useState } from 'react'
+import { treeForWarlord } from '../engine/talents'
+import { WarCouncil } from './WarCouncil'
 
 /**
  * Boons are a path you walk (Design Notes 04 §11). The M&M feel — Basic to
  * Advanced to Expert — is pure presentation over `talentsTaken`, so this is the
  * only place the arithmetic lives and there is no engine change behind it.
  */
-export const PATH_TITLES = ['—', 'Basic', 'Advanced', 'Expert', 'Master'] as const
+export const PATH_TITLES = ['—', 'Basic', 'Advanced', 'Expert', 'Master', 'Capstone'] as const
 
 export function pathTitle(picks: number): string {
-  return PATH_TITLES[Math.min(picks, 4)]
+  return PATH_TITLES[Math.min(picks, 5)]
 }
 
 /** How many boons this warlord has taken in each branch. */
@@ -33,8 +36,8 @@ export function PathPips({ branch, picks }: { branch: BoonBranch; picks: number 
     <span className="path" style={{ ['--bc' as string]: branchColor(branch) }}>
       <span className="path-name">{branch}</span>
       <span className="path-pips" aria-hidden="true">
-        {[0, 1, 2, 3].map((k) => (
-          <i key={k} data-on={k < Math.min(picks, 4) ? 'true' : undefined} />
+        {[0, 1, 2, 3, 4].map((k) => (
+          <i key={k} data-on={k < Math.min(picks, 5) ? 'true' : undefined} />
         ))}
       </span>
       <span className="path-title">{pathTitle(picks)}</span>
@@ -68,6 +71,8 @@ export function branchColor(b: string): string {
  * to read the beams coming at them.
  */
 export function HeroSheet({ warlord, round, onClose }: { warlord: Warlord; round: number; onClose: () => void }) {
+  // §4: the tree is always inspectable, from round 1, on its own tab.
+  const [tab, setTab] = useState<'hero' | 'council'>('hero')
   const hero = HERO_BY_ID.get(warlord.heroId)!
   const f = FACTION_BY_ID.get(warlord.factionId)!
   const x = spellPower(hero, heroState(warlord, round))
@@ -97,6 +102,26 @@ export function HeroSheet({ warlord, round, onClose }: { warlord: Warlord; round
           <div>{hero.spell.text.replace(/\bX\b/g, String(x))}</div>
           <div className="tiny dim">Currently X = {x}.</div>
         </div>
+        <div className="tabs">
+          <button className="tab" data-on={tab === 'hero'} onClick={() => setTab('hero')}>
+            Hero
+          </button>
+          <button className="tab" data-on={tab === 'council'} onClick={() => setTab('council')}>
+            War Council
+          </button>
+        </div>
+
+        {tab === 'council' ? (
+          <WarCouncil
+            tree={treeForWarlord(warlord.factionId, warlord.heroId)}
+            taken={warlord.talentsTaken}
+            heroId={warlord.heroId}
+            mods={warlord.mods}
+            round={round}
+            readOnly
+          />
+        ) : (
+          <>
         <div className="eyebrow">Paths</div>
         <PathColumns talentsTaken={warlord.talentsTaken} />
 
@@ -121,6 +146,8 @@ export function HeroSheet({ warlord, round, onClose }: { warlord: Warlord; round
         <button className="btn btn-primary" onClick={onClose}>
           Close
         </button>
+          </>
+        )}
       </div>
     </div>
   )

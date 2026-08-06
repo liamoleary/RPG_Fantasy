@@ -1,17 +1,12 @@
 import { useRef, useState } from 'react'
 import { UNIT_ART } from '../data/art'
 import { FACTION_BY_ID, HERO_BY_ID, unit } from '../data/index'
-import { addMods, type BoonBranch, type FactionId, type HeroDef, type HeroMods, type Row } from '../data/types'
+import { addMods, type BoonBranch, type HeroDef, type HeroMods, type Row } from '../data/types'
 import {
   FRONT_SLOTS,
   rowOfSlot,
-  spellCadence,
-  spellCasts,
-  spellPower,
-  spellTargets,
   stackStats,
   type BoardStack,
-  type HeroState,
 } from '../engine/battle'
 import {
   canPromote,
@@ -36,7 +31,9 @@ import { Ladder, WarlordSheet } from './Ladder'
 import { Sigil } from './Sigil'
 import { StackCard, rowGlyph, unitColor } from './StackCard'
 import { FeedbackButton } from './Feedback'
-import { TALENT_BY_ID, type TalentNode } from '../data/talents/index'
+import { MagicPreview } from './MagicPreview'
+import type { TalentOffer } from '../engine/talents'
+import { TALENT_BY_ID } from '../data/talents/index'
 
 /** The one place the two rows are explained in full (§1.2 row info tap). */
 export const ROW_INFO: Record<Row, { label: string; clause: string; text: string }> = {
@@ -437,8 +434,8 @@ export function MusterScreen({ run }: { run: RunState }) {
         </div>
       )}
       {run.phase === 'levelup' && run.talentOffer.length > 0 && (
-        <BoonModal
-          offers={run.talentOffer.flatMap((o) => o.options)}
+        <LevelUpModal
+          offers={run.talentOffer}
           level={level}
           hero={hero}
           mods={p.mods}
@@ -900,40 +897,13 @@ function BoonStrip({ ids, onOpen }: { ids: string[]; onOpen: () => void }) {
 const BRANCH_GLYPH: Record<BoonBranch, string> = { might: '\u2694', magic: '\u2726', command: '\u25c8' }
 
 /** How each spell's X reads in a preview line (§2.4). */
-const SPELL_VERB: Record<string, string> = {
-  shieldLowest: 'shields',
-  rallyAtk: 'grants',
-  healMostWounded: 'heals',
-  root: 'roots for',
-  chainLightning: 'deals',
-  extraAttack: 'strikes',
-}
 
 /**
  * Magic boons buff a spell the player has never seen a number for, so the card
  * shows the before → after it is buying (§2.4). Same numbers the battle banner
  * then proves — pick, preview, proof.
  */
-function MagicPreview({ hero, mods, round, boon }: { hero: HeroDef; mods: HeroMods; round: number; boon: TalentNode }) {
-  const base: HeroState = { heroId: hero.id, name: hero.name, factionId: hero.faction as FactionId, level: heroLevel(round), mods }
-  const next: HeroState = { ...base, mods: addMods(mods, boon.mods) }
-  const bits: string[] = []
-  const pair = <T,>(a: T, b: T, text: (a: T, b: T) => string) => {
-    if (a !== b) bits.push(text(a, b))
-  }
-  pair(spellPower(hero, base), spellPower(hero, next), (a, b) => `${SPELL_VERB[hero.spell.id] ?? 'is'} ${a} \u2192 ${b}`)
-  pair(spellCasts(hero, base), spellCasts(hero, next), (a, b) => `casts ${a}\u00d7 \u2192 ${b}\u00d7`)
-  pair(spellCadence(hero, base), spellCadence(hero, next), (a, b) => `every ${a} \u2192 ${b} exchanges`)
-  pair(spellTargets(hero, base), spellTargets(hero, next), (a, b) => `${a} \u2192 ${b} targets`)
-  if (bits.length === 0) return null
-  return (
-    <span className="boon-preview">
-      {hero.spell.name}: {bits.join(', ')}
-    </span>
-  )
-}
-
-function BoonModal({
+function LevelUpModal({
   offers,
   level,
   hero,
@@ -942,7 +912,7 @@ function BoonModal({
   taken,
   onPick,
 }: {
-  offers: TalentNode[]
+  offers: TalentOffer[]
   level: number
   hero: HeroDef
   mods: HeroMods
@@ -955,27 +925,37 @@ function BoonModal({
     // Solid, not translucent: the pick arrives straight off the result screen,
     // and the camp flashing through a see-through scrim reads as a glitch.
     <div className="scrim scrim-solid">
-      <div className="sheet">
+      <div className="sheet levelup-sheet">
         <div className="center">
           <div className="eyebrow">Level {level}</div>
-          <h2>Choose a path</h2>
+          <h2>Spend a point</h2>
         </div>
         <PathColumns talentsTaken={taken} />
-        {offers.map((b) => (
-          <button key={b.id} className="boon" style={{ ['--bc' as string]: branchColor(b.branch) }} onClick={() => onPick(b.id)}>
-            <span className="boon-branch">
-              {b.branch}
-              {b.tier === 5 ? ' \u00b7 capstone' : ''}
-            </span>
-            <span className="boon-advance">
-              advances {b.branch} to {pathTitle(picks[b.branch] + 1)}
-            </span>
-            <strong>{b.name}</strong>
-            <span className="small dim">{b.text}</span>
-            {b.branch === 'magic' && <MagicPreview hero={hero} mods={mods} round={round} boon={b} />}
-          </button>
+
+        {/* Each branch's *actual* next node — no draw. A fork tier shows both
+            sides, and taking one locks the other for the run (§2.3). */}
+        {offers.map((offer) => (
+          <div key={offer.branch} className="levelup-branch" style={{ ['--bc' as string]: branchColor(offer.branch) }}>
+            <div className="levelup-branch-head">
+              <span className="boon-branch">{offer.branch}</span>
+              <span className="boon-advance">
+                to {pathTitle(picks[offer.branch] + 1)}
+                {offer.options.length > 1 ? ' \u00b7 choose one' : ''}
+              </span>
+            </div>
+            {offer.options.map((node) => (
+              <button key={node.id} className="boon" style={{ ['--bc' as string]: branchColor(node.branch) }} onClick={() => onPick(node.id)}>
+                <strong>
+                  {node.name}
+                  {node.heroId ? ' \u2605' : ''}
+                </strong>
+                <span className="small dim">{node.text}</span>
+                {node.branch === 'magic' && <MagicPreview hero={hero} mods={mods} round={round} boon={node} />}
+              </button>
+            ))}
+          </div>
         ))}
-        <div className="center tiny dim">Boons are permanent for this run.</div>
+        <div className="center tiny dim">Permanent for this run.</div>
       </div>
     </div>
   )

@@ -3146,3 +3146,175 @@ h3 {
 .fb-note {
   white-space: nowrap;
 }
+
+/* ── War Council (Design Notes 05 §4) ────────────────────────────────────── */
+
+.council {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+.council-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  min-height: 0;
+  overflow-y: auto;
+}
+.council-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.council-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 0 2px 2px;
+  border-bottom: 1px solid color-mix(in srgb, var(--bc) 40%, transparent);
+}
+.council-branch {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bc);
+}
+.council-depth {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dim);
+}
+
+/* A fork's two options sit side by side so the choice reads as a choice. */
+.council-tier {
+  display: grid;
+  gap: 3px;
+}
+.council-tier[data-fork] {
+  grid-template-columns: 1fr 1fr;
+}
+
+.council-node {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: 34px;
+  text-align: left;
+  padding: 4px 5px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: #ffffff06;
+  color: var(--dim);
+  font-size: 9.5px;
+  line-height: 1.12;
+  font-weight: 700;
+  cursor: pointer;
+}
+/* Names wrap rather than clip: a fork column is ~55px wide and "Cleaving
+   Advance" has to survive it. §8.1 asks for readable, not merely present. */
+.council-node-name {
+  display: block;
+  overflow-wrap: anywhere;
+  padding-right: 8px;
+}
+.council-tier[data-fork] .council-node {
+  font-size: 8.5px;
+  padding: 4px 4px;
+}
+.council-node[data-state='taken'] {
+  border-color: var(--bc);
+  background: color-mix(in srgb, var(--bc) 22%, transparent);
+  color: #fff;
+}
+/* The one node a point buys right now — the only thing that should pulse. */
+.council-node[data-state='next'] {
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 12%, transparent);
+  color: var(--gold);
+}
+.council-node[data-state='locked'],
+.council-node[data-state='feat'] {
+  opacity: 0.4;
+}
+.council-node[data-open] {
+  outline: 1px solid var(--gold);
+  outline-offset: 1px;
+}
+.council-tick,
+.council-lock,
+.council-star {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  font-size: 8px;
+  line-height: 1;
+}
+.council-star {
+  top: auto;
+  bottom: 2px;
+  color: var(--gold);
+}
+
+.council-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: none;
+  padding: 8px 10px;
+  border-radius: var(--fx-radius);
+  border: 1px solid color-mix(in srgb, var(--bc) 50%, transparent);
+  background: color-mix(in srgb, var(--bc) 10%, transparent);
+}
+.council-detail-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.council-sig {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Tabs on the hero sheet. */
+.tabs {
+  display: flex;
+  gap: 4px;
+}
+.tab {
+  flex: 1;
+  padding: 6px 8px;
+  border-radius: var(--fx-radius);
+  border: 1px solid var(--line);
+  background: #ffffff06;
+  color: var(--dim);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.tab[data-on='true'] {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 12%, transparent);
+}
+
+/* Level-up: one block per branch, both fork options inside it. */
+.levelup-sheet {
+  gap: 8px;
+}
+.levelup-branch {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.levelup-branch-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}

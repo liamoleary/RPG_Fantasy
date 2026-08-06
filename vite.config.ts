@@ -8,13 +8,18 @@ import react from '@vitejs/plugin-react'
    side of a fix. Railway sets RAILWAY_GIT_COMMIT_SHA; a local build falls back
    to git, and a tree with no git at all still produces something honest. */
 function buildId() {
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')
   const fromEnv = process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.VITE_BUILD_ID
-  if (fromEnv) return `${fromEnv.slice(0, 7)}-${new Date().toISOString().slice(0, 10)}`
+  if (fromEnv) return `${fromEnv.slice(0, 7)}-${stamp.slice(0, 10)}`
   try {
     const sha = execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()
-    return `${sha}-${new Date().toISOString().slice(0, 10)}`
+    return `${sha}-${stamp.slice(0, 10)}`
   } catch {
-    return `local-${new Date().toISOString().slice(0, 10)}`
+    /* No SHA available — the Docker build stage has neither .git nor a git
+       binary. Fall back to a timestamp down to the minute, not the day: two
+       deploys on one afternoon must not share an id, or the §6 update check
+       silently decides everyone is current and testers stay on the old build. */
+    return `build-${stamp}`
   }
 }
 

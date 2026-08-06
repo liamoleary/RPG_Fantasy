@@ -14,6 +14,9 @@ self.addEventListener('install', (e) => {
    but a second run — or an offline one — has every card ready. */
 self.addEventListener('message', (e) => {
   const data = e.data
+  /* §6: the update toast asks a waiting worker to take over now. Without this
+     the new worker idles until every tab closes, which on a phone is never. */
+  if (data?.type === 'skip-waiting') return void self.skipWaiting()
   if (!data || data.type !== 'warm-art' || !Array.isArray(data.urls)) return
   e.waitUntil(
     caches.open(CACHE).then(async (c) => {

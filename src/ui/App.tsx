@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { FACTION_BY_ID } from '../data/index'
 import { player } from '../engine/run'
 import { useGame } from '../state/store'
@@ -7,9 +7,18 @@ import { HomeScreen } from './HomeScreen'
 import { MusterScreen } from './MusterScreen'
 import { ResultScreen, RunOverScreen } from './ResultScreen'
 import './styles.css'
+import { applyUpdate, onUpdateAvailable } from '../net/version'
 
 export function App() {
   const { run, screen, save, playerBattle } = useGame()
+  const [updateReady, setUpdateReady] = useState(false)
+
+  // §6: one toast, dismissible, never a modal. A tester mid-run should not be
+  // interrupted to take a deploy.
+  useEffect(() => {
+    onUpdateAvailable(() => setUpdateReady(true))
+    return () => onUpdateAvailable(null)
+  }, [])
 
   // Faction theming is systemic: one set of custom properties reskins
   // camp, cards, spell banners and buttons (§11.2).
@@ -45,6 +54,12 @@ export function App() {
         <ResultScreen run={run} />
       ) : (
         <RunOverScreen run={run} />
+      )}
+
+      {updateReady && (
+        <button className="update-toast" onClick={() => void applyUpdate()}>
+          New version — tap to update
+        </button>
       )}
     </div>
   )

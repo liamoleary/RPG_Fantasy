@@ -8,12 +8,14 @@
  * API must be mounted above it.
  */
 import express from 'express'
+import { readFileSync } from 'node:fs'
 import helmet from 'helmet'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { dbHealth } from './db.js'
 import { accountRoutes } from './routes/account.js'
 import { feedbackRoutes } from './routes/feedback.js'
+import { adminRoutes } from './routes/admin.js'
 import { runRoutes } from './routes/runs.js'
 import { saveRoutes } from './routes/save.js'
 
@@ -59,6 +61,22 @@ export function createApp({ dist = DIST } = {}) {
    * Railway restarts a service that fails its healthcheck, and the game is fully
    * playable without persistence (§2).
    */
+  /* §6: the deployed build id, read once off disk. A stale PWA polls this and
+     shows an update toast when it finds itself behind — silently running old
+     balance is the classic playtest data-poisoner. */
+  let cachedBuildId = null
+  app.get('/api/version', (_req, res) => {
+    if (cachedBuildId === null) {
+      try {
+        cachedBuildId = readFileSync(path.join(dist, 'build-id.txt'), 'utf8').trim()
+      } catch {
+        cachedBuildId = 'unknown'
+      }
+    }
+    res.setHeader('Cache-Control', 'no-store')
+    res.json({ buildId: cachedBuildId })
+  })
+
   app.get('/healthz', async (_req, res) => {
     res.status(200).json({ ok: true, service: 'bannerfell', db: await dbHealth() })
   })
@@ -67,6 +85,7 @@ export function createApp({ dist = DIST } = {}) {
   app.use('/api', saveRoutes())
   app.use('/api', feedbackRoutes())
   app.use('/api', runRoutes())
+  app.use('/api', adminRoutes())
 
   // Unmatched /api paths must 404 as JSON rather than falling through to the
   // SPA — a client fetching a typo'd endpoint should not get index.html back.

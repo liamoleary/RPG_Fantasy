@@ -5,23 +5,40 @@
    ───────────────────────────────────────────────────────────────────────── */
 
 :root {
-  --bg: #0c0d13;
-  --bg-2: #141621;
-  --panel: #1b1e2c;
-  --panel-2: #232739;
-  --line: #333852;
-  --ink: #e8e6f0;
-  --ink-dim: #9a9ab5;
-  --gold: #e8c05a;
+  /* Retuned for the v2 art (PLAN_ART_AND_THEME §4). The plates are warm and
+     bright — lavender-grey midtones over #483030 browns, and no pure black
+     anywhere in them. The old chrome was blue-biased near-black, which read as
+     a different product wrapped around them. Same darkness, hue moved from
+     blue to plum, so the art pops like a gallery wall instead of fighting the
+     frame. */
+  --bg: #171320;
+  --bg-2: #1e1829;
+  --panel: #241d30;
+  --panel-2: #322843;
+  --line: #4a3a52;
+  --ink: #f3ede4;
+  --ink-dim: #a99bb4;
+  --gold: #efc76b;
   /* One colour for "this number is bigger than the card says" (DN03 §2.1). */
   --buff: #ffe08a;
-  --danger: #d9534f;
-  --good: #5cb87f;
+  --danger: #e0685f;
+  --good: #6fc98f;
 
-  --fx-primary: #5b86b8;
-  --fx-secondary: #e0b352;
-  --fx-accent: #8fb6e2;
-  --fx-radius: 4px;
+  /* The warm maroon the art outlines with. Card borders and anything that
+     wants to read as "drawn" use this rather than black or cold slate. */
+  --stroke-ink: #4a2f38;
+  /* Shadows follow the art too: a plum-black shadow under a warm plate, never
+     a neutral var(--shadow) hole. */
+  --shadow: #120a16;
+  /* Mirrors ART_OBJECT_POSITION so CSS-side crops cannot drift from the TS
+     constant. Faces sit high in frame; centring decapitates them. */
+  --art-pos: 50% 8%;
+
+  --fx-primary: #6f9ed0;
+  --fx-secondary: #f0c96b;
+  --fx-accent: #a9c9ea;
+  /* The art is chunky and rounded; 4px corners looked like a spreadsheet. */
+  --fx-radius: 10px;
 
   --tap: 44px;
   /* Cards are 4:5, so their WIDTH sets the height of every board row. Capping
@@ -122,7 +139,7 @@ button {
   cursor: default;
 }
 .btn-primary {
-  background: linear-gradient(180deg, var(--fx-primary), color-mix(in srgb, var(--fx-primary) 62%, #000));
+  background: linear-gradient(180deg, var(--fx-primary), color-mix(in srgb, var(--fx-primary) 62%, var(--shadow)));
   border-color: var(--fx-accent);
   color: #fff;
 }
@@ -277,7 +294,7 @@ h3 {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--fc) 30%, #000);
+  background: color-mix(in srgb, var(--fc) 30%, var(--shadow));
   color: var(--fc);
   flex: none;
 }
@@ -320,7 +337,7 @@ h3 {
   border-radius: calc(var(--fx-radius) + 6px);
   border: 1px solid var(--line);
   overflow: hidden;
-  background: #0b111d;
+  background: var(--bg-2);
   display: grid;
   place-items: center;
   color: var(--fc);
@@ -357,7 +374,7 @@ h3 {
   font-size: 13px;
   font-weight: 800;
   text-align: center;
-  text-shadow: 0 2px 6px #000;
+  text-shadow: 0 2px 6px var(--shadow);
 }
 .choice-lock {
   position: absolute;
@@ -436,7 +453,7 @@ h3 {
   border-radius: var(--fx-radius);
   border: 1px solid color-mix(in srgb, var(--fc) 60%, transparent);
   overflow: hidden;
-  background: #0b111d;
+  background: var(--bg-2);
   display: grid;
   place-items: center;
   color: var(--fc);
@@ -631,14 +648,14 @@ h3 {
   border-radius: 50%;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--fc) 70%, transparent);
-  background: #0b111d;
+  background: var(--bg-2);
   display: grid;
   place-items: center;
   color: var(--fc);
 }
 /* Chips are 26px — crop tighter to the face than the full card does. */
 .banner-face .plate {
-  object-position: 50% 5% !important;
+  object-position: 50% 5% !important; /* tighter than --art-pos: these are small circular faces */
 }
 
 /* ── stack cards ────────────────────────────────────────────────────────── */
@@ -694,7 +711,7 @@ h3 {
   border-radius: 6px;
   overflow: hidden;
   border: 1px solid var(--gold);
-  box-shadow: 0 10px 28px -8px #000, 0 0 0 1px var(--gold);
+  box-shadow: 0 10px 28px -8px var(--shadow), 0 0 0 1px var(--gold);
   pointer-events: none;
   opacity: 0.92;
 }
@@ -832,7 +849,7 @@ h3 {
   inset: 0;
   z-index: 0;
   overflow: hidden;
-  background: #0b111d;
+  background: var(--bg-2);
 }
 .card-scrim {
   position: absolute;
@@ -894,7 +911,7 @@ h3 {
   text-align: center;
   font-weight: 700;
   color: #fff;
-  text-shadow: 0 1px 2px #000;
+  text-shadow: 0 1px 2px var(--shadow);
   max-width: 100%;
   overflow: hidden;
   display: -webkit-box;
@@ -916,7 +933,7 @@ h3 {
   font-weight: 800;
   display: grid;
   place-items: center;
-  text-shadow: 0 1px 2px #000;
+  text-shadow: 0 1px 2px var(--shadow);
 }
 /* Row eligibility, on every card, opposite the count badge (§1.4). */
 .row-glyph {
@@ -946,7 +963,7 @@ h3 {
   z-index: 3;
   top: 3px;
   right: 4px;
-  text-shadow: 0 1px 3px #000;
+  text-shadow: 0 1px 3px var(--shadow);
 }
 .chips {
   display: flex;
@@ -954,7 +971,7 @@ h3 {
   gap: 3px;
   font-size: 10px;
   font-weight: 800;
-  text-shadow: 0 1px 2px #000, 0 0 4px #000;
+  text-shadow: 0 1px 2px var(--shadow), 0 0 4px var(--shadow);
 }
 .stack .chips {
   padding: 1px 5px;
@@ -974,7 +991,7 @@ h3 {
 .chip-atk[data-buff='true'],
 .chip-hp[data-buff='true'] {
   color: var(--buff);
-  text-shadow: 0 1px 2px #000, 0 0 6px color-mix(in srgb, var(--buff) 70%, transparent);
+  text-shadow: 0 1px 2px var(--shadow), 0 0 6px color-mix(in srgb, var(--buff) 70%, transparent);
 }
 .hpbar {
   position: absolute;
@@ -1053,7 +1070,7 @@ h3 {
   aspect-ratio: 4 / 5;
   max-height: calc(var(--card-max) * 1.05);
   overflow: hidden;
-  background: #0b111d;
+  background: var(--bg-2);
   margin-bottom: 2px;
 }
 .offer-art::after {
@@ -1121,7 +1138,7 @@ h3 {
   z-index: 3;
   top: 3px;
   left: 4px;
-  text-shadow: 0 1px 3px #000;
+  text-shadow: 0 1px 3px var(--shadow);
   font-size: 9px;
   font-weight: 800;
   color: var(--ink-dim);
@@ -1152,7 +1169,7 @@ h3 {
   border-radius: calc(var(--fx-radius) + 4px);
   border: 1px solid color-mix(in srgb, var(--sc) 70%, transparent);
   overflow: hidden;
-  background: #0b111d;
+  background: var(--bg-2);
   display: grid;
   place-items: center;
   color: color-mix(in srgb, var(--sc) 70%, #fff);
@@ -1174,7 +1191,7 @@ h3 {
   border-radius: 3px;
   border: 1px solid color-mix(in srgb, var(--sc) 60%, transparent);
   overflow: hidden;
-  background: #0b111d;
+  background: var(--bg-2);
   display: grid;
   place-items: center;
   color: color-mix(in srgb, var(--sc) 70%, #fff);
@@ -1303,7 +1320,7 @@ h3 {
   border: 1px solid #f0d68d;
   background: linear-gradient(180deg, var(--gold), #a8802c);
   color: #23180a;
-  box-shadow: 0 2px 8px -2px #000;
+  box-shadow: 0 2px 8px -2px var(--shadow);
 }
 .promote-tap[data-state='soon'] {
   background: var(--panel-2);
@@ -1342,11 +1359,11 @@ h3 {
   flex: none;
   display: grid;
   place-items: center;
-  background: #0b111d;
+  background: var(--bg-2);
   border: 1px solid #f0d68d;
 }
 .promote-face .plate {
-  object-position: 50% 5% !important;
+  object-position: 50% 5% !important; /* tighter than --art-pos: these are small circular faces */
 }
 .promote-why {
   display: block;
@@ -1703,7 +1720,7 @@ h3 {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--fc) 30%, #000);
+  background: color-mix(in srgb, var(--fc) 30%, var(--shadow));
   color: var(--fc);
 }
 .sheet-actions {
@@ -1934,7 +1951,7 @@ h3 {
   border-radius: var(--fx-radius);
   border: 1px solid color-mix(in srgb, var(--sc) 65%, transparent);
   overflow: hidden;
-  background: #0b111d;
+  background: var(--bg-2);
   display: grid;
   place-items: center;
   color: color-mix(in srgb, var(--sc) 70%, #fff);
@@ -1986,7 +2003,7 @@ h3 {
   transform: translateX(-50%);
   font-weight: 900;
   font-size: 15px;
-  text-shadow: 0 2px 4px #000;
+  text-shadow: 0 2px 4px var(--shadow);
   animation: floatUp 0.75s ease forwards;
   pointer-events: none;
   z-index: 5;
@@ -2195,8 +2212,8 @@ h3 {
   display: grid;
   place-items: center;
   color: var(--fc);
-  -webkit-mask-image: radial-gradient(120% 100% at 40% 40%, #000 45%, transparent 78%);
-  mask-image: radial-gradient(120% 100% at 40% 40%, #000 45%, transparent 78%);
+  -webkit-mask-image: radial-gradient(120% 100% at 40% 40%, var(--shadow) 45%, transparent 78%);
+  mask-image: radial-gradient(120% 100% at 40% 40%, var(--shadow) 45%, transparent 78%);
 }
 .stage-art .plate {
   object-position: 50% 12% !important;
@@ -2301,7 +2318,7 @@ h3 {
   border-radius: calc(var(--fx-radius) + 6px);
   border: 1px solid var(--line);
   overflow: hidden;
-  background: #0b111d;
+  background: var(--bg-2);
   display: grid;
   place-items: center;
   color: var(--fc);
@@ -2336,7 +2353,7 @@ h3 {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-shadow: 0 2px 6px #000;
+  text-shadow: 0 2px 6px var(--shadow);
 }
 .duel-hp {
   position: absolute;
@@ -2357,7 +2374,7 @@ h3 {
   left: 6px;
   font-size: 16px;
   color: var(--gold);
-  text-shadow: 0 2px 6px #000;
+  text-shadow: 0 2px 6px var(--shadow);
 }
 .duel-mid {
   display: grid;
@@ -2465,12 +2482,12 @@ h3 {
   font-weight: 900;
   letter-spacing: -2px;
   color: #cf8f4e;
-  text-shadow: 0 1px 2px #000, 0 0 5px #00000099;
+  text-shadow: 0 1px 2px var(--shadow), 0 0 5px var(--shadow)99;
   pointer-events: none;
 }
 .rank-pips[data-rank='2'] {
   color: var(--gold);
-  text-shadow: 0 1px 2px #000, 0 0 7px color-mix(in srgb, var(--gold) 60%, transparent);
+  text-shadow: 0 1px 2px var(--shadow), 0 0 7px color-mix(in srgb, var(--gold) 60%, transparent);
 }
 .rank-flash {
   animation: rankStamp 700ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
@@ -2909,7 +2926,7 @@ h3 {
   resize: none;
   border-radius: var(--fx-radius);
   border: 1px solid var(--line);
-  background: #00000030;
+  background: var(--shadow)30;
   color: var(--ink);
   padding: 8px;
   font: inherit;
@@ -3010,10 +3027,13 @@ h3 {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  /* Was pinned above the action bar, which put an informational toast in the
-     one strip of screen every critical button lives in. Nothing but the action
-     bar belongs in the thumb zone. */
-  top: calc(env(safe-area-inset-top, 0px) + 10px);
+  /* Sits above the action bar but well clear of it. Moving it to the top was an
+     over-correction: it never actually overlapped the buttons — measured, the
+     bar's top edge and the toast's bottom edge were 16px apart — and at the top
+     it covered the title instead. 88px clears the bar (button bottom sits ~80px
+     up once the 24px gesture floor and screen padding are counted) while
+     staying far outside the ~24px strip the OS reserves. */
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 88px);
   z-index: 60;
   border: 1px solid color-mix(in srgb, var(--gold) 55%, transparent);
   background: #142034f2;
@@ -3022,7 +3042,7 @@ h3 {
   font-size: 13px;
   border-radius: 999px;
   padding: 9px 16px;
-  box-shadow: 0 6px 20px #00000066;
+  box-shadow: 0 6px 20px var(--shadow)66;
   cursor: pointer;
 }
 

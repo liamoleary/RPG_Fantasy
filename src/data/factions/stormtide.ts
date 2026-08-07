@@ -7,8 +7,8 @@ export const STORMTIDE: FactionDef = {
   mechanicText: 'When a stack takes casualties and survives, it permanently gains +ATK for the battle.',
   blurb: 'Orc and troll clans riding storms. Wants the fight bloody and fast.',
   unlockRenown: 0,
-  colors: { primary: '#2f9296', secondary: '#c2392f', accent: '#54d6d1', ink: '#08181a' },
-  shape: '2px',
+  colors: { primary: '#3aa9ad', secondary: '#d9564a', accent: '#6ae3de', ink: '#08181a' },
+  shape: '6px',
   nameBank: ['Karrug', 'Vaska', 'Drok', 'Muraga', 'Skallt', 'Yenna', 'Torgh', 'Rhuza', 'Ogrim', 'Nazka'],
   titleBank: ['Stormfang', 'the Drowned', 'Saltborn', 'Thunderjaw', 'Wavecaller', 'of the Black Surf'],
 }

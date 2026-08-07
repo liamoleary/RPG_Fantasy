@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { HERO_ART, HERO_ART_2X, UNIT_ART } from '../src/data/art'
@@ -6,10 +6,17 @@ import { ALL_UNITS, HEROES, unit } from '../src/data/index'
 import { projectileOf } from '../src/ui/StackCard'
 
 /**
- * Art and data must never drift. A unit added later without a plate should
- * fail here, loudly, rather than render a blank card in someone's run.
+ * Art and data must never drift, but the rule runs one way only:
+ * **every unit must have art; art without a unit is fine.** Plates drawn ahead
+ * of the game live in public/art/_unassigned as future content inventory
+ * (PLAN_ART_AND_THEME §2b) and are exempt from every check here — they are
+ * referenced by nothing, need no UnitDef, and never ship.
+ *
+ * A unit added later without a plate still fails here, loudly, rather than
+ * rendering a blank card in someone's run.
  */
 const PUBLIC = join(import.meta.dirname, '..', 'public')
+const UNASSIGNED = join(PUBLIC, 'art', '_unassigned')
 
 describe('card art manifest', () => {
   it('has a plate for every unit', () => {
@@ -29,6 +36,21 @@ describe('card art manifest', () => {
     const heroIds = new Set(HEROES.map((h) => h.id))
     expect(Object.keys(UNIT_ART).filter((id) => !unitIds.has(id))).toEqual([])
     expect(Object.keys(HERO_ART).filter((id) => !heroIds.has(id))).toEqual([])
+  })
+
+  it('leaves _unassigned art alone — no unit needed, nothing shipped', () => {
+    // The folder is optional; the exemption is what matters, not its contents.
+    if (!existsSync(UNASSIGNED)) return
+    const parked = readdirSync(UNASSIGNED).filter((f) => f.endsWith('.webp'))
+    const manifest = new Set([
+      ...Object.values(UNIT_ART),
+      ...Object.values(HERO_ART),
+      ...Object.values(HERO_ART_2X),
+    ])
+    // Referenced by nothing: that is what keeps them inert, and what lets the
+    // build drop them instead of shipping ~1.5 MB of unused plates to a phone.
+    const referenced = parked.filter((f) => manifest.has(`/art/_unassigned/${f}`))
+    expect(referenced, `parked art must not be in the manifest: ${referenced.join(', ')}`).toEqual([])
   })
 
   it('points every entry at a file that actually shipped', () => {

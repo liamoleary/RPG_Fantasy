@@ -2,7 +2,7 @@
    itself is network-first — index.html points at hashed bundles, and serving a
    stale copy would pin returning players to an old deploy forever.
    Bump CACHE to invalidate. */
-const CACHE = 'bannerfell-v5'
+const CACHE = 'bannerfell-v6'
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg']
 
 self.addEventListener('install', (e) => {
@@ -10,7 +10,7 @@ self.addEventListener('install', (e) => {
 })
 
 /* The app hands us the plate list once it is idle (see src/ui/preload.ts).
-   Keeping it out of `install` means ~9 MB of art never blocks first paint,
+   Keeping it out of `install` means 3.2 MB of art never blocks first paint,
    but a second run — or an offline one — has every card ready. */
 self.addEventListener('message', (e) => {
   const data = e.data

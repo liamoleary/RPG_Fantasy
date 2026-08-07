@@ -7,13 +7,8 @@ export const VANGUARD: FactionDef = {
   mechanicText: 'Armor that soaks damage from each incoming attack, then wears down by 1.',
   blurb: 'Shield walls, cannons and oaths. Wins long battles by refusing to die.',
   unlockRenown: 0,
-  /* `ink` is currently referenced nowhere outside these files — PLAN §4 asked
-     whether it drives text or borders over art, and the answer is that it
-     drives nothing. Left as-is rather than retuned to --stroke-ink, so a future
-     use starts from a deliberate choice instead of a value that was changed
-     blind. */
-  colors: { primary: '#6f9ed0', secondary: '#f0c96b', accent: '#a9c9ea', ink: '#0d1622' },
-  shape: '10px',
+  colors: { primary: '#5b86b8', secondary: '#e0b352', accent: '#8fb6e2', ink: '#0d1622' },
+  shape: '4px',
   nameBank: ['Halvard', 'Dagna', 'Roderic', 'Ingrith', 'Tormund', 'Mabel', 'Osric', 'Brynja', 'Aldric', 'Sigrun'],
   titleBank: ['Stonewarden', 'Hammerfast', 'of the Long Wall', 'Ironvow', 'Shieldborn', 'the Oathkeeper'],
 }

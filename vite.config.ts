@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process'
-import { rmSync, writeFileSync } from 'node:fs'
+import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -36,16 +36,6 @@ export default defineConfig({
       name: 'bannerfell-build-id',
       writeBundle() {
         writeFileSync(resolve('dist', 'build-id.txt'), BUILD_ID)
-      },
-    },
-    {
-      /* public/art/_unassigned holds plates drawn for units that do not exist
-         in the game yet. Nothing references them, but publicDir copies
-         everything — so without this they are 1.5 MB of dead weight shipped to
-         every phone. They stay in the repo, they just do not ship. */
-      name: 'bannerfell-drop-unassigned-art',
-      writeBundle() {
-        rmSync(resolve('dist', 'art', '_unassigned'), { recursive: true, force: true })
       },
     },
   ],

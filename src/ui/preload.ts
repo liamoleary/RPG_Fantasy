@@ -32,19 +32,11 @@ export function unitArtFor(unitIds: string[]): string[] {
 /**
  * Hand the whole plate list to the service worker once the app is idle, so a
  * second run is instant and the PWA works offline. Deliberately not part of
- * the worker's install step: it is an acceptable cache footprint but not an
- * acceptable thing to block first paint on.
- *
- * The v2 plates are roughly 2.5x the weight of the ones they replaced — the
- * full set is about 9 MB, not the 3.2 MB this comment used to claim. That is
- * fine over wifi and rude over a metered connection, so a device that has
- * asked for less data does not get warmed at all. It still plays; it just
- * fetches each plate when it first needs it.
+ * the worker's install step: 3.2 MB is an acceptable cache footprint but not
+ * an acceptable thing to block first paint on.
  */
 export function warmArtCache() {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return
-  const conn = (navigator as { connection?: { saveData?: boolean; effectiveType?: string } }).connection
-  if (conn?.saveData === true || /^(slow-)?2g$/.test(conn?.effectiveType ?? '')) return
   const urls = [...Object.values(UNIT_ART), ...Object.values(HERO_ART), ...Object.values(HERO_ART_2X)]
   const send = () => {
     navigator.serviceWorker.ready

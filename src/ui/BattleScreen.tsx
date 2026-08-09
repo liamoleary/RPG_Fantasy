@@ -415,7 +415,9 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
   const totals = frames[frames.length - 1].spent
 
   return (
-    <div className="screen">
+    // Battle has no War Camp to pay for, so both boards spend that room on
+    // themselves (DN07 §3).
+    <div className="screen screen-battle">
       <div className="center dim tiny" style={{ height: 20 }}>
         Round {run.round}
       </div>

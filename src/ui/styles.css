@@ -2173,6 +2173,88 @@ h3 {
 
 /* ── battle ─────────────────────────────────────────────────────────────── */
 
+/* The scale-up (DN07 §3). Battle carries no camp, so the room Muster spends
+   below the board goes into the boards themselves — four rows of it, which is
+   why the gains show up as tighter gutters rather than as one big jump. At
+   390pt four-across is still the binding constraint on both screens, so a
+   battle card is ~91px against Muster's 89; the rest of the increase is real
+   on wider and taller devices, where --card-max stops being the ceiling. */
+.screen-battle {
+  padding-left: 6px;
+  padding-right: 6px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+/* Sized the same way the camp hand is (§3, and the lesson from commit 2): the
+   four rows take whatever height is left after the hero stages and the pinned
+   controls, and a card's width follows from 4:5. Tuning a fixed card size per
+   breakpoint is what left the old battle screen clipping its own action bar on
+   a 320pt phone; this cannot, because the cards are what gives way. */
+.screen-battle .battlefield {
+  min-height: 0;
+  justify-content: flex-start;
+}
+.screen-battle .battlefield > .board {
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 4px;
+}
+.screen-battle .board-row {
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 4px;
+  /* ...but never taller than four-across allows, or the cards would overlap on
+     a tall narrow screen. 0.3125 = 1.25 / 4, i.e. the row height at which four
+     cards exactly fill the width. */
+  max-height: calc((min(100vw, 520px) - 24px) * 0.3125);
+}
+.screen-battle .board-row > .stack,
+.screen-battle .board-row > .stack-wrap,
+.screen-battle .board-row > .cell,
+.screen-battle .board-row > .slot {
+  flex: 0 0 auto;
+  width: auto;
+  height: 100%;
+  aspect-ratio: 4 / 5;
+}
+/* Bigger cards carry bigger chrome — the numbers have to stay readable at
+   arm's length while the replay runs, which is the one moment nobody is
+   holding the phone close. */
+.screen-battle .stack[data-size='board'] {
+  --card-radius: 16px;
+  --card-pad: 4px;
+  --chip-fs: 12px;
+  --chip-h: 19px;
+  --mark-fs: 11px;
+}
+/* Damage floats and banners scale with them (§3). */
+.screen-battle .float {
+  font-size: 18px;
+}
+.screen-battle .float[data-size='md'] {
+  font-size: 23px;
+}
+.screen-battle .float[data-size='lg'] {
+  font-size: 31px;
+}
+/* Every pixel not spent on a card is a pixel the cards do not get, and with
+   four rows on screen each one costs 4x. So the battlefield's own furniture
+   pays first: tighter row gaps, the FRONT/BACK overline reduced to clearance,
+   and the enemy's stage shrunk — DN04 §9 already says their board matters more
+   than their face, and yours keeps its full height. */
+.screen-battle .battlefield {
+  gap: 5px;
+}
+.screen-battle .board-row[data-tag='true'] {
+  padding-top: 4px;
+}
+.screen-battle .hero-stage[data-mirror='true'] {
+  min-height: 50px;
+}
+.screen-battle .hero-stage[data-mirror='true'] .stage-art {
+  height: 50px;
+}
+
 .battlefield {
   display: flex;
   flex-direction: column;

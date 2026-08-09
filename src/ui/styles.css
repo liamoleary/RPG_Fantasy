@@ -1,65 +1,70 @@
 /* ─────────────────────────────────────────────────────────────────────────
-   BANNERFELL — Daybreak. Portrait, thumb-first, art-first.
+   BANNERFELL — plum-dark. Portrait, thumb-first, art-first.
    Faction identity is systemic: every faction sets --fx-* custom properties
    and the whole app reskins (§11.2).
 
-   Design Notes 07 §4. The chrome used to be a cold near-black built for oil
-   paintings in a dark tavern. The v2 art lives in daylight — dominant
-   neutrals are warm lavender-greys, skies slate-blue and sage, highlights
-   cream, and every line drawn in warm maroon. In near-black chrome that reads
-   as two products stapled together, so the app goes light: the whole product
-   becomes the storybook page the art was drawn on.
+   Design Notes 07 §4 proposed going light — the storybook page the art was
+   drawn on — and it was tried and rejected in play: the white ground was not
+   what the game wants to be. So the app is dark, and the dark is the one
+   PLAN_ART_AND_THEME §4 sampled *from this art*: same darkness as the
+   original chrome, hue moved off cold blue and onto warm plum, so the plates
+   read like paintings on a gallery wall rather than fighting the frame.
 
-   Two rules make the swap safe, and both are load-bearing:
+   Two rules survive the reversal, and both are load-bearing:
      1. Every colour resolves through a token here. There are no hex literals
         past this block except the FX palette below, which is also tokens.
      2. Anything that sits ON a plate (chips, pills, badges) is drawn on
         --veil, not on the page. Its contrast is against the ink backing, so
         changing the ground underneath cannot make a stat number illegible.
+
+   Those two are why this swap was a token edit rather than a rewrite, and
+   why going back the other way would be one too.
    ───────────────────────────────────────────────────────────────────────── */
 
 :root {
-  /* ── the storybook page ─────────────────────────────────────────────── */
-  --page: #ece7ef; /* warm lavender-white                                  */
+  /* ── the ground ─────────────────────────────────────────────────────── */
+  --page: #171320; /* warm plum-dark, not blue-black                       */
   --bg: var(--page);
-  --bg-2: #f5f1f6; /* the lighter pool the page gradient rises to          */
-  --panel: #f6f2ea; /* cream card/panel face, from the art's highlights    */
-  --panel-2: #ddd5e2; /* recessed: camp sheet, ladder strip                */
-  --line: #c6bbcb;
-  --ink: #3a2b38; /* primary text — the art's own dark maroon-brown        */
-  --ink-dim: #645668;
-  --gold: #d9a441;
-  /* Gold at text weight on a light ground: #d9a441 on --panel is 2.0:1, which
-     fails. Cost numbers and any other gold *text* use this instead (§4). */
-  --gold-ink: #7f570b;
-  --gold-deep: #b8842c; /* the low stop of a gold button                   */
-  --gold-lite: #f2dfa4; /* its highlight edge                              */
-  --on-gold: #2e2109; /* text on a gold fill                               */
-  /* One colour for "this number is bigger than the card says" (DN03 §2.1).
-     Light, because every place it lands is on a plate or on the battle
-     ground; --buff-ink is the same idea for the few that sit on the page. */
+  --bg-2: #1e1829; /* the pool the page gradient rises to                  */
+  --panel: #241d30;
+  --panel-2: #322843; /* recessed: camp sheet, ladder strip                */
+  --line: #4a3a52;
+  --ink: #f3ede4; /* primary text — warm off-white, never pure            */
+  --ink-dim: #a99bb4;
+  --gold: #efc76b;
+  --gold-deep: #a8802c; /* the low stop of a gold button                   */
+  --gold-lite: #f0d68d; /* its highlight edge                              */
+  --on-gold: #23180a; /* text on a gold fill                               */
+  /* One colour for "this number is bigger than the card says" (DN03 §2.1). */
   --buff: #ffe08a;
-  --buff-ink: #8a5a06;
-  --danger: #c9483f;
-  --good: #3e9463;
-  /* Text-weight variants. An accent tuned to fill a chip or draw a border is
-     rarely the same colour that clears 4.5:1 as 12px type on cream, so every
-     accent that is ever used as *text* has an -ink twin (§4). Under dusk each
-     one resolves back to the full-chroma original, because there the ground is
-     dark and the original is the readable choice. */
-  --danger-ink: #a53229;
-  --stat-atk-ink: #a3540c;
-  --stat-hp-ink: #1f7247;
-  --stat-bul-ink: #235d99;
-  --rank-vet-ink: #8a5a1e;
-  /* Faction colour as text on the page, and as a fallback sigil inside a plate
-     box. --fc is set per-element by the faction; --fx-* is the app-wide theme. */
-  --fx-ink: color-mix(in srgb, var(--fx-accent) 36%, var(--stroke-ink));
-  --fc-ink: color-mix(in srgb, var(--fc, var(--fx-primary)) 45%, var(--stroke-ink));
-  /* The primary button has to hold cream text on a light page, so it mixes
-     down into the ink rather than sitting at full chroma. */
-  --btn-primary-hi: color-mix(in srgb, var(--fx-primary) 60%, var(--stroke-ink));
-  --btn-primary-lo: color-mix(in srgb, var(--fx-primary) 38%, var(--stroke-ink));
+  --danger: #d9534f;
+  --good: #5cb87f;
+  /* Text-weight twins. On a light ground an accent tuned to fill a chip is
+     rarely readable as 12px type, so every accent that is ever used as text
+     has an -ink variant. On a dark ground the full-chroma original IS the
+     readable choice, so each one resolves straight back to it — the variants
+     stay declared rather than being stripped out, because that is the whole
+     mechanism that lets the theme move without touching a component. */
+  --gold-ink: var(--gold);
+  --buff-ink: var(--buff);
+  /* Danger is the one that does not simply resolve back: #d9534f is tuned to
+     fill a button, and as 13px type on --panel-2 it measures 3.5:1. The twin
+     goes *lighter* here, where on a cream page it went darker. */
+  --danger-ink: #ff8f8a;
+  --stat-atk-ink: var(--stat-atk);
+  --stat-hp-ink: var(--stat-hp);
+  --stat-bul-ink: var(--stat-bul);
+  --rank-vet-ink: var(--rank-vet);
+  /* Faction colour as text, and as a fallback sigil inside a plate box.
+     --fc is set per-element by the faction; --fx-* is the app-wide theme. */
+  --fx-ink: var(--fx-accent);
+  --fc-ink: var(--fc, var(--fx-accent));
+  /* Cream on a full-chroma --fx-primary is 3.3:1 — the primary button has
+     always been slightly under, on either ground. It mixes down into the ink
+     and keeps its bright --fx-accent keyline, which reads as *more* of a
+     call to action on a plum page, not less. */
+  --btn-primary-hi: color-mix(in srgb, var(--fx-primary) 62%, var(--stroke-ink));
+  --btn-primary-lo: color-mix(in srgb, var(--fx-primary) 40%, var(--stroke-ink));
 
   --fx-primary: #6f9ed0;
   --fx-secondary: #f0c96b;
@@ -75,11 +80,11 @@
   --veil: rgba(69, 43, 61, 0.88); /* chips and pills over art              */
   --veil-strong: rgba(69, 43, 61, 0.95); /* banners, tooltips over art     */
   --veil-soft: rgba(69, 43, 61, 0.55);
-  --scrim: rgba(58, 43, 56, 0.5); /* behind a modal                        */
-  --shadow-ink: rgba(69, 43, 61, 0.35);
-  --shadow: 0 2px 10px rgba(69, 43, 61, 0.18);
-  /* Faint surface washes. On the old dark ground these were white at 2–20%;
-     on the page they have to be ink at the same strengths or they vanish. */
+  --scrim: rgba(12, 8, 16, 0.62); /* behind a modal                        */
+  --shadow-ink: rgba(11, 6, 14, 0.6);
+  --shadow: 0 2px 12px rgba(11, 6, 14, 0.45);
+  /* Faint surface washes, expressed against --ink so they follow the ground:
+     light films on a dark page, ink films on a light one. */
   --tint-1: color-mix(in srgb, var(--ink) 5%, transparent);
   --tint-2: color-mix(in srgb, var(--ink) 9%, transparent);
   --tint-3: color-mix(in srgb, var(--ink) 15%, transparent);
@@ -102,11 +107,12 @@
   --hit-flash: #ffd9c8;
 
   /* ── the battlefield ────────────────────────────────────────────────────
-     Dawn in camp, dusk on the battlefield (§4): during battle only, the page
-     deepens one step so combat FX keep their punch. Every DN03/04 effect is
-     checked against both grounds. */
-  --dusk: #4a4152;
-  --dusk-2: #38303f;
+     §4's "one step deeper for the fight" survives the reversal, it just has
+     less distance to travel now: camp is plum-dark, battle is night. Enough
+     that glows, lightning and damage floats gain punch when the fighting
+     starts, not so much that it reads as a different app. */
+  --dusk: #0f0b16;
+  --dusk-2: #16101f;
 
   /* ── spell and impact flavour (DN03 §4, DN04 §7, §10) ───────────────────
      Hues sampled from the art. These land on the battlefield's dusk ground or
@@ -179,38 +185,22 @@
      over §6.1's 150px floor, with the third card showing. */
   --hand-card: clamp(96px, min(44vw, calc(150px + (100vh - 740px) * 0.42)), 190px);
   --hand-card: clamp(96px, min(44vw, calc(150px + (100dvh - 740px) * 0.42)), 190px);
-  color-scheme: light;
+  color-scheme: dark;
 }
 
-/* Dusk (§4). Battle deepens the ground one step so combat FX — glows,
-   lightning, damage floats — keep their punch; a lightning bolt on a cream
-   page reads as a smudge. Only the six ground primitives move. Everything
-   derived (--tint-*, --art-void) is expressed against them and follows for
-   free, and everything that sits on a plate rides --veil and does not move at
-   all, which is what stops a stat pill changing legibility between screens. */
+/* Dusk (§4). Battle drops the ground to night so combat FX — glows, lightning,
+   damage floats — gain punch when the fighting starts. Only the ground
+   primitives move; everything derived (--tint-*, --art-void) is expressed
+   against them and follows for free, and everything that sits on a plate rides
+   --veil and does not move at all, which is what stops a stat pill changing
+   legibility between screens. */
 body[data-ground='dusk'] {
-  --page: #4a4152;
-  --bg: #4a4152;
-  --bg-2: #574c62;
-  --panel: #3f3749;
-  --panel-2: #352e3e;
-  --line: #6b5e76;
-  --ink: #f3edf1;
-  --ink-dim: #cdc2d2;
-  /* On a dark ground the full-chroma originals are the readable choice, so
-     every -ink twin resolves straight back to its accent. */
-  --gold-ink: var(--gold);
-  --buff-ink: var(--buff);
-  --danger-ink: var(--danger);
-  --stat-atk-ink: var(--stat-atk);
-  --stat-hp-ink: var(--stat-hp);
-  --stat-bul-ink: var(--stat-bul);
-  --rank-vet-ink: var(--rank-vet);
-  --fx-ink: var(--fx-accent);
-  --fc-ink: var(--fc, var(--fx-accent));
-  --btn-primary-hi: var(--fx-primary);
-  --btn-primary-lo: color-mix(in srgb, var(--fx-primary) 62%, var(--stroke-ink));
-  --shadow-ink: rgba(20, 12, 20, 0.5);
+  --page: var(--dusk);
+  --bg: var(--dusk);
+  --bg-2: var(--dusk-2);
+  --panel: #1a1424;
+  --panel-2: #241c31;
+  --line: #3d3048;
   color-scheme: dark;
 }
 
@@ -507,8 +497,12 @@ h3 {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--fc) 30%, var(--stroke-ink));
-  color: var(--fc-ink);
+  /* The standard ink backing, so the glyph is read against ink rather than
+     against a tint of its own colour — a faction colour at 30% is not a
+     background a faction colour reads on. */
+  background: var(--veil);
+  border: 1px solid color-mix(in srgb, var(--fc) 60%, transparent);
+  color: var(--fc);
   flex: none;
 }
 
@@ -553,7 +547,7 @@ h3 {
   background: var(--art-void);
   display: grid;
   place-items: center;
-  color: var(--fc-ink);
+  color: var(--fc);
   opacity: 0.55;
   filter: saturate(0.7);
   transition: opacity 0.15s ease, filter 0.15s ease;
@@ -671,7 +665,7 @@ h3 {
   background: var(--art-void);
   display: grid;
   place-items: center;
-  color: var(--fc-ink);
+  color: var(--fc);
   transition: width 0.16s ease;
 }
 .hero-art[data-big='true'] {
@@ -884,7 +878,7 @@ h3 {
   background: var(--art-void);
   display: grid;
   place-items: center;
-  color: var(--fc-ink);
+  color: var(--fc);
 }
 /* Chips are 26px — crop tighter to the face than the full card does. */
 .banner-face .plate {
@@ -2095,7 +2089,7 @@ h3 {
   place-items: center;
   border-radius: 50%;
   background: color-mix(in srgb, var(--fc) 30%, var(--stroke-ink));
-  color: var(--fc-ink);
+  color: var(--fc);
 }
 .sheet-actions {
   gap: 6px;
@@ -2646,7 +2640,7 @@ h3 {
   overflow: hidden;
   display: grid;
   place-items: center;
-  color: var(--fc-ink);
+  color: var(--fc);
   -webkit-mask-image: radial-gradient(120% 100% at 40% 40%, var(--stroke-ink) 45%, transparent 78%);
   mask-image: radial-gradient(120% 100% at 40% 40%, var(--stroke-ink) 45%, transparent 78%);
 }
@@ -2756,7 +2750,7 @@ h3 {
   background: var(--art-void);
   display: grid;
   place-items: center;
-  color: var(--fc-ink);
+  color: var(--fc);
 }
 .duel-portrait .plate {
   position: absolute;

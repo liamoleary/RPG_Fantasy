@@ -23,6 +23,25 @@
   --fx-accent: #8fb6e2;
   --fx-radius: 4px;
 
+  /* ── card anatomy v2 (Design Notes 07 §2) ──────────────────────────────
+     The plates are drawn in warm maroon ink — there is no black anywhere in
+     the art — so every outline and every chip backing on a card comes from
+     --stroke-ink rather than from a made-up dark. --on-ink is the cream that
+     sits on top of it; the pair has to hold in both grounds, because the
+     Daybreak swap (§4) changes the page under these chips, not the chips. */
+  --stroke-ink: #452b3d;
+  --on-ink: #f6f2ea;
+  /* Behind a plate while it decodes, and the letterbox if one ever mis-fits. */
+  --art-void: #0b111d;
+  --radius: 16px;
+  /* Stat colours live here so a card, a sheet and a banner can never disagree. */
+  --stat-atk: #ffb46b;
+  --stat-hp: #7fd39a;
+  --stat-bul: #9ecbff;
+  --rank-vet: #cf8f4e;
+  --tier-elite: #c9c9d8;
+  --hit-flash: #ffd9c8;
+
   --tap: 44px;
   /* Cards are 4:5, so their WIDTH sets the height of every board row. Capping
      it against the viewport is what keeps four rows, a hero and an action bar
@@ -758,7 +777,9 @@ h3 {
   /* 4:5 like the painted cards, so empty slots and filled ones line up
      however wide the row gets. */
   aspect-ratio: 4 / 5;
-  border-radius: var(--fx-radius);
+  /* Matches the board card's drawn frame, so a gap in the line reads as a gap
+     in the same row and not as a different kind of object. */
+  border-radius: 14px;
   border: 1px dashed color-mix(in srgb, var(--line) 80%, transparent);
   background: #ffffff06;
   display: grid;
@@ -789,25 +810,62 @@ h3 {
   text-transform: uppercase;
 }
 
-/* The card IS the art window: a 4:5 plate with every bit of chrome layered
-   over it. The faction frame stays on the outside so a Vanguard card still
-   reads blue-and-gold at thumbnail size (GDD §11.2). */
+/* The card IS the art (Design Notes 07 §2). Not an art window inside a frame:
+   a full-bleed 4:5 plate inside a drawn ink outline, with a handful of chips
+   floating on top. The old anatomy — name bar, stat row, faction gradient —
+   was built for 24px procedural sigils and left ~80px of painting on a phone.
+   Everything that used to be furniture is now an overlay, or gone. */
 .stack {
   position: relative;
+  display: block;
   width: 100%;
   aspect-ratio: 4 / 5;
-  border-radius: var(--fx-radius);
-  border: 1px solid var(--sc, var(--line));
-  background: linear-gradient(160deg, color-mix(in srgb, var(--sc) 34%, var(--panel-2)), var(--panel));
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0;
+  /* The art's own linework, so the frame reads as drawn, not manufactured. */
+  border: 2px solid var(--stroke-ink);
+  border-radius: var(--card-radius);
+  background: var(--art-void);
   padding: 0;
   color: var(--ink);
   overflow: hidden;
   transition: transform 0.12s ease, box-shadow 0.12s ease;
+
+  /* One knob per size (§2): every chip below is expressed against these, so
+     board / camp / showcase are the same component and not three layouts. */
+  --card-radius: 14px;
+  --card-pad: 3px;
+  --chip-fs: 10px;
+  --chip-h: 16px;
+  --mark-fs: 9px;
+  --name-fs: 0px;
+}
+/* ~160px: the hand you buy from, so it earns a name plate. */
+.stack[data-size='camp'] {
+  --card-radius: 16px;
+  --card-pad: 5px;
+  --chip-fs: 13px;
+  --chip-h: 21px;
+  --mark-fs: 11px;
+  --name-fs: 12px;
+}
+/* Full width: inspect, and the Legend recap parade (DN06). */
+.stack[data-size='showcase'] {
+  --card-radius: var(--radius);
+  --card-pad: 8px;
+  --chip-fs: 17px;
+  --chip-h: 28px;
+  --mark-fs: 14px;
+  --name-fs: 16px;
+}
+/* Faction identity with no chrome to carry it: a coloured keyline just inside
+   the ink outline, which is enough to read blue/green/teal at 86px. */
+.stack::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--sc) 62%, transparent);
+  pointer-events: none;
 }
 
 /* ── painted plates ─────────────────────────────────────────────────────── */
@@ -832,36 +890,53 @@ h3 {
   inset: 0;
   z-index: 0;
   overflow: hidden;
-  background: #0b111d;
+  background: var(--art-void);
 }
-.card-scrim {
+
+/* Top bar: marks on the left, count on the right. One flex row rather than
+   four independently-pinned chips, which at 86px used to overlap each other. */
+.card-top {
   position: absolute;
-  inset: 0;
-  z-index: 1;
+  z-index: 3;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 3px;
+  padding: var(--card-pad);
   pointer-events: none;
-  background: linear-gradient(transparent 45%, rgba(6, 10, 18, 0.92));
 }
-/* A faction-tinted foot under the scrim: colour identity survives the art. */
-.card-scrim::after {
-  content: '';
+.card-marks {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* The stat pill, bottom-left. The scrim is behind the pill only — never a
+   gradient across the plate (§2). The art is the point. */
+.card-foot {
   position: absolute;
+  z-index: 3;
   left: 0;
   right: 0;
   bottom: 0;
-  height: 34%;
-  background: linear-gradient(transparent, color-mix(in srgb, var(--sc) 42%, transparent));
-  mix-blend-mode: screen;
-  opacity: 0.5;
-}
-.card-foot {
-  position: relative;
-  z-index: 2;
-  width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 1px;
-  padding: 2px 2px 4px;
+  align-items: flex-start;
+  gap: 2px;
+  /* Clears the pooled-HP bar, which lives on the very bottom edge. */
+  padding: var(--card-pad) var(--card-pad) calc(var(--card-pad) + 4px);
+  pointer-events: none;
+}
+/* Camp and showcase cards carry a name, and a name needs something to sit on:
+   a short bottom band — a name plate — not a wash over the whole painting. */
+.stack[data-size='camp'] .card-foot,
+.stack[data-size='showcase'] .card-foot {
+  padding-top: calc(var(--card-pad) * 2.2);
+  background: linear-gradient(transparent, color-mix(in srgb, var(--stroke-ink) 86%, transparent));
 }
 /* Death desaturates the plate rather than hiding it — you can still see who
    fell. Applied once on death, never inside the attack loop. */
@@ -873,20 +948,37 @@ h3 {
   inset: 0;
   z-index: 2;
   pointer-events: none;
-  background: #ffd9c8;
+  background: var(--hit-flash);
   opacity: 0;
   animation: hitFlash 0.3s ease;
 }
+/* Elite tiers colour the drawn frame itself rather than adding a second inner
+   ring — at 86px two concentric 1px rings read as noise, a silver or gold
+   outline reads instantly. */
 .stack[data-tier='4'] {
-  box-shadow: inset 0 0 0 1px #c9c9d8;
+  border-color: color-mix(in srgb, var(--tier-elite) 70%, var(--stroke-ink));
 }
 .stack[data-tier='5'] {
-  box-shadow: inset 0 0 0 1px var(--gold), 0 0 14px -6px var(--gold);
+  border-color: var(--gold);
+  box-shadow: 0 0 14px -6px var(--gold);
 }
 .stack[data-sel='true'] {
   transform: translateY(-4px) scale(1.04);
   box-shadow: 0 0 0 2px var(--gold);
   z-index: 3;
+}
+/* Board cards render no name at all (§2) — the art is the identity, and a 9px
+   label never was. This is the camp / showcase name plate. */
+.stack .stack-name {
+  display: block;
+  font-size: var(--name-fs);
+  line-height: 1.15;
+  text-align: left;
+  color: var(--on-ink);
+  text-shadow: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .stack-name {
   font-size: 9px;
@@ -901,24 +993,35 @@ h3 {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
-.count-badge {
-  position: absolute;
-  z-index: 3;
-  top: 2px;
-  right: 2px;
-  min-width: 19px;
-  height: 17px;
-  padding: 0 3px;
-  border-radius: 9px;
-  background: rgba(11, 17, 29, 0.8);
-  border: 1px solid var(--sc);
-  font-size: 11px;
+/* Every chip on a plate shares one backing: ink at 88%, cream on top, a
+   faction keyline. That is what makes the numbers legible on the palest sky
+   and the darkest bark alike — the contrast is against the ink, not the art
+   (§6.4). Nothing here reads the page colour, so Daybreak cannot break it. */
+.card-top .count-badge,
+.card-marks > .row-glyph,
+.card-marks > .rank-pips,
+.card-marks > .promote-flag,
+.stack .chips {
+  background: color-mix(in srgb, var(--stroke-ink) 88%, transparent);
+  color: var(--on-ink);
+  text-shadow: none;
+}
+.card-top .count-badge {
+  position: relative;
+  top: auto;
+  right: auto;
+  flex: none;
+  min-width: calc(var(--chip-h) + 3px);
+  height: var(--chip-h);
+  padding: 0 4px;
+  border-radius: calc(var(--chip-h) / 2);
+  border: 1px solid color-mix(in srgb, var(--sc) 75%, transparent);
+  font-size: var(--chip-fs);
   font-weight: 800;
   display: grid;
   place-items: center;
-  text-shadow: 0 1px 2px #000;
 }
-/* Row eligibility, on every card, opposite the count badge (§1.4). */
+/* Row eligibility, on every card (§1.4). */
 .row-glyph {
   position: absolute;
   z-index: 3;
@@ -928,18 +1031,18 @@ h3 {
   opacity: 0.7;
   pointer-events: none;
 }
-/* Over a plate the glyph needs its own backing to stay readable. */
-.stack > .row-glyph {
-  top: 2px;
-  left: 2px;
+.card-marks > .row-glyph {
+  position: relative;
+  top: auto;
+  left: auto;
+  flex: none;
   display: grid;
   place-items: center;
-  width: 15px;
-  height: 15px;
-  border-radius: 4px;
-  background: rgba(11, 17, 29, 0.8);
-  border: 1px solid color-mix(in srgb, var(--sc) 60%, transparent);
-  color: #d8dcec;
+  width: var(--chip-h);
+  height: var(--chip-h);
+  border-radius: calc(var(--chip-h) / 2);
+  border: 1px solid color-mix(in srgb, var(--sc) 55%, transparent);
+  font-size: var(--mark-fs);
   opacity: 1;
 }
 .offer-card > .row-glyph {
@@ -957,19 +1060,21 @@ h3 {
   text-shadow: 0 1px 2px #000, 0 0 4px #000;
 }
 .stack .chips {
-  padding: 1px 5px;
-  border-radius: 7px;
-  background: rgba(11, 17, 29, 0.8);
-  border: 1px solid color-mix(in srgb, var(--sc) 55%, transparent);
+  min-height: var(--chip-h);
+  padding: 0 calc(var(--chip-fs) * 0.45);
+  border-radius: calc(var(--chip-h) / 2);
+  border: 1px solid color-mix(in srgb, var(--sc) 60%, transparent);
+  font-size: var(--chip-fs);
+  gap: 2px;
 }
 .chip-atk {
-  color: #ffb46b;
+  color: var(--stat-atk);
 }
 .chip-hp {
-  color: #7fd39a;
+  color: var(--stat-hp);
 }
 .chip-bul {
-  color: #9ecbff;
+  color: var(--stat-bul);
 }
 .chip-atk[data-buff='true'],
 .chip-hp[data-buff='true'] {
@@ -978,12 +1083,12 @@ h3 {
 }
 .hpbar {
   position: absolute;
-  z-index: 3;
+  z-index: 4;
   left: 0;
   right: 0;
   bottom: 0;
-  height: 3px;
-  background: #0008;
+  height: 4px;
+  background: color-mix(in srgb, var(--stroke-ink) 80%, transparent);
 }
 .hpbar > i {
   display: block;
@@ -998,8 +1103,8 @@ h3 {
 .promote-flag {
   position: absolute;
   z-index: 3;
-  /* Top bar, just right of the row glyph: the card foot belongs to the name,
-     and a badge there clips it. */
+  /* Top bar, just right of the row glyph: the card foot belongs to the stats,
+     and a badge there clips them. */
   left: 21px;
   top: 2px;
   width: 17px;
@@ -1010,10 +1115,21 @@ h3 {
   font-size: 9px;
   font-weight: 900;
   line-height: 1;
-  background: rgba(11, 17, 29, 0.85);
+  background: color-mix(in srgb, var(--stroke-ink) 88%, transparent);
   border: 1px solid var(--gold);
   color: var(--gold);
   pointer-events: none;
+}
+.card-marks > .promote-flag {
+  position: relative;
+  left: auto;
+  top: auto;
+  flex: none;
+  width: var(--chip-h);
+  height: var(--chip-h);
+  border-radius: calc(var(--chip-h) / 2);
+  font-size: var(--mark-fs);
+  color: var(--gold);
 }
 .promote-flag[data-state='soon'] {
   border-color: color-mix(in srgb, var(--gold) 40%, var(--line));
@@ -1192,34 +1308,36 @@ h3 {
 
 /* ── Cover (Design Notes 02 §3) ──────────────────────────────────────────── */
 
-/* One shield dot per remaining charge, left of the count badge. Dots, not
-   carets, so it never reads as a rank chevron. Dark backing keeps it legible
-   over a painted plate, same treatment as the rank pips. */
+/* One shield dot per remaining charge. Dots, not carets, so it never reads as
+   a rank chevron. A slim right-edge marker rather than a corner chip (DN07
+   §2): the corners belong to the count and the marks, and everything that can
+   leave the middle of the plate alone should. */
 .cover-pips {
   position: absolute;
   z-index: 3;
-  top: 21px;
-  right: 2px;
+  top: 50%;
+  right: var(--card-pad, 3px);
+  transform: translateY(-50%);
   display: flex;
+  flex-direction: column;
   gap: 2px;
   align-items: center;
-  padding: 2px 3px;
-  border-radius: 6px;
-  background: rgba(11, 17, 29, 0.8);
-  border: 1px solid color-mix(in srgb, #9ecbff 55%, transparent);
+  padding: 2px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--stroke-ink) 84%, transparent);
   pointer-events: none;
 }
 .cover-pips > i {
-  width: 5px;
-  height: 6px;
-  background: #9ecbff;
+  width: 6px;
+  height: 7px;
+  background: var(--stat-bul);
   /* a tiny shield, not a circle */
   clip-path: polygon(50% 100%, 0 55%, 0 0, 100% 0, 100% 55%);
 }
 .cover-pips > b {
   font-size: 9px;
   font-weight: 800;
-  color: #9ecbff;
+  color: var(--stat-bul);
   line-height: 1;
 }
 
@@ -1450,32 +1568,39 @@ h3 {
   gap: 5px;
   border-color: color-mix(in srgb, var(--sc) 45%, var(--line));
 }
-/* In a sheet the meter is inline, not pinned to a card corner. */
+/* In a sheet the meter is inline and horizontal, not pinned to a card edge. */
 .apex-panel .apex-meter {
   position: static;
+  transform: none;
+  flex-direction: row;
   background: none;
+  padding: 0;
 }
 .apex-panel .apex-meter > i {
   width: 9px;
   height: 5px;
 }
 
+/* On a card it is a slim left-edge marker filling bottom-up (DN07 §2) — the
+   bottom-left corner it used to sit in now belongs to the stat pill. */
 .apex-meter {
   position: absolute;
   z-index: 4;
-  left: 4px;
-  bottom: 4px;
+  left: var(--card-pad, 3px);
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
+  flex-direction: column-reverse;
   gap: 1px;
-  padding: 1px;
-  border-radius: 3px;
-  background: rgba(6, 10, 18, 0.7);
+  padding: 2px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--stroke-ink) 84%, transparent);
 }
 .apex-meter > i {
-  width: 4px;
+  width: 6px;
   height: 3px;
   border-radius: 1px;
-  background: #ffffff2e;
+  background: color-mix(in srgb, var(--on-ink) 22%, transparent);
 }
 .apex-meter > i[data-on='true'] {
   background: var(--sc);
@@ -2464,13 +2589,32 @@ h3 {
   font-size: 13px;
   font-weight: 900;
   letter-spacing: -2px;
-  color: #cf8f4e;
-  text-shadow: 0 1px 2px #000, 0 0 5px #00000099;
+  color: var(--rank-vet);
+  text-shadow: 0 1px 2px var(--stroke-ink), 0 0 5px color-mix(in srgb, var(--stroke-ink) 60%, transparent);
   pointer-events: none;
 }
 .rank-pips[data-rank='2'] {
   color: var(--gold);
-  text-shadow: 0 1px 2px #000, 0 0 7px color-mix(in srgb, var(--gold) 60%, transparent);
+  text-shadow: 0 1px 2px var(--stroke-ink), 0 0 7px color-mix(in srgb, var(--gold) 60%, transparent);
+}
+/* On a card the chevrons are the top-left mark (DN07 §2), on the same ink
+   backing as everything else so they survive a pale sky behind them. */
+.card-marks > .rank-pips {
+  position: relative;
+  top: auto;
+  right: auto;
+  flex: none;
+  height: var(--chip-h);
+  line-height: calc(var(--chip-h) - 2px);
+  padding: 0 4px;
+  border-radius: calc(var(--chip-h) / 2);
+  border: 1px solid color-mix(in srgb, var(--rank-vet) 60%, transparent);
+  font-size: calc(var(--chip-fs) + 3px);
+  color: var(--rank-vet);
+}
+.card-marks > .rank-pips[data-rank='2'] {
+  border-color: color-mix(in srgb, var(--gold) 70%, transparent);
+  color: var(--gold);
 }
 .rank-flash {
   animation: rankStamp 700ms cubic-bezier(0.2, 1.4, 0.4, 1) both;

@@ -73,7 +73,9 @@ export function CoverPips({ charges }: { charges: number }) {
 /**
  * The Apex meter (Design Notes 04 §3): one segment per charge, filling as the
  * stack fights. Deliberately a bar, not pips — rank chevrons and Cover dots
- * already own that language, and a meter has to read as *progress*.
+ * already own that language, and a meter has to read as *progress*. On the
+ * card it is a slim left-edge marker (DN07 §2): the plate is the point, and a
+ * meter parked in the corner was competing with the stat pill for it.
  */
 export function ApexMeter({ charge, max, ready }: { charge: number; max: number; ready?: boolean }) {
   if (max <= 0) return null
@@ -85,6 +87,16 @@ export function ApexMeter({ charge, max, ready }: { charge: number; max: number;
     </span>
   )
 }
+
+/**
+ * The three canonical card sizes (Design Notes 07 §2). One component renders
+ * all of them; nothing else in the app is allowed to invent a card layout.
+ *
+ * - `board`    grid-fitted, ~86–100px wide. No name: the art is the identity.
+ * - `camp`     ~160px, the hand you buy from. Name plate on a local scrim.
+ * - `showcase` full width — inspect and the Legend recap parade.
+ */
+export type CardSize = 'board' | 'camp' | 'showcase'
 
 interface Props {
   unitId: string
@@ -132,6 +144,8 @@ interface Props {
   eager?: boolean
   /** jump the fetch queue (the visible camp offers) */
   priority?: boolean
+  /** which of the three canonical sizes to render at (§2); defaults to board */
+  size?: CardSize
 }
 
 export function StackCard({
@@ -163,6 +177,7 @@ export function StackCard({
   domId,
   eager,
   priority,
+  size = 'board',
 }: Props) {
   const def = unit(unitId)
   const color = unitColor(def)
@@ -173,6 +188,7 @@ export function StackCard({
     <Tag
       className="stack"
       style={{ ['--sc' as string]: color }}
+      data-size={size}
       data-tier={def.tier}
       data-sel={selected ? 'true' : 'false'}
       data-illegal={illegal ? 'true' : undefined}
@@ -190,19 +206,14 @@ export function StackCard({
       type={onClick ? 'button' : undefined}
       aria-label={`${def.name}, ${count} units, ${atk} attack, ${hp} health, ${rowWord(def.row)} row${rank > 0 ? `, ${rankWord(rank)}` : ''}${promote === 'ready' ? ', promotion available' : ''}${cover > 0 ? `, Cover ${cover}` : ''}${apexMax > 0 ? `, Apex ${apexCharge} of ${apexMax}` : ''}`}
     >
+      {/* Full-bleed: the plate IS the card (§2). Everything below is an
+          overlay floating on it, and none of it may become a frame again. */}
       <span className="card-art">
         <Plate src={UNIT_ART[unitId]} eager={eager} priority={priority} fallback={<Sigil id={def.sigil} size={26} />} />
       </span>
-      {/* Name sits on the scrim, so it stays legible over any plate. */}
-      <span className="card-scrim" aria-hidden="true" />
       {/* Hit flash is an overlay, never a filter on the image — a filter
           forces a re-decode mid-battle on Safari. */}
       {state === 'hit' && <span className="card-flash" aria-hidden="true" />}
-      {promote && !onPromoteTap && (
-        <span className="promote-flag" data-state={promote} aria-hidden="true">
-          ▲
-        </span>
-      )}
       {bloom && <span className="cast-bloom" data-fx={bloom} aria-hidden="true" />}
       {float && (
         <span
@@ -212,15 +223,28 @@ export function StackCard({
           {float.text}
         </span>
       )}
-      <span className="row-glyph" aria-hidden="true">
-        {rowGlyph(def.row)}
+      {/* Top bar: marks left, count right. One flex row rather than four
+          absolutely-placed chips, which at 86px used to collide. */}
+      <span className="card-top">
+        <span className="card-marks">
+          <RankPips rank={rank} flash={rankFlash} />
+          <span className="row-glyph" aria-hidden="true">
+            {rowGlyph(def.row)}
+          </span>
+          {promote && !onPromoteTap && (
+            <span className="promote-flag" data-state={promote} aria-hidden="true">
+              ▲
+            </span>
+          )}
+        </span>
+        <span className="count-badge">{count}</span>
       </span>
-      <RankPips rank={rank} flash={rankFlash} />
+      {/* Slim edge markers, so neither one eats into the art (§2). */}
       <CoverPips charges={cover} />
       <ApexMeter charge={apexCharge} max={apexMax} ready={apexCharge >= apexMax && apexMax > 0} />
-      <span className="count-badge">{count}</span>
       <span className="card-foot">
-        <span className="stack-name">{def.name}</span>
+        {/* No name at board size: the art is the identity (§2). */}
+        {size !== 'board' && <span className="stack-name">{def.name}</span>}
         <span className="chips">
           <span className="chip-atk" data-buff={atkBuffed ? 'true' : undefined}>
             {atk}
@@ -266,6 +290,7 @@ export function SnapCard({
   onClick,
   savedByCover,
   apexFiring,
+  size,
 }: {
   snap: StackSnap
   state?: 'hit' | 'act' | 'dead' | null
@@ -276,6 +301,7 @@ export function SnapCard({
   onClick?: () => void
   savedByCover?: boolean
   apexFiring?: boolean
+  size?: CardSize
 }) {
   const total = snap.startCount * snap.maxHp
   const cur = snap.count * snap.maxHp - snap.wound
@@ -301,6 +327,7 @@ export function SnapCard({
       savedByCover={savedByCover}
       domId={snap.uid}
       eager
+      size={size}
     />
   )
 }

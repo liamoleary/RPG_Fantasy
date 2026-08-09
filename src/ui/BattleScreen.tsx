@@ -11,6 +11,8 @@ import { Plate } from './Plate'
 import { Sigil } from './Sigil'
 import { describe, HEAVY_HIT_FRACTION, poolOf, spellSummary } from './battleLog'
 import { castFxOfFaction, projectileOf, SnapCard } from './StackCard'
+import { OutcomeFlash } from './OutcomeFlash'
+import { ResultScreen } from './ResultScreen'
 
 /** Volley is a unit property, so the log does not need to repeat it. */
 function isVolley(unitId: string | undefined): boolean {
@@ -254,6 +256,8 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
   )
   const [i, setI] = useState(0)
   const [done, setDone] = useState(false)
+  /** the player asked for the round-up behind the flash */
+  const [detail, setDetail] = useState(false)
   /** the snapshot the player tapped; inspecting holds the replay (§2.1) */
   const [peek, setPeek] = useState<StackSnap | null>(null)
   /** the hero whose plaque was tapped — pauses the replay and shows their kit */
@@ -371,6 +375,9 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
     if (done || frames.length === 0) return
     if (i >= frames.length - 1) {
       setDone(true)
+      // The replay ending IS the end of the round now — there is no page to
+      // press Continue on. The flash takes it from here (DN08).
+      store.finishBattle()
       return
     }
     // An open sheet — stack or hero — pauses playback rather than racing it.
@@ -389,7 +396,7 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
     return (
       <div className="screen center">
         <p className="dim">No battle to show.</p>
-        <button className="btn btn-primary" onClick={store.finishBattle}>
+        <button className="btn btn-primary" onClick={store.nextRound}>
           Continue
         </button>
       </div>
@@ -526,9 +533,6 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
         </button>
       </div>
 
-      <button className="btn btn-primary" disabled={!done} onClick={store.finishBattle}>
-        {done ? 'Continue' : 'Fighting…'}
-      </button>
       </div>
 
       {peek && (
@@ -546,6 +550,18 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
       )}
 
       {heroPeek && <HeroSheet warlord={heroPeek} round={run.round} onClose={() => setHeroPeek(null)} />}
+
+      {/* The round ends here now (DN08): the verdict is stamped over the board
+          that produced it and the game moves itself on. The old result page
+          survives as the detail view behind "What happened?" — it is a full
+          screen in its own right, so it is laid over this one rather than
+          squeezed into a sheet. */}
+      {store.outcome && !detail && <OutcomeFlash outcome={store.outcome} onDetails={() => setDetail(true)} />}
+      {store.outcome && detail && (
+        <div className="result-overlay">
+          <ResultScreen run={run} />
+        </div>
+      )}
     </div>
   )
 }

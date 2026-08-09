@@ -17,7 +17,7 @@ import { FEEDBACK_CATEGORIES, MESSAGE_MAX, submitFeedback, type FeedbackCategory
 import { buildContext } from '../net/feedbackContext'
 import { useGame } from '../state/store'
 
-function Stars({ value, onPick, size = 30 }: { value: number; onPick: (n: number) => void; size?: number }) {
+export function Stars({ value, onPick, size = 30 }: { value: number; onPick: (n: number) => void; size?: number }) {
   return (
     <div className="stars" role="radiogroup" aria-label="Rating">
       {[1, 2, 3, 4, 5].map((n) => (

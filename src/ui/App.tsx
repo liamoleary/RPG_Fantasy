@@ -5,7 +5,7 @@ import { useGame } from '../state/store'
 import { BattleScreen } from './BattleScreen'
 import { HomeScreen } from './HomeScreen'
 import { MusterScreen } from './MusterScreen'
-import { ResultScreen, RunOverScreen } from './ResultScreen'
+import { RunOverScreen } from './ResultScreen'
 import './styles.css'
 import { applyUpdate, onUpdateAvailable } from '../net/version'
 
@@ -42,10 +42,10 @@ export function App() {
     document.body.classList.toggle('reduced-motion', save.settings.reducedMotion)
   }, [save.settings.reducedMotion])
 
-  // Dawn in camp, dusk on the battlefield (DN07 §4). The ground is painted on
-  // <body>, so the shift has to live there too — and putting it on a data
-  // attribute rather than a class means the theme redefines a handful of
-  // tokens and every descendant follows, with no per-component branching.
+  // Camp is plum-dark, the battlefield is night (DN07 §4). The ground is
+  // painted on <body>, so the shift has to live there too — and putting it on
+  // a data attribute rather than a class means the theme redefines a handful
+  // of tokens and every descendant follows, with no per-component branching.
   useEffect(() => {
     document.body.dataset.ground = screen === 'battle' ? 'dusk' : 'dawn'
   }, [screen])
@@ -58,8 +58,6 @@ export function App() {
         <MusterScreen run={run} />
       ) : screen === 'battle' ? (
         <BattleScreen run={run} result={playerBattle} />
-      ) : screen === 'result' ? (
-        <ResultScreen run={run} />
       ) : (
         <RunOverScreen run={run} />
       )}

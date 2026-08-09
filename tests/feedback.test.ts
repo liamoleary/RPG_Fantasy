@@ -111,11 +111,11 @@ describe('auto-context (§3)', () => {
     const events = Array.from({ length: 200 }, (_, i) => ({ t: 'attack', damage: i, snap: [{ uid: 'x' }] }))
     const battle = { events } as never
 
-    const bug = buildContext({ run: null, screen: 'result', playerBattle: battle, account, includeBattleLog: true })
+    const bug = buildContext({ run: null, screen: 'battle', playerBattle: battle, account, includeBattleLog: true })
     expect(bug.battleLog).toHaveLength(50)
     expect(bug.battleLog?.[49]).toContain('damage=199') // the *last* 50
 
-    const notBug = buildContext({ run: null, screen: 'result', playerBattle: battle, account, includeBattleLog: false })
+    const notBug = buildContext({ run: null, screen: 'battle', playerBattle: battle, account, includeBattleLog: false })
     expect(notBug.battleLog).toBeUndefined()
   })
 

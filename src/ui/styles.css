@@ -148,10 +148,10 @@
   /* Data colours that live in TS (unit pools, boon branches) resolve here too,
      so the whole palette is auditable in one place. The TS helpers return the
      var() reference; it is only ever assigned to a custom property. */
-  --merc: #6f6577;
-  --branch-might: #b85c30;
-  --branch-magic: #7a55c4;
-  --branch-command: #2f8375;
+  --merc: #8a8fa6;
+  --branch-might: #e08a5a;
+  --branch-magic: #ac90f2;
+  --branch-command: #5ab0a0;
 
   --dmg: #ff8f7a;
   --dmg-soft: #ffd9d0;
@@ -2246,7 +2246,10 @@ h3 {
 .boon-preview {
   font-size: 12px;
   font-weight: 800;
-  color: var(--bc);
+  /* Not var(--bc): the chip's ground is already a wash of --bc, and a colour
+     on 14% of itself is the worst pairing available. The keyline and the
+     label carry the branch; the numbers just have to be readable. */
+  color: var(--ink);
   background: color-mix(in srgb, var(--bc) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--bc) 40%, transparent);
   border-radius: 6px;
@@ -3805,4 +3808,141 @@ h3 {
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
+}
+
+/* ── outcome flash (DN08) ───────────────────────────────────────────────── */
+
+/* The round's verdict, over the board that produced it. Not a screen: a beat.
+   It covers the app rather than replacing it, so the final positions are
+   still visible behind the word — which is the thing a player actually wants
+   to look at when they have just won or lost. */
+.outcome {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(120% 80% at 50% 50%, transparent, var(--veil-soft) 70%);
+  animation: outcomeIn 0.24s ease both;
+}
+.outcome-card {
+  display: grid;
+  justify-items: center;
+  /* Deliberately compact: the final positions behind it are what a player
+     wants to look at when they have just won or lost, so the beat sits over
+     the board rather than replacing it. */
+  gap: 7px;
+  padding: 12px 18px 12px;
+  border-radius: calc(var(--radius) + 4px);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: var(--shadow), 0 18px 60px -20px var(--shadow-ink);
+  max-width: 296px;
+  width: 100%;
+  text-align: center;
+}
+.outcome-word {
+  font-size: clamp(26px, 9.5vw, 38px);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
+  animation: outcomeStamp 0.45s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+.outcome-word[data-verdict='win'] {
+  color: var(--gold-ink);
+  text-shadow: 0 0 24px color-mix(in srgb, var(--gold) 45%, transparent);
+}
+.outcome-word[data-verdict='loss'] {
+  color: var(--danger-ink);
+}
+.outcome-word[data-verdict='tie'] {
+  color: var(--ink-dim);
+}
+.outcome-figures {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--ink-dim);
+}
+.outcome-figures b {
+  color: var(--ink);
+  font-weight: 800;
+}
+.outcome-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--line);
+}
+.outcome-rate {
+  display: grid;
+  place-items: center;
+}
+.outcome-more {
+  color: var(--ink-dim);
+}
+.outcome-go {
+  width: 100%;
+}
+/* A quiet clock, so the auto-advance is something the player can see coming
+   rather than something that happens to them. */
+.outcome-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--gold);
+  animation: outcomeClock 2200ms linear forwards;
+}
+@keyframes outcomeIn {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes outcomeStamp {
+  from {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+@keyframes outcomeClock {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+/* Reduced motion keeps the beat and drops the theatrics — including the
+   clock, which is decoration; the timer itself is unaffected. */
+.reduced-motion .outcome,
+.reduced-motion .outcome-word {
+  animation: none;
+}
+.reduced-motion .outcome-bar {
+  display: none;
+}
+
+/* "What happened?" — the old result page, laid over the battle rather than
+   routed to. It is a full screen, so it gets the whole app box. */
+.result-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 62;
+  display: flex;
+  flex-direction: column;
+  max-width: 520px;
+  margin: 0 auto;
+  background: var(--bg);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) max(env(safe-area-inset-bottom), 24px)
+    env(safe-area-inset-left);
+}
+.result-overlay > .screen {
+  flex: 1;
+  min-height: 0;
 }

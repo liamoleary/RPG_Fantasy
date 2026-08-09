@@ -30,7 +30,26 @@ import { buildRunReport, emptyTally, submitRun, tallyBattle, type RunTally } fro
 import { withMeta, type MetaSave } from './meta'
 import { DEFAULT_SAVE, loadSave, writeSave, type SaveData } from './persist'
 
-export type Screen = 'home' | 'muster' | 'battle' | 'result' | 'runover'
+export type Screen = 'home' | 'muster' | 'battle' | 'runover'
+
+/**
+ * What the battle ended in, held just long enough to stamp it over the final
+ * board. The old flow parked this on a whole screen between every fight and
+ * the next muster; a round is 40 seconds and a page you always dismiss is a
+ * page in the way. The numbers are read off the report at the moment the
+ * replay ends, so the flash does not depend on run state that advanceRound is
+ * about to move on.
+ */
+export interface Outcome {
+  verdict: 'win' | 'loss' | 'tie'
+  /** banner damage taken this round; 0 on a win */
+  damage: number
+  /** units left standing on your board */
+  survivors: number
+  /** your banner HP after the round */
+  hp: number
+  round: number
+}
 
 interface Store {
   save: SaveData
@@ -43,6 +62,8 @@ interface Store {
   /** uid of a stack that just gained a Banner Rank — one stamp, then cleared */
   rankFlash: string | null
   playerBattle: BattleResult | null
+  /** set when a replay ends, cleared when the round advances (DN08) */
+  outcome: Outcome | null
   speed: 1 | 2
   renownEarned: number
   /** §4 counters that are events rather than state, accumulated as the run goes. */
@@ -93,6 +114,7 @@ export const useGame = create<Store>((set, get) => ({
   inspecting: null,
   rankFlash: null,
   playerBattle: null,
+  outcome: null,
   speed: 1,
   renownEarned: 0,
   tally: emptyTally(),
@@ -103,7 +125,7 @@ export const useGame = create<Store>((set, get) => ({
     const run = newRun({ seed, factionId, heroId, difficulty })
     const save = { ...get().save, settings: { ...get().save.settings, difficulty } }
     persist(save, run)
-    set({ run, save, screen: 'muster', selected: null, rankFlash: null, playerBattle: null, renownEarned: 0, speed: save.settings.speedDefault, tally: emptyTally() })
+    set({ run, save, screen: 'muster', selected: null, rankFlash: null, playerBattle: null, outcome: null, renownEarned: 0, speed: save.settings.speedDefault, tally: emptyTally() })
   },
 
   applyMeta: (meta) => {
@@ -122,24 +144,29 @@ export const useGame = create<Store>((set, get) => ({
     // normalise once here so no engine read has to guess (§3).
     const boards = [...active.warlords.map((w) => w.board), ...Object.values(active.ghostBoards)]
     for (const board of boards) for (const s of board) if (typeof s.rank !== 'number') s.rank = 0
-    // A run saved mid-'result' must come back to the result screen — dropping it
-    // on Muster lets Fight resolve the same round twice.
     set({
       run: active,
-      screen: active.phase === 'over' ? 'runover' : active.phase === 'result' ? 'result' : 'muster',
+      screen: active.phase === 'over' ? 'runover' : 'muster',
       selected: null,
       rankFlash: null,
       playerBattle: null,
+      outcome: null,
     })
+    // A run saved in the engine's 'result' phase has resolved its battle but
+    // not advanced the round. Dropping it straight on Muster lets Fight resolve
+    // the same round twice, so finish the round here. There used to be a screen
+    // to come back to; there is only a two-second flash now, and replaying it a
+    // day later would be noise rather than news.
+    if (active.phase === 'result') get().nextRound()
   },
 
   abandon: () => {
     const save = { ...get().save, activeRun: null }
     writeSave(save)
-    set({ save, run: null, screen: 'home', playerBattle: null })
+    set({ save, run: null, screen: 'home', playerBattle: null, outcome: null })
   },
 
-  goHome: () => set({ screen: 'home', scouting: false, inspecting: null }),
+  goHome: () => set({ screen: 'home', scouting: false, inspecting: null, outcome: null }),
 
   buy: (index) => {
     const { run } = get()
@@ -288,7 +315,33 @@ export const useGame = create<Store>((set, get) => ({
     })
   },
 
-  finishBattle: () => set({ screen: 'result' }),
+  /**
+   * The replay is over. Work out what happened and hand it to the flash; the
+   * battle screen stays mounted underneath, so the verdict is stamped over the
+   * board that produced it rather than over a fresh page. Advancing is the
+   * flash's job (it does it on a timer, or on a tap).
+   */
+  finishBattle: () => {
+    const { run } = get()
+    if (!run) return
+    const p = player(run)
+    const report = run.reports.find((r) => r.aId === p.id || r.bId === p.id)
+    const playerIsA = report ? report.aId === p.id : true
+    const won = report ? (playerIsA ? report.winner === 'a' : report.winner === 'b') : false
+    const tie = report?.winner === 'tie'
+    const survivors = report
+      ? (playerIsA ? report.result.survivorsA : report.result.survivorsB).reduce((n, s) => n + s.count, 0)
+      : 0
+    set({
+      outcome: {
+        verdict: tie ? 'tie' : won ? 'win' : 'loss',
+        damage: tie ? (report?.result.damageToBoth ?? 0) : won ? 0 : (report?.damage ?? 0),
+        survivors,
+        hp: Math.max(0, p.hp),
+        round: run.round,
+      },
+    })
+  },
 
   nextRound: () => {
     const { run } = get()
@@ -318,13 +371,13 @@ export const useGame = create<Store>((set, get) => ({
       // is cleared, since it reads the final board off it.
       const report = buildRunReport(run, get().tally)
       if (report) void submitRun(report)
-      set({ save, screen: 'runover', renownEarned: earned, playerBattle: null })
+      set({ save, screen: 'runover', renownEarned: earned, playerBattle: null, outcome: null })
       return
     }
 
     advanceRound(run)
     persist(get().save, run)
-    set({ run: { ...run }, screen: 'muster', playerBattle: null, selected: null, rankFlash: null })
+    set({ run: { ...run }, screen: 'muster', playerBattle: null, outcome: null, selected: null, rankFlash: null })
   },
 
   setSpeed: (s) => {

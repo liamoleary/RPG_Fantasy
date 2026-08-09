@@ -1,5 +1,13 @@
 # Design Notes 07 — acceptance evidence
 
+> **The screenshots below show the Daybreak light theme, which was tried in
+> play and reverted.** The app is dark again — warm plum-dark, per
+> PLAN_ART_AND_THEME §4. Everything else here still holds: the layout
+> measurements, the card anatomy and the contrast method are unchanged by the
+> ground moving, which was the point of building the theme as tokens. The
+> contrast figures were re-run on the dark ground and still come back at zero
+> failing on every screen.
+
 Everything below was measured in a headless Chromium against the built app, not
 estimated. "Before" is `5dcd124` (the v2 art restored, the old UI) served from a
 second worktree so the two are compared on identical content: the same seeded

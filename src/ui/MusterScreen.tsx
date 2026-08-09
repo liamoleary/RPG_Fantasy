@@ -197,7 +197,9 @@ export function MusterScreen({ run }: { run: RunState }) {
   const promoteTarget = promoteStack ? promoteBlock(promoteStack.unitId, p.camp.tier, p.gold, p.mods) : null
 
   return (
-    <div className="screen">
+    // Muster runs edge-to-edge (DN07 §3): the board is the screen, and 12px of
+    // page gutter on each side is 24px the cards want more than the margin does.
+    <div className="screen screen-muster">
       <div className="screen-body">
       <Ladder run={run} onInspect={(id) => store.inspect(id)} />
 
@@ -232,7 +234,7 @@ export function MusterScreen({ run }: { run: RunState }) {
       </div>
 
       {/* ── your board ── */}
-      <div>
+      <div className="board-region">
         <Board
           board={p.board}
           selected={store.selected}
@@ -270,9 +272,13 @@ export function MusterScreen({ run }: { run: RunState }) {
             under the offers, playtesters never found it. */}
         <TierUpButton tier={p.camp.tier} cost={tCost} gold={p.gold} onBuy={store.tierUp} />
 
-        <div className="offer" style={{ gridTemplateColumns: `repeat(${Math.min(5, Math.max(3, p.camp.offer.length))}, 1fr)` }}>
+        {/* The hand (DN07 §3). The camp used to be five cramped tiles in a
+            grid; it is where every purchase decision is made, so it gets the
+            biggest always-visible art on the screen. Swipeable, with the next
+            card peeking — the peek IS the scroll affordance. */}
+        <div className="camp-hand" role="list" aria-label="Recruits available">
           {p.camp.offer.map((unitId, i) => (
-            <OfferCard
+            <HandCard
               key={i}
               unitId={unitId}
               block={recruitBlock(unitId)}
@@ -284,7 +290,7 @@ export function MusterScreen({ run }: { run: RunState }) {
           ))}
         </div>
 
-        <div className="row wrap" style={{ gap: 6 }}>
+        <div className="camp-dock">
           <button className="btn btn-sm grow btn-quiet" disabled={p.gold < rCost} onClick={store.reroll}>
             Reroll {rCost === 0 ? 'free' : `${rCost}g`}
           </button>
@@ -618,14 +624,11 @@ export function Board({
                 data-illegal={holding && !droppable ? 'true' : undefined}
                 onClick={() => droppable && onSlot?.(slot)}
               >
-                {droppable ? (
-                  '↓'
-                ) : (
-                  <span className="slot-hint">
-                    <Sigil id={row === 'front' ? 'shield' : 'bow'} size={16} />
-                    <span>{row}</span>
-                  </span>
-                )}
+                {/* A thin dashed ghost (DN07 §3), not a labelled tile: the row
+                    caption above already says which row this is, and the space
+                    an empty slot spends on repeating it is space the cards
+                    beside it want. */}
+                {droppable ? '↓' : <span className="slot-hint">{rowGlyph(row)}</span>}
               </div>
             )
           }
@@ -698,9 +701,17 @@ export function Board({
   )
 }
 
-// ── camp offer card ──────────────────────────────────────────────────────
+// ── camp hand card ───────────────────────────────────────────────────────
 
-function OfferCard({
+/**
+ * One card in the hand (DN07 §3). The same StackCard as the board, at camp
+ * size — the whole point of §2's one-component-three-sizes rule is that the
+ * thing you are buying and the thing you will own look like the same object.
+ *
+ * The buy button rides on the card's bottom band rather than sitting under it,
+ * so the hand costs one card's height and no more.
+ */
+function HandCard({
   unitId,
   block,
   plan,
@@ -717,28 +728,30 @@ function OfferCard({
   onInspect: () => void
   onRecruit: () => void
 }) {
-  if (!unitId || !plan) return <div className="offer-card" data-empty="true" />
+  if (!unitId || !plan) return <div className="hand-card" data-empty="true" role="listitem" />
   const def = unit(unitId)
   const label = buyLabel(plan)
   // Tapping the card still only ever opens the Inspect sheet — reading is free
   // and never costs gold. Recruiting is its own explicit button so the common
   // case does not need a round trip through the sheet.
   return (
-    <div className="offer-card" style={{ ['--sc' as string]: unitColor(def) }} data-blocked={!block.ok || undefined}>
-      <button className="offer-body" onClick={onInspect} aria-label={`Inspect ${def.name}`}>
-        <span className="offer-art">
-          <Plate src={UNIT_ART[unitId]} priority={priority} fallback={<Sigil id={def.sigil} size={20} />} />
-        </span>
+    <div
+      className="hand-card"
+      style={{ ['--sc' as string]: unitColor(def) }}
+      data-blocked={!block.ok || undefined}
+      role="listitem"
+    >
+      <button className="hand-body" onClick={onInspect} aria-label={`Inspect ${def.name}`}>
+        <StackCard
+          unitId={unitId}
+          size="camp"
+          count={plan.added}
+          atk={def.atk}
+          hp={def.hp}
+          priority={priority}
+          eager={priority}
+        />
         <span className="tier-pip">T{def.tier}</span>
-        <span className="row-glyph" aria-hidden="true">
-          {rowGlyph(def.row)}
-        </span>
-        <span className="stack-name">{def.name}</span>
-        <span className="chips">
-          <span className="chip-atk">{def.atk}</span>
-          <span className="dim">/</span>
-          <span className="chip-hp">{def.hp}</span>
-        </span>
       </button>
       <button
         className="offer-buy"
@@ -751,7 +764,7 @@ function OfferCard({
             : `Recruit ${def.name}: starts a new stack of ${plan.added} for ${RECRUIT_COST} gold`
         }
       >
-        {/* One line: a second line here costs every offer card 14px of height,
+        {/* One line: a second line here costs every hand card 14px of height,
             and the height budget is what keeps the camp on screen. */}
         <span className="buy-main">{label.text}</span>
         {label.sub && <span className="buy-sub">{label.sub}</span>}

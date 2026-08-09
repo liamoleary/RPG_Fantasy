@@ -50,8 +50,23 @@
      same cards and a scrollbar. Calibrated so 740px lands on 64px. */
   /* vh first, dvh where the browser knows it — phones without dvh otherwise
      drop the rule entirely, the app gets auto height, and the page scrolls. */
-  --card-max: clamp(38px, calc(64px + (100vh - 740px) * 0.2), 104px);
-  --card-max: clamp(38px, calc(64px + (100dvh - 740px) * 0.2), 104px);
+  /* Recalibrated for DN07 §3: the board now runs edge-to-edge and the camp is
+     a bottom sheet rather than a grid of tiles, which returns enough height
+     that the old 104px ceiling was the binding constraint rather than the
+     viewport. At 390x844 the row itself caps first, at 4x89px — comfortably
+     over §6.1's 86px floor, and the same 89px whether the back line holds 3
+     slots or DN06's 4, because every cell has always been sized as a quarter
+     of the row. */
+  --card-max: clamp(38px, calc(64px + (100vh - 740px) * 0.24), 132px);
+  --card-max: clamp(38px, calc(64px + (100dvh - 740px) * 0.24), 132px);
+  /* One hand card, governed by both axes. Width, so the next card always
+     peeks — the peek is what tells a thumb the row scrolls. Height, because
+     the hand is the tallest single thing in Muster and a short phone has to
+     take it out of somewhere; taking it here is right, since the hand can be
+     swiped and the board cannot. On a 390x844 screen this lands at ~172px,
+     over §6.1's 150px floor, with the third card showing. */
+  --hand-card: clamp(96px, min(44vw, calc(150px + (100vh - 740px) * 0.42)), 190px);
+  --hand-card: clamp(96px, min(44vw, calc(150px + (100dvh - 740px) * 0.42)), 190px);
   color-scheme: dark;
 }
 
@@ -235,6 +250,53 @@ h3 {
    nature, so it keeps its own scroll. */
 .screen[data-scroll='true'] {
   overflow-y: auto;
+}
+/* Muster gives its gutters to the board (DN07 §3): 8px a side instead of 12,
+   which is 8px of card width across a four-slot row. */
+.screen-muster {
+  padding-left: 8px;
+  padding-right: 8px;
+  /* The board and the hand are both taller now; the space between regions is
+     the cheapest place to find it, and DN04 §5's rule — Muster never scrolls —
+     is not negotiable. */
+  gap: 8px;
+}
+.screen-muster > .screen-body {
+  gap: 8px;
+}
+/* The board is fixed furniture: it never gives up height (DN04 §5). */
+.screen-muster .board-region {
+  flex: none;
+}
+/* The camp is the flexible one, and inside it the hand is: whatever height is
+   left after the board, the header and the pinned Fight button is what a hand
+   card is tall, and its width follows from 4:5. That is what lets one layout
+   cover a 568pt phone and a 915pt one without a scrollbar appearing in Muster
+   on either — the previous version tuned a fixed card size per breakpoint and
+   overflowed by ~100px in between. */
+.screen-muster .camp-panel {
+  padding: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-template-rows: auto auto minmax(110px, 1fr) auto;
+}
+.screen-muster .camp-hand {
+  min-height: 0;
+  /* ...but never so tall that a card stops leaving room for the next to peek. */
+  max-height: 55vw;
+}
+.screen-muster .hand-card {
+  flex: 0 0 auto;
+  width: auto;
+  height: 100%;
+  aspect-ratio: 4 / 5;
+}
+.screen-muster .hand-body {
+  height: 100%;
+}
+.screen-muster .hand-card[data-empty='true'] {
+  flex: 0 0 44px;
+  aspect-ratio: auto;
 }
 
 /* Everything above the pinned bar; the only part allowed to give up space. */
@@ -537,7 +599,7 @@ h3 {
     padding: 8px;
     gap: 5px;
   }
-  .offer {
+  .camp-hand {
     gap: 4px;
   }
   .board-line {
@@ -587,6 +649,18 @@ h3 {
   }
   .boon-strip {
     display: none;
+  }
+  /* A 568pt phone: the hand keeps swiping, it just stops being the biggest
+     thing on screen. Muster still does not scroll. */
+  .screen-muster .camp-panel {
+    grid-template-rows: auto auto minmax(80px, 1fr) auto;
+    gap: 4px;
+  }
+  .camp-dock > .btn {
+    min-height: 30px;
+  }
+  .row-label {
+    min-height: 13px;
   }
   .screen {
     gap: 6px;
@@ -742,7 +816,9 @@ h3 {
   pointer-events: none;
 }
 
-/* full, tappable row label on the Muster board */
+/* An overline caption above its row (DN07 §3), not a bar. It was 28px of
+   chrome per row explaining a distinction the board layout already makes;
+   shrunk, it still carries the ⓘ tap that opens the full explanation. */
 .row-label {
   display: flex;
   align-items: baseline;
@@ -751,13 +827,13 @@ h3 {
   /* Below the 44px norm on purpose: this is a secondary read-more affordance
      sitting directly above its row, and a full-height bar would push the War
      Camp out of thumb reach. */
-  min-height: 28px;
-  padding: 4px 0;
+  min-height: 18px;
+  padding: 1px 2px;
   text-align: left;
-  font-size: 11px;
+  font-size: 9px;
   text-transform: uppercase;
-  letter-spacing: 0.14em;
-  font-weight: 700;
+  letter-spacing: 0.18em;
+  font-weight: 800;
   color: var(--ink-dim);
   white-space: nowrap;
   overflow: hidden;
@@ -800,14 +876,14 @@ h3 {
   filter: grayscale(1);
   pointer-events: none;
 }
+/* A ghost, not a tile: one faint glyph. The row caption above already names
+   the row, so an empty slot repeating it was chrome charged to the cards. */
 .slot-hint {
   display: grid;
   place-items: center;
-  gap: 1px;
-  opacity: 0.34;
-  font-size: 9px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  opacity: 0.26;
+  font-size: 15px;
+  line-height: 1;
 }
 
 /* The card IS the art (Design Notes 07 §2). Not an art window inside a frame:
@@ -1045,12 +1121,6 @@ h3 {
   font-size: var(--mark-fs);
   opacity: 1;
 }
-.offer-card > .row-glyph {
-  z-index: 3;
-  top: 3px;
-  right: 4px;
-  text-shadow: 0 1px 3px #000;
-}
 .chips {
   display: flex;
   align-items: center;
@@ -1144,103 +1214,122 @@ h3 {
 
 /* ── camp ───────────────────────────────────────────────────────────────── */
 
-.offer {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
-}
-.offer-card {
-  border-radius: var(--fx-radius);
-  border: 1px solid var(--sc, var(--line));
-  background: linear-gradient(165deg, color-mix(in srgb, var(--sc) 26%, var(--panel-2)), var(--panel));
-  padding: 0 0 5px;
+/* The hand (DN07 §3). Five cramped tiles in a grid became a swipeable row of
+   large cards: this is where purchase decisions are made, so it carries the
+   biggest always-visible art on the screen. Snap points keep a swipe landing
+   on a card rather than between two. */
+.camp-hand {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
+  gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  /* The peek is the affordance, so the row must not pad it away. */
+  padding-bottom: 2px;
+}
+.camp-hand::-webkit-scrollbar {
+  display: none;
+}
+.hand-card {
   position: relative;
-  overflow: hidden;
+  flex: 0 0 var(--hand-card);
+  scroll-snap-align: start;
+  border-radius: 16px;
   transition: transform 0.1s ease;
 }
-/* The plate leads the card, the numbers sit under it. */
-.offer-art {
-  position: relative;
+.hand-body {
+  display: block;
   width: 100%;
-  aspect-ratio: 4 / 5;
-  max-height: calc(var(--card-max) * 1.05);
-  overflow: hidden;
-  background: #0b111d;
-  margin-bottom: 2px;
-}
-.offer-art::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(transparent 55%, rgba(6, 10, 18, 0.92));
-}
-.offer-card .stack-name {
-  padding: 0 3px;
-}
-.offer-body {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  width: 100%;
-  padding-bottom: 3px;
+  padding: 0;
   color: inherit;
 }
-.offer-body:active {
+.hand-body:active {
   transform: scale(0.97);
+}
+/* The card's own name plate is the bottom band, so the buy button rides on top
+   of it — the hand costs one card's height and no more. */
+.hand-card .card-foot {
+  padding-bottom: 36px;
 }
 /* Recruiting is its own button: tapping the card only ever inspects, so a
    mis-tap costs nothing, and buying no longer needs a trip through a sheet. */
 .offer-buy {
-  width: calc(100% - 8px);
+  position: absolute;
+  z-index: 4;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
   min-height: 30px;
-  margin: 0 4px 1px;
-  border-radius: var(--fx-radius);
+  border-radius: 15px;
   background: linear-gradient(180deg, var(--gold), #a8802c);
   border: 1px solid #f0d68d;
   color: #23180a;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 8px;
+  overflow: hidden;
+  white-space: nowrap;
 }
 .offer-buy:active {
   transform: scale(0.96);
 }
 .offer-buy:disabled {
-  background: none;
-  border-color: var(--line);
+  background: color-mix(in srgb, var(--stroke-ink) 88%, transparent);
+  border-color: color-mix(in srgb, var(--line) 70%, transparent);
   color: var(--ink-dim);
   cursor: default;
 }
+.offer-buy .buy-sub {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 700;
+}
 /* Can't afford it (or nowhere to put it): say so at a glance. Still tappable
    for inspect — reading is always free. */
-.offer-card[data-blocked] .offer-art .plate,
-.offer-card[data-blocked] .offer-body {
+.hand-card[data-blocked] .hand-body {
   filter: grayscale(0.85);
   opacity: 0.5;
 }
-.offer-card[data-blocked] {
-  border-color: var(--line);
-}
-.offer-card[data-empty='true'] {
-  border-style: dashed;
+/* A sold-out slot is a gap in the hand, not a card in it: it keeps its place
+   in the row so the offers do not jump, at a fraction of the width. */
+.hand-card[data-empty='true'] {
+  flex: 0 0 44px;
+  align-self: stretch;
+  border: 1px dashed var(--line);
   background: #ffffff05;
   opacity: 0.4;
 }
 .tier-pip {
   position: absolute;
-  z-index: 3;
-  top: 3px;
-  left: 4px;
-  text-shadow: 0 1px 3px #000;
-  font-size: 9px;
+  z-index: 4;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 5px;
+  font-size: 10px;
   font-weight: 800;
-  color: var(--ink-dim);
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--stroke-ink) 88%, transparent);
+  color: var(--on-ink);
+}
+/* Reroll and Freeze dock under the hand as one quiet row (§3): they are the
+   two things you do when the hand is wrong, and neither is a decision worth a
+   full-height bar. Tier-up keeps its own banner above — playtesters missed it
+   when it dressed like these. */
+.camp-dock {
+  display: flex;
+  gap: 6px;
+}
+.camp-dock > .btn {
+  flex: 1;
+  min-height: 34px;
 }
 
 .gold {
@@ -2537,14 +2626,8 @@ h3 {
 }
 
 /* The camp button prints exactly what the purchase does (DN04 §1.3), on one
-   line — a second line costs every offer card real height. */
-.offer-buy {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 3px;
-  min-height: 30px;
-}
+   line — a second line costs every hand card real height. Its box lives with
+   the hand layout above; this is only what it says. */
 .buy-main {
   font-weight: 900;
   white-space: nowrap;

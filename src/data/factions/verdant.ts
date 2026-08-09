@@ -7,8 +7,8 @@ export const VERDANT: FactionDef = {
   mechanicText: 'At the end of every Muster, Growth stacks permanently gain +ATK/+HP per unit.',
   blurb: 'Elves, treants and wild spirits. Weak early, terrifying if left alone.',
   unlockRenown: 0,
-  colors: { primary: '#4f9d69', secondary: '#cfe3d4', accent: '#8fdc9f', ink: '#0b1710' },
-  shape: '14px',
+  colors: { primary: '#5fb87c', secondary: '#d8ead9', accent: '#9fe8ad', ink: '#0b1710' },
+  shape: '18px',
   nameBank: ['Aelwyn', 'Thessa', 'Faerwyn', 'Ilyara', 'Corrin', 'Nualaith', 'Ryndel', 'Elowen', 'Ysoria', 'Bramwel'],
   titleBank: ['of the Deep Grove', 'Moonbough', 'Dawnleaf', 'of the First Seed', 'Greenmantle', 'the Wildcaller'],
 }

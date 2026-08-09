@@ -25,7 +25,7 @@ function BannerChip({ w, you, foe, onClick }: { w: Warlord; you: boolean; foe: b
   return (
     <button
       className="banner"
-      style={{ ['--fc' as string]: f?.colors.primary ?? '#666' }}
+      style={{ ['--fc' as string]: f?.colors.primary ?? 'var(--ink-dim)' }}
       data-dead={!w.alive}
       data-you={you}
       data-foe={foe && w.alive}

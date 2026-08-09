@@ -96,7 +96,9 @@ export function HomeScreen() {
             </button>
           ))}
         </div>
-        <div className="tiny faction-line" style={{ color: faction.colors.accent }}>
+        {/* The faction's accent is tuned to fill a chip, not to be 12px type on a
+            cream page — --fc-ink is the same hue mixed down into the ink (§4). */}
+        <div className="tiny faction-line" style={{ ['--fc' as string]: faction.colors.accent, color: 'var(--fc-ink)' }}>
           <strong>{faction.mechanic}</strong> — {faction.mechanicText}
         </div>
 
@@ -137,7 +139,7 @@ export function HomeScreen() {
 
         <div className="hero-kit">
           <span className="tiny dim blurb-flavour">Passive · {activeHero.passive.text}</span>
-          <span className="tiny" style={{ color: 'var(--fx-secondary)' }}>
+          <span className="tiny" style={{ color: 'var(--fx-ink)' }}>
             {activeHero.spell.name} · {activeHero.spell.text}
           </span>
           {!canStart && <span className="tiny gold">{activeHero.unlockRenown} Renown to unlock</span>}

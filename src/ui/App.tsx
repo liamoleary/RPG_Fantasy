@@ -42,6 +42,14 @@ export function App() {
     document.body.classList.toggle('reduced-motion', save.settings.reducedMotion)
   }, [save.settings.reducedMotion])
 
+  // Dawn in camp, dusk on the battlefield (DN07 §4). The ground is painted on
+  // <body>, so the shift has to live there too — and putting it on a data
+  // attribute rather than a class means the theme redefines a handful of
+  // tokens and every descendant follows, with no per-component branching.
+  useEffect(() => {
+    document.body.dataset.ground = screen === 'battle' ? 'dusk' : 'dawn'
+  }, [screen])
+
   return (
     <div className="app">
       {screen === 'home' || !run ? (

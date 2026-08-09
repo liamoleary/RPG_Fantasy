@@ -59,7 +59,9 @@ export function PathColumns({ talentsTaken }: { talentsTaken: readonly string[] 
 
 /** The three boon branches, wherever a branch has to be coloured. */
 export function branchColor(b: string): string {
-  return b === 'might' ? '#e08a5a' : b === 'magic' ? '#9a7ae0' : '#5ab0a0'
+  // A token reference, not a value: this is only ever assigned to the --bc
+  // custom property, so the palette stays in one place (DN07 §4).
+  return b === 'might' ? 'var(--branch-might)' : b === 'magic' ? 'var(--branch-magic)' : 'var(--branch-command)'
 }
 
 /**

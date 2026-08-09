@@ -6,8 +6,10 @@ import { Plate } from './Plate'
 import { Sigil } from './Sigil'
 
 export function unitColor(def: UnitDef): string {
-  if (def.pool === 'merc') return '#8a8fa6'
-  return FACTION_BY_ID.get(def.pool)?.colors.primary ?? '#8a8fa6'
+  // Mercenaries are deliberately drab; the value is a token so the theme owns
+  // it (DN07 §4). Factions keep their own sampled colours.
+  if (def.pool === 'merc') return 'var(--merc)'
+  return FACTION_BY_ID.get(def.pool)?.colors.primary ?? 'var(--merc)'
 }
 
 /**

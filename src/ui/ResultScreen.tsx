@@ -1,4 +1,4 @@
-import { HERO_ART_2X, UNIT_ART } from '../data/art'
+import { HERO_ART_2X } from '../data/art'
 import { FACTION_BY_ID, HERO_BY_ID, unit } from '../data/index'
 import { useState } from 'react'
 import type { BattleEvent, Side, SpellOutcome } from '../engine/battle'
@@ -8,7 +8,7 @@ import { Ladder } from './Ladder'
 import { Plate } from './Plate'
 import { Sigil } from './Sigil'
 import { describe as describeEvent, keyMoments } from './battleLog'
-import { unitColor } from './StackCard'
+import { StackCard } from './StackCard'
 import { FeedbackPrompt } from './Feedback'
 
 /** How a spell's tally reads on the receipt (Design Notes 03 §2.6). */
@@ -133,13 +133,18 @@ export function ResultScreen({ run }: { run: RunState }) {
           <div className="eyebrow" style={{ marginBottom: 5 }}>
             {won ? 'Your warband, still standing' : tie ? 'Left on the field' : `What ${foe?.name ?? 'they'} had left`}
           </div>
+          {/* The parade uses the shared card, not a bespoke thumbnail (DN07
+              §2): what survived the battle should look like what stood on the
+              board, because it is the same stack. */}
           <div className="survivor-strip">
-            {winnersSurvivors.map((sv) => (
-              <span key={sv.uid} className="survivor" style={{ ['--sc' as string]: unitColor(unit(sv.unitId)) }}>
-                <Plate src={UNIT_ART[sv.unitId]} eager fallback={<Sigil id={unit(sv.unitId).sigil} size={18} />} />
-                <span className="survivor-count">{sv.count}</span>
-              </span>
-            ))}
+            {winnersSurvivors.map((sv) => {
+              const def = unit(sv.unitId)
+              return (
+                <span key={sv.uid} className="survivor">
+                  <StackCard unitId={sv.unitId} count={sv.count} atk={def.atk} hp={def.hp} eager />
+                </span>
+              )
+            })}
           </div>
         </div>
       )}

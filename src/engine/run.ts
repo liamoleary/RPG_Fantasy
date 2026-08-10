@@ -383,6 +383,29 @@ function elitePick(offers: readonly TalentOffer[], archetype: string): TalentNod
 function makePairings(run: RunState, rng: RNG, tm: TierMods = {}): Pairing[] {
   const alive = run.warlords.filter((w) => w.alive)
 
+  // The Crownless Throne (War Tier 10): a run that reaches its endgame is
+  // guaranteed a seat opposite an authored board. DN09 §3 promises the final
+  // rounds replace the fallen with something worse, and that promise cannot be
+  // left to the odd-number ghost slot — that slot only exists when the living
+  // count happens to be odd, so most runs met the Throne never or once by
+  // accident. The Throne takes a fixture of its own, ahead of the grudge
+  // (Tier 8): at the top of the ladder the last word belongs to the higher rung.
+  if (inBossPhase(run, tm)) {
+    const you = run.warlords.find((w) => w.isPlayer && w.alive)
+    const throne = lastEliminated(run)
+    // With nothing yet fallen there is nothing for the Throne to wear. The
+    // round pairs normally; the phase reopens the moment a banner drops.
+    if (you && throne) {
+      const q = rng.shuffle(alive.filter((w) => w.id !== you.id).map((w) => w.id))
+      const pairs: Pairing[] = [{ aId: you.id, bId: throne, ghost: true }]
+      while (q.length >= 2) pairs.push({ aId: q.shift() as string, bId: q.shift() as string, ghost: false })
+      // The odd rival meets the same board you do. It is the last rounds of
+      // the war for them too.
+      if (q.length === 1) pairs.push({ aId: q[0], bId: throne, ghost: true })
+      return pairs
+    }
+  }
+
   // Grudge Pairings (War Tier 8): every Nth round the strongest banner still
   // standing is put opposite you, and the rest of the lobby pairs off around
   // that fixture. Strength is banner HP then board size — both are things a
@@ -614,25 +637,43 @@ function bankWarSpoils(w: Warlord, survivors: Survivor[]) {
 }
 
 /**
- * Which authored board, if any, stands in for a ghost this round. Endgame is
- * "three banners or fewer left" rather than a round number, because a lobby
- * that ends early should still meet the Throne.
+ * Is this the endgame the Throne is written for (DN09 §3)?
+ *
+ * A run ends one of two ways, so the endgame has to be read two ways: the
+ * lobby is down to its last few banners, or the hard cap is within
+ * `bossRounds`. The first reading alone was the original implementation and it
+ * under-fired badly — a crowded run could reach round 16 and win without ever
+ * meeting a boss, because the banner count never fell far enough. Either
+ * condition now opens the phase.
  */
-function bossFor(run: RunState, tm: TierMods, ghostId: string): BoardStack[] | null {
-  if (!tm.bossRounds) return null
+export function inBossPhase(run: RunState, tm: TierMods): boolean {
+  if (!tm.bossRounds) return false
   const standing = run.warlords.filter((w) => w.alive).length
-  if (standing > tm.bossRounds + 1) return null
+  return standing <= tm.bossRounds + 1 || run.round > HARD_CAP_ROUND - tm.bossRounds
+}
+
+/**
+ * Which authored board, if any, stands in for a ghost this round. Exported so
+ * a test can look at what the endgame actually builds — the first version of
+ * the Throne was wrong in the data, not the control flow, and nothing
+ * observable from outside would have said so.
+ */
+export function bossFor(run: RunState, tm: TierMods, ghostId: string): BoardStack[] | null {
+  if (!inBossPhase(run, tm)) return null
   const pick = BOSS_BOARDS[hashSeed(`${run.seed}|boss|${run.round}|${ghostId}`) % BOSS_BOARDS.length]
+  // The temper rides in on the same fields Growth and Banner Ranks use, so the
+  // board reads, fights and displays exactly like any other — no boss-only
+  // branch anywhere in `battle.ts`.
   return pick.stacks.map((s, i) => ({
     uid: `boss${run.round}_${i}`,
     unitId: s.unitId,
     count: s.count,
     slot: s.slot,
-    bonusAtk: 0,
-    bonusHp: 0,
+    bonusAtk: pick.temper.atk,
+    bonusHp: pick.temper.hp,
     growthTicks: 0,
     spent: 0,
-    rank: 0,
+    rank: pick.temper.rank,
   }))
 }
 

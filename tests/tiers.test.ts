@@ -10,8 +10,21 @@ import {
 } from '../src/data/tiers'
 import { UNIT_BY_ID } from '../src/data/index'
 import { FRONT_SLOTS, TOTAL_SLOTS } from '../src/engine/battle'
-import { advanceRound, newRun, player, resolveBattles, tierMods, type RunState } from '../src/engine/run'
-import { income } from '../src/engine/camp'
+import {
+  HARD_CAP_ROUND,
+  LOBBY_SIZE,
+  START_HP,
+  advanceRound,
+  beginRound,
+  bossFor,
+  inBossPhase,
+  newRun,
+  player,
+  resolveBattles,
+  tierMods,
+  type RunState,
+} from '../src/engine/run'
+import { BASE_INCOME_CAP, income } from '../src/engine/camp'
 import { ZERO_MODS } from '../src/data/types'
 
 /**
@@ -238,6 +251,124 @@ describe('the Crownless Throne', () => {
   it('only shows up at the tier that authors it', () => {
     expect(modsForTier(9).bossRounds).toBeUndefined()
     expect(modsForTier(10).bossRounds).toBeGreaterThan(0)
+  })
+
+  /**
+   * The ruling: "a run that reaches the final two rounds is guaranteed at least
+   * one boss battle, regardless of banner count." The first implementation
+   * substituted a boss into the ghost slot — which only exists when the living
+   * count is odd — so most runs met the Throne never. This is the test that
+   * would have caught that, and it is the one that has to stay honest.
+   */
+  it('seats every surviving player opposite the Throne once the endgame opens', () => {
+    let sawEndgame = 0
+    for (let seed = 1; seed <= 24; seed++) {
+      const run = newRun({ seed, factionId: 'vanguard', heroId: 'h_berrik', tier: 10 })
+      for (let guard = 0; guard < 20 && !run.finished; guard++) {
+        const you = player(run)
+        // Fixture, not a rule: nothing in a test drafts a board for the
+        // player, so an untouched banner is eliminated long before any
+        // endgame. Propping the HP up is what lets the run reach the rounds
+        // this test is about; it changes no pairing and no outcome.
+        if (you.alive) you.hp = 60
+        const fallen = run.warlords.some((w) => !w.alive)
+        if (you.alive && fallen && inBossPhase(run, tierMods(run))) {
+          const mine = run.pairings.find((p) => p.aId === you.id || p.bId === you.id)
+          expect(mine, `seed ${seed} round ${run.round}: the player has no pairing at all`).toBeDefined()
+          expect(mine!.aId, `seed ${seed} round ${run.round}: the player must hold the live seat`).toBe(you.id)
+          expect(mine!.ghost, `seed ${seed} round ${run.round}: no boss battle in the endgame`).toBe(true)
+          // The seat the Throne wears belongs to a warlord who has fallen —
+          // a living rival there would be skipped, not fought.
+          expect(run.warlords.find((w) => w.id === mine!.bId)!.alive).toBe(false)
+          sawEndgame += 1
+        }
+        resolveBattles(run)
+        if (run.finished) break
+        advanceRound(run)
+      }
+    }
+    expect(sawEndgame, 'no fixture ever reached the endgame — the test proves nothing').toBeGreaterThan(20)
+  })
+
+  it('opens on the hard cap as well as on banner count', () => {
+    const run = newRun({ seed: 3, factionId: 'vanguard', heroId: 'h_berrik', tier: 10 })
+    const tm = tierMods(run)
+    // A full lobby, but the cap is two rounds away: still the endgame.
+    run.round = HARD_CAP_ROUND - 1
+    expect(run.warlords.filter((w) => w.alive).length).toBe(LOBBY_SIZE)
+    expect(inBossPhase(run, tm)).toBe(true)
+    // Same crowded lobby, early: not the endgame.
+    run.round = 4
+    expect(inBossPhase(run, tm)).toBe(false)
+    // Few banners left, early: the endgame by the other reading.
+    for (const w of run.warlords.filter((w) => !w.isPlayer).slice(0, 5)) w.alive = false
+    expect(inBossPhase(run, tm)).toBe(true)
+  })
+
+  /**
+   * The second half of "under-implemented, not soft". Firing the Throne every
+   * endgame was necessary and not sufficient: the authored rosters alone
+   * measured 447 board power against a round-13 player's ~1775, so the player
+   * won 98.2% of boss battles for 1.5 HP and the rung read as a rest stop.
+   * The temper is what closes that, and nothing else in the suite would
+   * notice if it were quietly dropped back to zero.
+   */
+  it('arrives carrying a run’s worth of history, not a fresh roster', () => {
+    for (const b of BOSS_BOARDS) {
+      // Honored: the thing a player spends a whole run chasing.
+      expect(b.temper.rank, `${b.name} musters unranked`).toBeGreaterThanOrEqual(2)
+      expect(b.temper.atk, `${b.name} carries no growth`).toBeGreaterThan(0)
+      expect(b.temper.hp, `${b.name} carries no growth`).toBeGreaterThan(0)
+    }
+    // And the temper has to actually reach the board the engine builds — the
+    // data being right is worthless if `bossFor` drops it on the floor.
+    const run = newRun({ seed: 3, factionId: 'vanguard', heroId: 'h_berrik', tier: 10 })
+    run.round = HARD_CAP_ROUND - 1
+    run.warlords[1].alive = false
+    run.warlords[1].eliminatedRound = 5
+    beginRound(run)
+    const mine = run.pairings.find((p) => p.aId === run.playerId)!
+    expect(mine.ghost).toBe(true)
+    const board = bossFor(run, tierMods(run), mine.bId)
+    expect(board, 'the endgame produced no boss board').not.toBeNull()
+    for (const s of board!) {
+      expect(s.bonusAtk).toBeGreaterThan(0)
+      expect(s.bonusHp).toBeGreaterThan(0)
+      expect(s.rank).toBeGreaterThanOrEqual(2)
+    }
+  })
+
+  it('never opens below Tier 10, at any round or banner count', () => {
+    const run = newRun({ seed: 3, factionId: 'vanguard', heroId: 'h_berrik', tier: 9 })
+    run.round = HARD_CAP_ROUND
+    for (const w of run.warlords.filter((w) => !w.isPlayer).slice(0, 6)) w.alive = false
+    expect(inBossPhase(run, tierMods(run))).toBe(false)
+  })
+})
+
+/**
+ * Ruling 4 on the War Tiers report: the DN08 substitutions must not be
+ * rediscoverable only by reading `tiers.ts`. This is the tripwire — it fails
+ * the moment someone lands DN08's economy, and the failure message says what
+ * to do and where the rest of it is written down.
+ */
+describe('the DN08 substitutions are pinned to today’s baselines', () => {
+  it('fails loudly when the economy moves under the ladder', () => {
+    const why =
+      'DN08 baselines changed. Re-point War Tiers 4, 6 and 7 in this same change — see TODO.md.'
+    expect(START_HP, why).toBe(30)
+    expect(BASE_INCOME_CAP, why).toBe(10)
+  })
+
+  it('states the substitutions as proportions of those baselines', () => {
+    // Thin Rations: DN09 asks for 50 -> 42. On a 30 HP banner that is -5.
+    expect(modsForTier(4).playerHp).toBe(-5)
+    // Long Supply Lines: DN09 asks for 18 -> 15; the designer re-pointed it at
+    // a 15 -> 13-equivalent after -2 failed to bite. On a 10 ceiling that is -3.
+    expect(modsForTier(7).playerIncomeCap).toBe(-3)
+    // Neither may ever reach zero: "never remove the toys" (DN09 §3).
+    expect(START_HP + modsForTier(4).playerHp!).toBeGreaterThan(0)
+    expect(BASE_INCOME_CAP + modsForTier(7).playerIncomeCap!).toBeGreaterThan(0)
   })
 })
 

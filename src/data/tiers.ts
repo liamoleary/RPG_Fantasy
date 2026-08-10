@@ -56,9 +56,17 @@ export interface WarTier {
  * Two of these numbers are placeholders and say so, because DN09 was written
  * against DN08's economy and DN08 is not implemented yet. Thin Rations is
  * specified as 50 → 42 HP and Long Supply Lines as an 18 → 15 income ceiling;
- * today those baselines are 30 and 10. Both are set to the same *proportion*
- * of the live numbers (-16%, -20%) so the ladder's shape is right now and the
- * absolute values land when DN08 does.
+ * today those baselines are 30 and 10. Both are set to a proportion of the
+ * live numbers so the ladder's shape is right now and the absolute values land
+ * when DN08 does. Long Supply Lines is -3 rather than the -2 the DN09 ratio
+ * gives: at -2 it bit for barely a point and the designer re-pointed it at a
+ * 15 → 13-equivalent.
+ *
+ * When DN08 §5 lands, Tiers 4, 6 and 7 must be re-pointed at the new baselines
+ * in the same change. That obligation is tracked in TODO.md and pinned by
+ * `tests/tiers.test.ts` — which fails the moment START_HP or BASE_INCOME_CAP
+ * moves, so this comment cannot be the only thing standing between a new
+ * economy and a stale ladder.
  */
 export const WAR_TIERS: WarTier[] = [
   { tier: 1, name: null, text: null, mods: {} },
@@ -95,8 +103,8 @@ export const WAR_TIERS: WarTier[] = [
   {
     tier: 7,
     name: 'Long Supply Lines',
-    text: 'Your income ceiling drops by 2.',
-    mods: { playerIncomeCap: -2 },
+    text: 'Your income ceiling drops by 3.',
+    mods: { playerIncomeCap: -3 },
   },
   {
     tier: 8,
@@ -164,6 +172,20 @@ export function modsForTier(tier: number): TierMods {
  */
 export interface BossBoard {
   name: string
+  /**
+   * What the Throne carries that a fresh roster does not.
+   *
+   * The first pass authored these boards as rosters alone and they were a
+   * *gift*: the harness measured a round-13 player board at ~1775 power
+   * against 447, and the player won 98.2% of boss battles for 1.5 HP. A board
+   * met in the last rounds of a run is standing opposite fifteen rounds of
+   * Growth, war banks and Banner Ranks, so it has to arrive carrying the same
+   * kind of history. `rank: 2` is Honored — the thing the player spends a
+   * whole run chasing, and the reason this reads as a boss rather than a
+   * bigger rival. DN09 §3 leaves these numbers to the harness; §7 is where
+   * they were tuned.
+   */
+  temper: { atk: number; hp: number; rank: number }
   stacks: { unitId: string; count: number; slot: number }[]
 }
 
@@ -172,28 +194,30 @@ export const BOSS_BOARDS: BossBoard[] = [
     // One banner from each faction's top of the line — the lobby's survivors
     // fused into the thing that took the throne while you were climbing.
     name: 'The Crownless Host',
+    temper: { atk: 12, hp: 26, rank: 2 },
     stacks: [
-      { unitId: 'vg_colossus', count: 6, slot: 0 },
-      { unitId: 'vg_champion', count: 8, slot: 1 },
-      { unitId: 'vd_elderbark', count: 6, slot: 2 },
-      { unitId: 'st_warlord', count: 8, slot: 3 },
-      { unitId: 'vg_ballistier', count: 8, slot: 4 },
-      { unitId: 'vd_matriarch', count: 8, slot: 5 },
-      { unitId: 'st_stormspear', count: 8, slot: 6 },
+      { unitId: 'vg_colossus', count: 12, slot: 0 },
+      { unitId: 'vg_champion', count: 16, slot: 1 },
+      { unitId: 'vd_elderbark', count: 12, slot: 2 },
+      { unitId: 'st_warlord', count: 16, slot: 3 },
+      { unitId: 'vg_ballistier', count: 16, slot: 4 },
+      { unitId: 'vd_matriarch', count: 16, slot: 5 },
+      { unitId: 'st_stormspear', count: 16, slot: 6 },
     ],
   },
   {
     // Verdant to the last stack: the faction whose whole identity is that it
     // never stops growing, met at the end of a run where it never had to stop.
     name: 'The Last Grove',
+    temper: { atk: 12, hp: 26, rank: 2 },
     stacks: [
-      { unitId: 'vd_ancient', count: 6, slot: 0 },
-      { unitId: 'vd_elderbark', count: 7, slot: 1 },
-      { unitId: 'vd_stag', count: 10, slot: 2 },
-      { unitId: 'vd_thornbark', count: 12, slot: 3 },
-      { unitId: 'vd_matriarch', count: 9, slot: 4 },
-      { unitId: 'vd_warden', count: 8, slot: 5 },
-      { unitId: 'vd_moonshade', count: 12, slot: 6 },
+      { unitId: 'vd_ancient', count: 12, slot: 0 },
+      { unitId: 'vd_elderbark', count: 14, slot: 1 },
+      { unitId: 'vd_stag', count: 20, slot: 2 },
+      { unitId: 'vd_thornbark', count: 24, slot: 3 },
+      { unitId: 'vd_matriarch', count: 18, slot: 4 },
+      { unitId: 'vd_warden', count: 16, slot: 5 },
+      { unitId: 'vd_moonshade', count: 24, slot: 6 },
     ],
   },
 ]

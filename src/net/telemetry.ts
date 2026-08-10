@@ -62,6 +62,8 @@ export interface RunReport {
   heroId: string
   factionId: string
   difficulty: string
+  /** War Tier the run was climbed at (DN09 §7.4). 1 for every pre-tier row. */
+  tier: number
   placement: number | null
   rounds: number
   durationMs: number
@@ -85,6 +87,8 @@ export function buildRunReport(run: RunState, tally: RunTally, now = Date.now())
       heroId: me.heroId,
       factionId: me.factionId,
       difficulty: run.difficulty,
+      /** DN09 §7.4: every run row is tagged with the tier it was climbed at. */
+      tier: run.tier,
       placement: me.placement,
       rounds: run.round,
       durationMs: Math.max(0, now - tally.startedAt),

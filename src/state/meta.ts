@@ -14,6 +14,13 @@ export interface MetaSave {
   unlocks: string[]
   feats: Record<string, true>
   stats: SaveData['stats']
+  /**
+   * The climb is progression, so the server owns it like renown does (DN09).
+   * Optional because it has to be: a payload written by a client that shipped
+   * before War Tiers has no `tiers` key at all, and the sync layer must merge
+   * it without inventing a ladder or throwing.
+   */
+  tiers?: SaveData['tiers']
 }
 
 export const SAVE_VERSION_FOR_SYNC = SAVE_VERSION
@@ -28,12 +35,28 @@ export function metaOf(save: SaveData): MetaSave {
       wins: save.stats.wins,
       bestPlacementByHero: { ...save.stats.bestPlacementByHero },
     },
+    tiers: {
+      highestUnlocked: save.tiers.highestUnlocked,
+      highestWon: save.tiers.highestWon,
+      records: { ...save.tiers.records },
+      bestByHero: { ...save.tiers.bestByHero },
+    },
   }
 }
 
 /** Graft a meta slice back onto a full save, leaving run and settings untouched. */
 export function withMeta(save: SaveData, meta: MetaSave): SaveData {
-  return { ...save, renown: meta.renown, unlocks: meta.unlocks, feats: meta.feats, stats: meta.stats }
+  return {
+    ...save,
+    renown: meta.renown,
+    unlocks: meta.unlocks,
+    feats: meta.feats,
+    stats: meta.stats,
+    // A server copy from before War Tiers carries no ladder; keeping the local
+    // one is right, because the alternative is resetting a player's climb to
+    // Tier 1 the first time an old payload comes back.
+    tiers: meta.tiers ? mergeTiers(save.tiers, meta.tiers) : save.tiers,
+  }
 }
 
 /**
@@ -87,5 +110,36 @@ export function mergeMeta(a: MetaSave, b: MetaSave): MetaSave {
       wins: Math.min(runs, Math.max(a.stats.wins, b.stats.wins)),
       bestPlacementByHero: bestByHero,
     },
+    tiers: mergeTiers(a.tiers, b.tiers),
+  }
+}
+
+/**
+ * Two devices climbing the same ladder. Everything here takes the better of
+ * the two, because losing never demotes (§4) and a merge is not a loss: the
+ * highest unlocked and won tiers are maxima, per-tier records add up to the
+ * larger side rather than summing (summing would double-count a run that
+ * synced from both devices), and each hero keeps its best.
+ */
+function mergeTiers(a?: SaveData['tiers'], b?: SaveData['tiers']): SaveData['tiers'] {
+  const EMPTY: SaveData['tiers'] = { highestUnlocked: 1, highestWon: 1, records: {}, bestByHero: {} }
+  a = a ?? EMPTY
+  b = b ?? EMPTY
+  const records: SaveData['tiers']['records'] = {}
+  for (const key of new Set([...Object.keys(a.records), ...Object.keys(b.records)])) {
+    const x = a.records[key] ?? { runs: 0, wins: 0 }
+    const y = b.records[key] ?? { runs: 0, wins: 0 }
+    const runs = Math.max(x.runs, y.runs)
+    records[key] = { runs, wins: Math.min(runs, Math.max(x.wins, y.wins)) }
+  }
+  const bestByHero: Record<string, number> = { ...a.bestByHero }
+  for (const [heroId, tier] of Object.entries(b.bestByHero)) {
+    bestByHero[heroId] = Math.max(bestByHero[heroId] ?? 0, tier)
+  }
+  return {
+    highestUnlocked: Math.max(a.highestUnlocked, b.highestUnlocked),
+    highestWon: Math.max(a.highestWon, b.highestWon),
+    records,
+    bestByHero,
   }
 }

@@ -4,7 +4,7 @@ import type { TalentNode } from '../data/talents/index'
 import type { FactionId, HeroDef, HeroMods } from '../data/types'
 import { ZERO_MODS, addMods } from '../data/types'
 import { economyGold, FRONT_SLOTS, simulateBattle, type BattleResult, type BoardStack, type HeroState, type Survivor } from './battle'
-import { canTake, heroLevel, isLevelUpRound, offersFor, rivalPick, treeForWarlord, type TalentOffer } from './talents'
+import { canTake, heroLevel, isLevelUpRound, offersFor, rivalPick, scoreNode, treeForWarlord, type TalentOffer } from './talents'
 import { BASE_INCOME_CAP, MAX_CAMP_TIER, income, newCamp, rollOffer, type CampState } from './camp'
 import { applyRankProgress, rankDefOf, refreshRanks } from './ranks'
 import { autoPosition, NOISE, rivalMuster, type Archetype, type Difficulty } from './rivals'
@@ -266,7 +266,7 @@ export function beginRound(run: RunState) {
       // Elite Muster (War Tier 5) swaps the archetype policy for the deepest
       // available node, which is what makes rivals reach their capstones.
       const offers = offersFor(treeForWarlord(w.factionId, w.heroId), w.talentsTaken)
-      const chosen = tm.rivalEliteDraft ? deepestPick(offers) : rivalPick(offers, w.archetype)
+      const chosen = tm.rivalEliteDraft ? elitePick(offers, w.archetype) : rivalPick(offers, w.archetype)
       if (chosen) applyTalent(w, chosen, tm)
     }
     const out = rivalMuster(
@@ -352,16 +352,29 @@ export function choosePlayerTalent(run: RunState, nodeId: string) {
 }
 
 /**
- * Elite Muster's policy: always take the deepest node available, so rivals
- * climb their ladders rather than grazing across them. Ties break on id, which
- * keeps a seeded run replayable.
+ * Elite Muster's policy (War Tier 5): the archetype's own synergy scoring,
+ * with a thumb on the scale for depth, so rivals climb their ladders instead
+ * of grazing across them.
+ *
+ * The first version of this ignored scoring entirely and just took the deepest
+ * node — which made the tier a *buff to the player*, worth +4.3 points of win
+ * rate in the harness, because a rival taking bad-but-deep nodes is a worse
+ * rival. Synergy has to lead; depth only breaks the tie. Ties beyond that
+ * break on id, which keeps a seeded run replayable.
  */
-function deepestPick(offers: readonly TalentOffer[]): TalentNode | null {
+const DEPTH_WEIGHT = 0.6
+
+function elitePick(offers: readonly TalentOffer[], archetype: string): TalentNode | null {
   let best: TalentNode | null = null
+  let bestScore = -Infinity
   for (const offer of offers) {
     for (const node of offer.options) {
       if (node.unlockedByFeat) continue
-      if (!best || node.tier > best.tier || (node.tier === best.tier && node.id < best.id)) best = node
+      const score = scoreNode(node, archetype) + node.tier * DEPTH_WEIGHT
+      if (score > bestScore || (score === bestScore && best !== null && node.id < best.id)) {
+        bestScore = score
+        best = node
+      }
     }
   }
   return best

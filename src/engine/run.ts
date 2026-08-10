@@ -5,10 +5,11 @@ import type { FactionId, HeroDef, HeroMods } from '../data/types'
 import { ZERO_MODS, addMods } from '../data/types'
 import { economyGold, FRONT_SLOTS, simulateBattle, type BattleResult, type BoardStack, type HeroState, type Survivor } from './battle'
 import { canTake, heroLevel, isLevelUpRound, offersFor, rivalPick, treeForWarlord, type TalentOffer } from './talents'
-import { MAX_CAMP_TIER, income, newCamp, rollOffer, type CampState } from './camp'
+import { BASE_INCOME_CAP, MAX_CAMP_TIER, income, newCamp, rollOffer, type CampState } from './camp'
 import { applyRankProgress, rankDefOf, refreshRanks } from './ranks'
 import { autoPosition, NOISE, rivalMuster, type Archetype, type Difficulty } from './rivals'
 import { hashSeed, makeRng, type RNG } from './rng'
+import { BOSS_BOARDS, clampTier, modsForTier, type TierMods } from '../data/tiers'
 
 export const LOBBY_SIZE = 8
 export const START_HP = 30
@@ -60,6 +61,8 @@ export interface RunState {
   round: number
   phase: Phase
   difficulty: Difficulty
+  /** War Tier this run is climbing (DN09). 1 is the game as shipped. */
+  tier: number
   warlords: Warlord[]
   playerId: string
   pairings: Pairing[]
@@ -119,7 +122,17 @@ export interface NewRunOptions {
   heroId: string
   playerName?: string
   difficulty?: Difficulty
+  /** War Tier (DN09). Omitted or 1 = the game as shipped. */
+  tier?: number
 }
+
+/**
+ * The active War Tier rules, merged. Read through this everywhere rather than
+ * reaching for WAR_TIERS, so a run's difficulty is one lookup and Tier 1
+ * resolves to an empty object — which is what makes "Tier 1 is byte-identical"
+ * true by construction instead of by discipline (DN09 §8.1).
+ */
+export const tierMods = (run: RunState): TierMods => modsForTier(run.tier)
 
 export function newRun(opts: NewRunOptions): RunState {
   const rng = makeRng(opts.seed)
@@ -148,11 +161,34 @@ export function newRun(opts: NewRunOptions): RunState {
     )
   }
 
+  const tier = clampTier(opts.tier ?? 1)
+  const mods = modsForTier(tier)
+
+  // Thin Rations and anything else that trims the player's banner lands before
+  // the first round begins, so nothing has to re-read it later.
+  if (mods.playerHp) warlords[0].hp = Math.max(1, warlords[0].hp + mods.playerHp)
+  // Iron Banners is a mod the battle engine already reads — no engine edit,
+  // the rivals simply march with thicker front lines.
+  if (mods.rivalFrontBulwark) {
+    for (const w of warlords) {
+      if (w.isPlayer) continue
+      w.mods = { ...w.mods, frontBulwark: w.mods.frontBulwark + mods.rivalFrontBulwark }
+    }
+  }
+  // Rich Foes, likewise: rivals just have a better income mod than you do.
+  if (mods.rivalIncome) {
+    for (const w of warlords) {
+      if (w.isPlayer) continue
+      w.mods = { ...w.mods, income: w.mods.income + mods.rivalIncome }
+    }
+  }
+
   const run: RunState = {
     seed: opts.seed,
     round: 1,
     phase: 'muster',
     difficulty: opts.difficulty ?? 'standard',
+    tier,
     warlords,
     playerId,
     pairings: [],
@@ -203,6 +239,7 @@ function makeWarlord(
 /** Start of Muster: income, Growth, offers, rival turns, pairings, level-up. */
 export function beginRound(run: RunState) {
   const rng = roundRng(run, 1)
+  const tm = tierMods(run)
 
   for (const w of run.warlords) {
     if (!w.alive) continue
@@ -210,7 +247,10 @@ export function beginRound(run: RunState) {
     // Anything that moved a count since the last Muster — Growth, talents,
     // hero passives — can have crossed a Banner Rank threshold (§3.1).
     refreshRanks(w.board)
-    w.gold = income(run.round, w.mods) + economyGold(w.board)
+    // Long Supply Lines trims the player's ceiling and nobody else's, so the
+    // cap is passed per warlord rather than being a global constant.
+    const cap = w.isPlayer && tm.playerIncomeCap ? BASE_INCOME_CAP + tm.playerIncomeCap : undefined
+    w.gold = income(run.round, w.mods, cap) + economyGold(w.board)
     w.camp.rerollsUsedThisRound = 0
     if (!w.camp.frozen || w.camp.offer.length === 0) {
       w.camp.offer = rollOffer(w.factionId, w.camp, w.mods, rng.fork(hashSeed(w.id)))
@@ -223,8 +263,11 @@ export function beginRound(run: RunState) {
     if (!w.alive || w.isPlayer) continue
     if (isLevelUpRound(run.round)) {
       // §5: rivals walk the same trees, by archetype policy and with no RNG.
-      const chosen = rivalPick(offersFor(treeForWarlord(w.factionId, w.heroId), w.talentsTaken), w.archetype)
-      if (chosen) applyTalent(w, chosen)
+      // Elite Muster (War Tier 5) swaps the archetype policy for the deepest
+      // available node, which is what makes rivals reach their capstones.
+      const offers = offersFor(treeForWarlord(w.factionId, w.heroId), w.talentsTaken)
+      const chosen = tm.rivalEliteDraft ? deepestPick(offers) : rivalPick(offers, w.archetype)
+      if (chosen) applyTalent(w, chosen, tm)
     }
     const out = rivalMuster(
       {
@@ -235,7 +278,7 @@ export function beginRound(run: RunState) {
         round: run.round,
         archetype: w.archetype,
         factionId: w.factionId,
-        noise: NOISE[run.difficulty],
+        noise: tm.rivalNoise ?? NOISE[run.difficulty],
       },
       rng.fork(hashSeed(`m${w.id}`)),
     )
@@ -244,7 +287,7 @@ export function beginRound(run: RunState) {
     w.gold = out.gold
   }
 
-  run.pairings = makePairings(run, roundRng(run, 2))
+  run.pairings = makePairings(run, roundRng(run, 2), tm)
 
   const p = player(run)
   if (p.alive && isLevelUpRound(run.round)) {
@@ -283,9 +326,15 @@ function applyGrowth(w: Warlord) {
  * touches the engine (§6): push the id, add the mods, honour campTierUp. Only
  * the name and the shape of the thing being applied moved.
  */
-export function applyTalent(w: Warlord, node: TalentNode) {
+export function applyTalent(w: Warlord, node: TalentNode, tm: TierMods = {}) {
   w.talentsTaken.push(node.id)
   w.mods = addMods(w.mods, node.mods)
+  // Their War Chests (War Tier 6): a rival's *gold* talents pay twice.
+  // Applied as a second helping of the income component only, so the rest of
+  // the node — and every node the player takes — is untouched.
+  if (!w.isPlayer && tm.rivalIncomeTalentMult && node.mods.income) {
+    w.mods = { ...w.mods, income: w.mods.income + node.mods.income * (tm.rivalIncomeTalentMult - 1) }
+  }
   if (node.mods.campTierUp) {
     w.camp = { ...w.camp, tier: Math.min(MAX_CAMP_TIER, w.camp.tier + node.mods.campTierUp), tierDiscount: 0 }
   }
@@ -302,8 +351,48 @@ export function choosePlayerTalent(run: RunState, nodeId: string) {
   run.phase = 'muster'
 }
 
-function makePairings(run: RunState, rng: RNG): Pairing[] {
+/**
+ * Elite Muster's policy: always take the deepest node available, so rivals
+ * climb their ladders rather than grazing across them. Ties break on id, which
+ * keeps a seeded run replayable.
+ */
+function deepestPick(offers: readonly TalentOffer[]): TalentNode | null {
+  let best: TalentNode | null = null
+  for (const offer of offers) {
+    for (const node of offer.options) {
+      if (node.unlockedByFeat) continue
+      if (!best || node.tier > best.tier || (node.tier === best.tier && node.id < best.id)) best = node
+    }
+  }
+  return best
+}
+
+function makePairings(run: RunState, rng: RNG, tm: TierMods = {}): Pairing[] {
   const alive = run.warlords.filter((w) => w.alive)
+
+  // Grudge Pairings (War Tier 8): every Nth round the strongest banner still
+  // standing is put opposite you, and the rest of the lobby pairs off around
+  // that fixture. Strength is banner HP then board size — both are things a
+  // player can see coming, which is the difference between pressure and ambush.
+  if (tm.grudgeEvery && run.round % tm.grudgeEvery === 0) {
+    const you = run.warlords.find((w) => w.isPlayer && w.alive)
+    const foes = alive.filter((w) => !w.isPlayer)
+    if (you && foes.length > 0) {
+      const rival = foes
+        .slice()
+        .sort((a, b) => b.hp - a.hp || b.board.length - a.board.length || (a.id < b.id ? -1 : 1))[0]
+      const rest = alive.filter((w) => w.id !== you.id && w.id !== rival.id)
+      const pairs: Pairing[] = [{ aId: you.id, bId: rival.id, ghost: false }]
+      const q = rng.shuffle(rest.map((w) => w.id))
+      while (q.length >= 2) pairs.push({ aId: q.shift() as string, bId: q.shift() as string, ghost: false })
+      if (q.length === 1) {
+        const ghostId = lastEliminated(run)
+        pairs.push({ aId: q[0], bId: ghostId ?? q[0], ghost: true })
+      }
+      return pairs
+    }
+  }
+
   let pool = rng.shuffle(alive.map((w) => w.id))
   const pairs: Pairing[] = []
 
@@ -347,10 +436,16 @@ function lastEliminated(run: RunState): string | null {
 export function resolveBattles(run: RunState): BattleReport[] {
   const reports: BattleReport[] = []
 
+  const tm = tierMods(run)
   for (const p of run.pairings) {
     const a = byId(run, p.aId)
     const bSource = byId(run, p.bId)
-    const bBoard = p.ghost ? (run.ghostBoards[p.bId] ?? bSource.board) : bSource.board
+    // The Crownless Throne (War Tier 10): in the endgame the ghost slot stops
+    // being a dead warlord's leftovers and becomes an authored board. It is
+    // the one seat in the lobby that is already a stand-in, so nothing else
+    // about pairing has to change.
+    const boss = bossFor(run, tm, p.bId)
+    const bBoard = p.ghost ? (boss ?? run.ghostBoards[p.bId] ?? bSource.board) : bSource.board
 
     const seed = hashSeed(`${run.seed}|${run.round}|${p.aId}|${p.bId}`)
     const result = simulateBattle(
@@ -503,6 +598,29 @@ function bankWarSpoils(w: Warlord, survivors: Survivor[]) {
     s.bonusAtk += bank.atk
     s.bonusHp += bank.hp
   }
+}
+
+/**
+ * Which authored board, if any, stands in for a ghost this round. Endgame is
+ * "three banners or fewer left" rather than a round number, because a lobby
+ * that ends early should still meet the Throne.
+ */
+function bossFor(run: RunState, tm: TierMods, ghostId: string): BoardStack[] | null {
+  if (!tm.bossRounds) return null
+  const standing = run.warlords.filter((w) => w.alive).length
+  if (standing > tm.bossRounds + 1) return null
+  const pick = BOSS_BOARDS[hashSeed(`${run.seed}|boss|${run.round}|${ghostId}`) % BOSS_BOARDS.length]
+  return pick.stacks.map((s, i) => ({
+    uid: `boss${run.round}_${i}`,
+    unitId: s.unitId,
+    count: s.count,
+    slot: s.slot,
+    bonusAtk: 0,
+    bonusHp: 0,
+    growthTicks: 0,
+    spent: 0,
+    rank: 0,
+  }))
 }
 
 function eliminate(run: RunState) {

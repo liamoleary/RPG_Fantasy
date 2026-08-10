@@ -209,16 +209,39 @@ describe('Thornqueen Maravel — survivorGrowsCount', () => {
     if (survived) expect(after.count).toBeGreaterThan(0)
   })
 
-  it('grows a stack that walks off a won battle, and ranks it up on the way', () => {
-    const run = maravelRun(31)
+  it('grows a stack that bled and walked off, and ranks it up on the way', () => {
+    const run = maravelRun(3)
     const p = player(run)
-    // A wall big enough that the first-round rivals cannot wipe it, sitting one
-    // unit short of Veteran (Sapling Warden musters 4 -> thresholds 12/24).
-    p.board = [stack('vd_sapling', 11, 0, { uid: 's_wall', bonusHp: 40, bonusAtk: 20 })]
+    // A wall the first-round rivals can bloody but not break, sitting one unit
+    // short of Veteran (Sapling Warden musters 4 -> thresholds 12/24).
+    p.board = [stack('vd_sapling', 11, 0, { uid: 's_wall' })]
     resolveBattles(run)
+    const survivors = run.reports
+      .flatMap((r) => [...r.result.survivorsA, ...r.result.survivorsB])
+      .find((s) => s.uid === 's_wall')
+    expect(survivors, 'the fixture must survive for this to test anything').toBeDefined()
+    expect(survivors!.count, 'and must take casualties, which is what the passive replaces').toBeLessThan(11)
     const after = player(run).board[0]
     expect(after.count).toBe(12)
     expect(after.rank).toBe(1)
+  })
+
+  /**
+   * The passive replaces the dead, so a stack that was never touched has
+   * nothing to replace. Unconditional growth made Maravel the strongest hero in
+   * the game by a distance — 3.9 average placement and 18% of all wins against
+   * a 4.0-5.0 band — because counts multiply stats *and* drive Banner Ranks.
+   */
+  it('leaves a stack that came through untouched exactly as it was', () => {
+    const run = maravelRun(31)
+    const p = player(run)
+    p.board = [stack('vd_sapling', 11, 0, { uid: 's_wall', bonusHp: 40, bonusAtk: 20 })]
+    resolveBattles(run)
+    const survivors = run.reports
+      .flatMap((r) => [...r.result.survivorsA, ...r.result.survivorsB])
+      .find((s) => s.uid === 's_wall')
+    expect(survivors?.count, 'the fixture is deliberately unkillable').toBe(11)
+    expect(player(run).board[0].count).toBe(11)
   })
 
   it('never touches a ghost board', () => {

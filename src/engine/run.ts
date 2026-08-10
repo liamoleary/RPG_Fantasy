@@ -3,7 +3,7 @@ import { FACTIONS, HERO_BY_ID, faction, heroesOfFaction, unit } from '../data/in
 import type { TalentNode } from '../data/talents/index'
 import type { FactionId, HeroDef, HeroMods } from '../data/types'
 import { ZERO_MODS, addMods } from '../data/types'
-import { economyGold, simulateBattle, type BattleResult, type BoardStack, type HeroState, type Survivor } from './battle'
+import { economyGold, FRONT_SLOTS, simulateBattle, type BattleResult, type BoardStack, type HeroState, type Survivor } from './battle'
 import { canTake, heroLevel, isLevelUpRound, offersFor, rivalPick, treeForWarlord, type TalentOffer } from './talents'
 import { MAX_CAMP_TIER, income, newCamp, rollOffer, type CampState } from './camp'
 import { applyRankProgress, rankDefOf, refreshRanks } from './ranks'
@@ -396,9 +396,18 @@ export function resolveBattles(run: RunState): BattleReport[] {
 
   // Thornqueen Maravel: every stack that walked off the field grows by one.
   // A ghost board belongs to an eliminated warlord and is never modified.
+  // The ghost skip mirrors growSurvivors and is defensive rather than
+  // load-bearing: a warlord's board is snapshotted into ghostBoards when they
+  // are eliminated and never read from the warlord again, so banking onto the
+  // dead is invisible either way. tests/warbanks.test.ts says so out loud
+  // rather than pretending to cover it.
   for (const r of reports) {
     growSurvivors(byId(run, r.aId), r.result.survivorsA)
-    if (!r.ghost) growSurvivors(byId(run, r.bId), r.result.survivorsB)
+    bankWarSpoils(byId(run, r.aId), r.result.survivorsA)
+    if (!r.ghost) {
+      growSurvivors(byId(run, r.bId), r.result.survivorsB)
+      bankWarSpoils(byId(run, r.bId), r.result.survivorsB)
+    }
   }
 
   if (run.round >= HARD_CAP_ROUND) {
@@ -423,11 +432,76 @@ export function resolveBattles(run: RunState): BattleReport[] {
  */
 function growSurvivors(w: Warlord, survivors: Survivor[]) {
   if (heroDef(w.heroId).passive.id !== 'survivorGrowsCount') return
-  const standing = new Set(survivors.filter((s) => s.count > 0).map((s) => s.uid))
+  const standing = new Map(survivors.filter((s) => s.count > 0).map((s) => [s.uid, s.count]))
   for (const s of w.board) {
-    if (!standing.has(s.uid)) continue
+    const left = standing.get(s.uid)
+    if (left === undefined) continue
+    // The survivors recruit to replace their dead — so a stack that came
+    // through untouched gains nothing. Counts multiply stats *and* drive Banner
+    // Ranks, which makes this the strongest compounding effect in the game;
+    // unconditional it left Maravel at 3.9 average placement and 18% of wins
+    // while every other hero sat inside the band.
+    if (left >= s.count) continue
     s.count += 1
     s.rank = applyRankProgress(s)
+  }
+}
+
+/**
+ * The war banks (`feat/balance-01`).
+ *
+ * Growth was the only mechanic in the game that banked permanent power, and it
+ * belongs to one faction — measured, Verdant carried ~1958 points of permanent
+ * bonus by round 14 against exactly 0 for the other two, and their board power
+ * was four times Vanguard's. Bulwark and Frenzy are per-battle effects that
+ * reset, and ablation showed both were close to inert: quadrupling Bulwark
+ * bought Vanguard 0.51 places, quadrupling Frenzy bought Stormtide 0.26.
+ *
+ * So all three factions bank, in their own flavour, into the same
+ * bonusAtk/bonusHp the Growth keyword already uses — no new engine field, and
+ * the same Muster-phase machinery `growSurvivors` above established:
+ *
+ *   Verdant   grows every Muster, unconditionally      — the gardener
+ *   Vanguard  banks when a Bulwark stack holds the line — the wall thickens
+ *   Stormtide banks when a stack bleeds and survives    — blood remembers
+ *
+ * Verdant's is guaranteed and the other two are earned, which is the trade:
+ * they bank faster per trigger, but only when their mechanic actually did
+ * something. That also makes DN08's power fantasy true for all three factions
+ * rather than one.
+ */
+export interface WarBank {
+  /** 'held' = survived in the front row; 'bled' = took casualties and survived;
+   *  'stood' = survived at all */
+  trigger: 'held' | 'bled' | 'stood'
+  atk: number
+  hp: number
+}
+
+export const WAR_BANKS: Record<string, WarBank> = {
+  // The wall gets tougher faster than it gets sharper.
+  vanguard: { trigger: 'held', atk: 2, hp: 4 },
+  // Anything that walks off the field carries the rage with it. 'stood' rather
+  // than 'bled': a trigger that needs you to take casualties AND survive fails
+  // exactly when you are losing, which is rich-get-richer and measured 1.5
+  // places worse for them.
+  stormtide: { trigger: 'stood', atk: 2, hp: 2 },
+}
+
+function bankWarSpoils(w: Warlord, survivors: Survivor[]) {
+  const bank = WAR_BANKS[w.factionId]
+  if (!bank) return
+  const stood = new Map(survivors.filter((s) => s.count > 0).map((s) => [s.uid, s.count]))
+  for (const s of w.board) {
+    const left = stood.get(s.uid)
+    if (left === undefined) continue
+    // Vanguard banks off the line it held: a front-row stack still standing.
+    if (bank.trigger === 'held' && s.slot >= FRONT_SLOTS) continue
+    // Stormtide banks off a stack that actually bled — Frenzy's own trigger,
+    // carried out of the battle instead of expiring with it.
+    if (bank.trigger === 'bled' && left >= s.count) continue
+    s.bonusAtk += bank.atk
+    s.bonusHp += bank.hp
   }
 }
 

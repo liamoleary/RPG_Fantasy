@@ -4,7 +4,8 @@ export const STORMTIDE: FactionDef = {
   id: 'stormtide',
   name: 'The Stormtide Clans',
   mechanic: 'Frenzy',
-  mechanicText: 'When a stack takes casualties and survives, it permanently gains +ATK for the battle.',
+  mechanicText:
+    'A stack that takes casualties and survives gains +ATK for the battle. Every stack that walks off the field keeps +2 ATK / +2 HP for the rest of the run.',
   blurb: 'Orc and troll clans riding storms. Wants the fight bloody and fast.',
   unlockRenown: 0,
   colors: { primary: '#3aa9ad', secondary: '#d9564a', accent: '#6ae3de', ink: '#08181a' },

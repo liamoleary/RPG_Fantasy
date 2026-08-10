@@ -20,7 +20,7 @@ import { applyRankProgress, rankDefOf, refreshRanks } from './ranks'
 import { autoPosition, NOISE, rivalMuster, type Archetype, type Difficulty } from './rivals'
 import { hashSeed, makeRng, type RNG } from './rng'
 import { BOSS_BOARDS, MAX_WAR_TIER, clampTier, modsForTier, type TierMods } from '../data/tiers'
-import { INTERLUDE_TALENT_POINTS, stipendFor } from '../data/arrival'
+import { INTERLUDE_TALENT_POINTS, arrivalFor, stipendFor } from '../data/arrival'
 
 export const LOBBY_SIZE = 8
 export const START_HP = 30
@@ -796,6 +796,75 @@ export function canMarchOn(run: RunState): boolean {
 }
 
 /**
+ * How many Musters a rival's arrival budget is spent across. One pass could
+ * not spend it — an offer holds a handful of recruits and a stack has a size —
+ * so the budget arrives the way gold always does, a round at a time, through
+ * the ordinary policy. `ARRIVAL_ROUND` is where those pseudo-rounds sit on the
+ * curve the policy reads: late enough that it is picky about a weak offer and
+ * willing to tier up, not so late that it refuses everything.
+ */
+const ARRIVAL_ROUND = 4
+
+/**
+ * A rival that was already here when you arrived (DN10 §5).
+ *
+ * The board is *not* built by a bespoke generator and never reads the player.
+ * It is built by handing the ordinary rival Muster policy an authored gold
+ * budget, which means an arriving warband is one the game could genuinely have
+ * produced — same recruit scoring, same promotions, same camp, same tier
+ * rules. Mirror-scaling was the alternative and DN10 §5 rules it out for the
+ * reason DN09 §2.3 gave: if the lobby scales to your board, out-building it
+ * just raises it, and building stops meaning anything.
+ *
+ * Only used on the March On path. `newRun` at an explicit tier stays exactly
+ * as DN09 left it, so the old ladder harness remains an honest control to
+ * measure the campaign against.
+ */
+function preDevelop(w: Warlord, tier: number, difficulty: Difficulty, rng: RNG) {
+  const budget = arrivalFor(tier)
+  const tm = modsForTier(tier)
+
+  // Talents first: they move income, camp tier and stats, so the gold that
+  // follows is spent by the warlord these picks made.
+  for (let i = 0; i < budget.talents; i++) {
+    const offers = offersFor(treeForWarlord(w.factionId, w.heroId), w.talentsTaken)
+    const chosen = tm.rivalEliteDraft ? elitePick(offers, w.archetype) : rivalPick(offers, w.archetype)
+    if (!chosen) break
+    applyTalent(w, chosen, tm)
+  }
+
+  w.camp = { ...w.camp, tier: Math.min(MAX_CAMP_TIER, Math.max(w.camp.tier, budget.campTier)), tierDiscount: 0 }
+
+  const slices = Math.max(1, budget.rounds)
+  const per = Math.floor(budget.spend / slices)
+  for (let i = 0; i < slices; i++) {
+    // The remainder rides on the last slice rather than being dropped.
+    const give = per + (i === slices - 1 ? budget.spend - per * slices : 0)
+    const out = rivalMuster(
+      {
+        board: w.board,
+        gold: w.gold + give,
+        camp: w.camp,
+        mods: w.mods,
+        round: ARRIVAL_ROUND + i,
+        archetype: w.archetype,
+        factionId: w.factionId,
+        noise: tm.rivalNoise ?? NOISE[difficulty],
+      },
+      rng.fork(hashSeed(`slice${i}`)),
+    )
+    w.board = out.board
+    w.camp = out.camp
+    w.gold = out.gold
+  }
+  // No `w.gold = 0` here, deliberately: `beginRound` pays every warlord its
+  // round-1 income unconditionally, so leftover budget cannot bank into the
+  // lobby whatever this function does. Zeroing it looked like the rule and
+  // was dead code — deleting it failed no test, which is how it was found.
+  refreshRanks(w.board)
+}
+
+/**
  * The crossing itself: one warband, moved to the next tier, with no lobby
  * around it yet.
  *
@@ -845,8 +914,13 @@ export function marchOn(run: RunState): { run: RunState; grants: InterludeGrants
   const seed = lobbySeedFor(run.campaignSeed, tier)
   const rng = makeRng(seed)
   const marched = marchedWarband(player(run), tier)
-  const warlords: Warlord[] = [marched, ...freshRivals(rng)]
+  const rivals = freshRivals(rng)
+  const warlords: Warlord[] = [marched, ...rivals]
   applyLobbyMods(warlords, tier)
+  // Lobby mods land before pre-development, so a rival builds its arriving
+  // board as a warlord already living under this tier's rules rather than
+  // having them bolted on afterwards.
+  for (const w of rivals) preDevelop(w, tier, run.difficulty, rng.fork(hashSeed(`arrive|${w.id}`)))
 
   const next: RunState = {
     seed,

@@ -29,7 +29,23 @@ export interface ArrivalBudget {
    * actually have produced — and stays subject to every tier rule.
    */
   spend: number
-  /** the camp tier it arrives holding, so its offers are altitude-appropriate */
+  /**
+   * How many Musters that gold is spent across. A budget is not just an
+   * amount, it is an amount *and* a history: one Muster can only take what an
+   * offer holds, so 300 gold handed over in five passes buys a fraction of
+   * what the same gold buys in twelve. This is the knob that says how long
+   * this rival has been building, and it is why a high tier's rivals have
+   * promoted stacks rather than merely bigger ones.
+   */
+  rounds: number
+  /**
+   * A floor on the camp tier it arrives holding, so its offers are
+   * altitude-appropriate. Not binding at today's budgets — the policy buys its
+   * way past every one of these with the gold it is given, and removing the
+   * floor changes no test. It is kept as the authored intent, and as the thing
+   * that would hold if `spend` were ever cut; it is not load-bearing today and
+   * `tests/arrival.test.ts` says so rather than implying coverage.
+   */
   campTier: number
   /** talent points already walked, by the same archetype policy rivals use */
   talents: number
@@ -47,17 +63,18 @@ export interface ArrivalBudget {
  * marches is unchanged" true by construction rather than by a special case.
  */
 export const ARRIVAL_BUDGETS: ArrivalBudget[] = [
-  { tier: 1, spend: 0, campTier: 1, talents: 0, stipend: 0 },
-  { tier: 2, spend: 26, campTier: 2, talents: 2, stipend: 12 },
-  { tier: 3, spend: 40, campTier: 3, talents: 3, stipend: 14 },
-  { tier: 4, spend: 54, campTier: 3, talents: 4, stipend: 16 },
-  { tier: 5, spend: 68, campTier: 4, talents: 4, stipend: 18 },
-  { tier: 6, spend: 82, campTier: 4, talents: 5, stipend: 20 },
-  { tier: 7, spend: 96, campTier: 5, talents: 5, stipend: 22 },
-  { tier: 8, spend: 110, campTier: 5, talents: 6, stipend: 24 },
-  { tier: 9, spend: 124, campTier: 5, talents: 6, stipend: 26 },
-  { tier: 10, spend: 138, campTier: 5, talents: 6, stipend: 28 },
+  { tier: 1, spend: 0, rounds: 0, campTier: 1, talents: 0, stipend: 0 },
+  { tier: 2, spend: 324, rounds: 20, campTier: 2, talents: 2, stipend: 12 },
+  { tier: 3, spend: 636, rounds: 40, campTier: 3, talents: 3, stipend: 14 },
+  { tier: 4, spend: 1198, rounds: 75, campTier: 4, talents: 4, stipend: 16 },
+  { tier: 5, spend: 2159, rounds: 135, campTier: 5, talents: 4, stipend: 18 },
+  { tier: 6, spend: 3781, rounds: 236, campTier: 5, talents: 5, stipend: 20 },
+  { tier: 7, spend: 5853, rounds: 366, campTier: 5, talents: 5, stipend: 22 },
+  { tier: 8, spend: 8299, rounds: 519, campTier: 5, talents: 6, stipend: 24 },
+  { tier: 9, spend: 11132, rounds: 696, campTier: 5, talents: 6, stipend: 26 },
+  { tier: 10, spend: 14265, rounds: 892, campTier: 5, talents: 6, stipend: 28 },
 ]
+
 
 export const arrivalFor = (tier: number): ArrivalBudget =>
   ARRIVAL_BUDGETS.find((b) => b.tier === tier) ?? ARRIVAL_BUDGETS[ARRIVAL_BUDGETS.length - 1]

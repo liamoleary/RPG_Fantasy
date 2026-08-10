@@ -15,6 +15,24 @@
  * These are the harness's numbers to tune (§6), not the designer's to fix:
  * `npm run sim -- --campaign` reports the delta between where real arriving
  * boards sit and where the budget says they should.
+ *
+ * KNOWN LIMITATION — arriving rivals are not faction-fair.
+ *
+ * Pre-development musters a board but fights no battles. Growth is a Muster
+ * effect, so a Verdant rival built over N development rounds arrives with N
+ * ticks of it; Vanguard and Stormtide, whose permanent accumulation is banked
+ * per *battle*, arrive with none. Measured at Tier 2: rival Verdant averages
+ * 3.11 of 8 against Vanguard 5.28 and Stormtide 5.55 — a spread of 2.44
+ * against DN09 §7.2's discipline of 0.4. Tier 1, which pre-develops nobody,
+ * sits at 0.28 and is unaffected.
+ *
+ * The fix is to bank war spoils onto an arriving board for the battles its
+ * campaign implies, and it needs a full re-calibration rather than a patch:
+ * these budgets were tuned to hit the player's power curve *without* banks, so
+ * bolting them on measured +200% arrival power at Tier 2 even with the battle
+ * count derived from tiers climbed rather than development rounds. Doing it
+ * properly means re-cutting `spend` against the new totals. Written down here
+ * rather than half-applied.
  */
 
 /** DN10 §3: one extra talent point per Interlude, on top of the level-up six. */
@@ -64,7 +82,7 @@ export interface ArrivalBudget {
  */
 export const ARRIVAL_BUDGETS: ArrivalBudget[] = [
   { tier: 1, spend: 0, rounds: 0, campTier: 1, talents: 0, stipend: 0 },
-  { tier: 2, spend: 324, rounds: 20, campTier: 2, talents: 2, stipend: 12 },
+  { tier: 2, spend: 420, rounds: 26, campTier: 2, talents: 2, stipend: 12 },
   { tier: 3, spend: 636, rounds: 40, campTier: 3, talents: 3, stipend: 14 },
   { tier: 4, spend: 1198, rounds: 75, campTier: 4, talents: 4, stipend: 16 },
   { tier: 5, spend: 2159, rounds: 135, campTier: 5, talents: 4, stipend: 18 },

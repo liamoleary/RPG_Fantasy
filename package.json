@@ -14,6 +14,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "sim": "tsx scripts/sim.ts",
+    "sim:campaign": "tsx scripts/sim.ts --campaign",
     "sweep": "tsx scripts/sweep.ts",
     "tiers": "tsx scripts/sim.ts --tiers"
   },

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { UNIT_ART } from '../data/art'
 import { FACTION_BY_ID, unit } from '../data/index'
 import type { CastFx, Projectile, RowPref, UnitDef } from '../data/types'
@@ -105,6 +106,13 @@ interface Props {
   count: number
   atk: number
   hp: number
+  /**
+   * The pool this stack started the battle with. Supplying it is what lets the
+   * HP number read as *wounded* rather than merely small — a 12/30 stack and a
+   * 12/12 stack are in very different trouble and the bare number cannot say
+   * which. Omit outside battle, where nothing is damaged.
+   */
+  hpMax?: number
   bulwark?: number
   /** 0 none / 1 Veteran / 2 Honored */
   rank?: number
@@ -155,6 +163,7 @@ export function StackCard({
   count,
   atk,
   hp,
+  hpMax,
   bulwark = 0,
   rank = 0,
   rankFlash,
@@ -184,6 +193,24 @@ export function StackCard({
   const def = unit(unitId)
   const color = unitColor(def)
   const Tag = onClick ? 'button' : 'div'
+
+  /**
+   * Count the times this stack's health has *dropped*, so the number can be
+   * seen falling rather than just being different on the next frame. A CSS
+   * animation will not replay while the element stays mounted, so the counter
+   * becomes the chip's key and a decrease remounts it.
+   *
+   * Only decreases tick. A heal already announces itself with a green `+N`
+   * float, and a stack visibly flinching as it is healed reads as a bug.
+   * Derived during render rather than in an effect — the number and its beat
+   * have to land in the same frame or the animation trails the damage.
+   */
+  const [seenHp, setSeenHp] = useState(hp)
+  const [hpTick, setHpTick] = useState(0)
+  if (seenHp !== hp) {
+    setSeenHp(hp)
+    if (hp < seenHp) setHpTick((n) => n + 1)
+  }
   // A tappable badge cannot live inside the card: the card is itself a button.
   // The wrapper is the positioning context for both (§8).
   const card = (
@@ -206,7 +233,9 @@ export function StackCard({
       data-dead={state === 'dead' ? 'true' : undefined}
       onClick={onClick}
       type={onClick ? 'button' : undefined}
-      aria-label={`${def.name}, ${count} units, ${atk} attack, ${hp} health, ${rowWord(def.row)} row${rank > 0 ? `, ${rankWord(rank)}` : ''}${promote === 'ready' ? ', promotion available' : ''}${cover > 0 ? `, Cover ${cover}` : ''}${apexMax > 0 ? `, Apex ${apexCharge} of ${apexMax}` : ''}`}
+      aria-label={`${def.name}, ${count} units, ${atk} attack, ${
+        hpMax !== undefined && hp < hpMax ? `${hp} of ${hpMax} health` : `${hp} health`
+      }, ${rowWord(def.row)} row${rank > 0 ? `, ${rankWord(rank)}` : ''}${promote === 'ready' ? ', promotion available' : ''}${cover > 0 ? `, Cover ${cover}` : ''}${apexMax > 0 ? `, Apex ${apexCharge} of ${apexMax}` : ''}`}
     >
       {/* Full-bleed: the plate IS the card (§2). Everything below is an
           overlay floating on it, and none of it may become a frame again. */}
@@ -252,7 +281,12 @@ export function StackCard({
             {atk}
           </span>
           <span className="dim">/</span>
-          <span className="chip-hp" data-buff={hpBuffed ? 'true' : undefined}>
+          <span
+            key={hpTick}
+            className="chip-hp"
+            data-buff={hpBuffed ? 'true' : undefined}
+            data-hurt={hpMax !== undefined && hp < hpMax ? 'true' : undefined}
+          >
             {hp}
           </span>
           {bulwark > 0 && <span className="chip-bul">◈{bulwark}</span>}
@@ -305,17 +339,19 @@ export function SnapCard({
   apexFiring?: boolean
   size?: CardSize
 }) {
-  const total = snap.startCount * snap.maxHp
-  const cur = snap.count * snap.maxHp - snap.wound
   return (
     <StackCard
       unitId={snap.unitId}
       count={snap.count}
-      atk={snap.atk}
-      hp={snap.maxHp}
+      // The stack's own numbers, not one model's. Per-model atk/maxHp are
+      // constants and never moved during a fight, which left the health bar
+      // as the only sign a stack was breaking — too quiet to read at speed.
+      atk={snap.power}
+      hp={snap.hp}
+      hpMax={snap.hpMax}
       bulwark={snap.bulwark}
       rank={snap.rank}
-      health={total > 0 ? cur / total : 0}
+      health={snap.hpMax > 0 ? snap.hp / snap.hpMax : 0}
       state={state}
       float={float}
       weight={weight}

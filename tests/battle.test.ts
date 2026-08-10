@@ -53,6 +53,84 @@ describe('stack damage math (HoMM pooled HP)', () => {
   })
 })
 
+/**
+ * The three numbers a card shows. They live on the snapshot rather than being
+ * worked out in the UI (GDD §12.3), so the thing worth pinning is that they
+ * are the *simulation's* numbers: `hp` is the pool the engine spends down and
+ * `power` is the swing it actually rolls, not a per-model stat the display
+ * happened to multiply.
+ */
+describe('what a card shows during a battle', () => {
+  it('reports the pool the engine is actually spending, wound and all', () => {
+    // 1 Arbalest (3 ATK) into 4 Militia (2 HP each): pool 8 -> 5.
+    const a = { board: [stack('vg_arbalest', 1, 4)], hero: hero('h_sylvaen') }
+    const b = { board: [stack('vg_militia', 4, 0)], hero: hero('h_sylvaen') }
+    const res = simulateBattle(a, b, sylvaen, sylvaen, 7, { round: 1 })
+    const shot = attacksBy(res.events, 'vg_arbalest@4')[0]
+    const target = shot.snap.find((s) => s.uid === 'vg_militia@0')!
+    expect(target.hpMax).toBe(8)
+    expect(target.hp).toBe(5)
+    // ...which is exactly the count/wound pair the same snapshot carries, so
+    // the number on the card and the number the AI targets on cannot drift.
+    expect(target.hp).toBe(target.count * target.maxHp - target.wound)
+  })
+
+  it('reports the swing the stack rolls, not one model’s attack', () => {
+    const a = { board: [stack('vg_arbalest', 2, 4)], hero: hero('h_sylvaen') }
+    const b = { board: [stack('vg_militia', 10, 0)], hero: hero('h_sylvaen') }
+    const res = simulateBattle(a, b, sylvaen, sylvaen, 1, { round: 1 })
+    const shot = attacksBy(res.events, 'vg_arbalest@4')[0]
+    const shooter = shot.snap.find((s) => s.uid === 'vg_arbalest@4')!
+    expect(shooter.power).toBe(shooter.atk * shooter.count)
+    // 2 Arbalests at 3 ATK swung for 6, and the card says 6.
+    expect(shooter.power).toBe(shot.dmg)
+  })
+
+  /**
+   * The whole point of the change: a stack that is losing has to *look* like
+   * it. Before this, cards showed per-model atk/maxHp, which are constants —
+   * nothing on a card moved for the entire battle.
+   */
+  it('falls monotonically as a stack is worn down, and hits zero when it dies', () => {
+    // Two Arbalests swing for 6 into a 12-point pool: it takes several
+    // exchanges to break, so there is a curve to watch rather than one wipe.
+    const a = { board: [stack('vg_arbalest', 2, 4)], hero: hero('h_sylvaen') }
+    const b = { board: [stack('vg_militia', 6, 0)], hero: hero('h_sylvaen') }
+    const res = simulateBattle(a, b, sylvaen, sylvaen, 3, { round: 1 })
+    const seen: number[] = []
+    for (const e of res.events) {
+      // battleStart carries the two opening boards under different keys.
+      const snaps = e.t === 'battleStart' ? [...e.a, ...e.b] : 'snap' in e ? e.snap : null
+      const t = snaps?.find((s) => s.uid === 'vg_militia@0')
+      if (t) seen.push(t.hp)
+    }
+    expect(seen.length, 'the fixture never showed the target').toBeGreaterThan(1)
+    // No heals in this fixture, so it may only ever fall.
+    for (let i = 1; i < seen.length; i++) {
+      expect(seen[i], `hp rose from ${seen[i - 1]} to ${seen[i]}`).toBeLessThanOrEqual(seen[i - 1])
+    }
+    expect(seen[0]).toBeGreaterThan(0)
+    expect(seen[seen.length - 1]).toBe(0)
+  })
+
+  /**
+   * True by two mechanisms — the `alive` guard on the snapshot and the kill
+   * path zeroing count/wound — so deleting either one alone leaves this
+   * green. It is kept for the property, not as coverage of the guard.
+   */
+  it('shows nothing threatening once a stack is dead', () => {
+    const a = { board: [stack('vg_arbalest', 8, 4)], hero: hero('h_sylvaen') }
+    const b = { board: [stack('vg_militia', 1, 0)], hero: hero('h_sylvaen') }
+    const res = simulateBattle(a, b, sylvaen, sylvaen, 11, { round: 1 })
+    const death = res.events.find((e) => e.t === 'death' && e.uid === 'vg_militia@0')
+    expect(death, 'the fixture never killed the target').toBeDefined()
+    const dead = (death as Extract<BattleEvent, { t: 'death' }>).snap.find((s) => s.uid === 'vg_militia@0')!
+    expect(dead.hp).toBe(0)
+    expect(dead.power).toBe(0)
+    expect(dead.count).toBe(0)
+  })
+})
+
 describe('Bulwark', () => {
   // The Militia are a wall so the Arbalest survives to fire twice; Volley
   // never provokes retaliation, which keeps these numbers clean.

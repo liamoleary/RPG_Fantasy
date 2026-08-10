@@ -155,8 +155,11 @@ export function InspectSheet({
         )}
 
         <div className="stat-grid">
-          <Stat label="ATK" value={atk} className="chip-atk" buffed={atk > def.atk} />
-          <Stat label="HP" value={hp} className="chip-hp" buffed={hp > def.hp} />
+          {/* Named per unit because the card itself now shows the stack's
+              totals. Same two numbers, two different scopes — the sheet is
+              where the per-model figure still has to be readable. */}
+          <Stat label="ATK ea." value={atk} className="chip-atk" buffed={atk > def.atk} />
+          <Stat label="HP ea." value={hp} className="chip-hp" buffed={hp > def.hp} />
           <Stat label="Init" value={def.init} />
           <Stat label="Buy" value={`+${def.musterSize}`} />
           <Stat label="Tier" value={def.tier} />

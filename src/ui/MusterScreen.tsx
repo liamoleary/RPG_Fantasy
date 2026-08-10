@@ -661,6 +661,9 @@ export function Board({
           // standing in the back gets the back-row boons, exactly as in battle.
           const stats = owner ? stackStats(st, rowOfSlot(slot), owner.mods, owner.talentsTaken) : null
           const def = unit(st.unitId)
+          // Per model, before the card multiplies out to the stack.
+          const perModelAtk = stats ? stats.atk : def.atk + st.bonusAtk
+          const perModelHp = stats ? stats.hp : def.hp + st.bonusHp
           const held = selected === st.uid
           // While a stack is held, an occupied slot either swaps (legal) or is
           // inert (illegal) — tapping the held stack itself puts it back down.
@@ -689,10 +692,13 @@ export function Board({
             <StackCard
               unitId={st.unitId}
               count={st.count}
-              atk={stats ? stats.atk : def.atk + st.bonusAtk}
-              hp={stats ? stats.hp : def.hp + st.bonusHp}
-              atkBuffed={(stats ? stats.atk : def.atk + st.bonusAtk) > def.atk}
-              hpBuffed={(stats ? stats.hp : def.hp + st.bonusHp) > def.hp}
+              // The whole stack's numbers, matching what the same card shows
+              // once the battle starts. A stack that read 1/2 in camp and
+              // 4/8 on the field looked like two different units.
+              atk={perModelAtk * st.count}
+              hp={perModelHp * st.count}
+              atkBuffed={perModelAtk > def.atk}
+              hpBuffed={perModelHp > def.hp}
               float={boonFx?.[st.uid] ? { text: boonFx[st.uid], kind: 'buff' } : null}
               rank={st.rank}
               rankFlash={rankFlash === st.uid}
@@ -771,8 +777,10 @@ function HandCard({
           unitId={unitId}
           size="camp"
           count={plan.added}
-          atk={def.atk}
-          hp={def.hp}
+          // Same reading as every other card: what the models on this card
+          // add up to, not what one of them is worth.
+          atk={def.atk * plan.added}
+          hp={def.hp * plan.added}
           priority={priority}
           eager={priority}
         />

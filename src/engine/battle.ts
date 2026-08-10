@@ -67,8 +67,25 @@ export interface StackSnap {
   count: number
   startCount: number
   wound: number
+  /** attack of a single model */
   atk: number
+  /** health of a single model */
   maxHp: number
+  /**
+   * The three numbers a card actually shows, computed here rather than in the
+   * UI so the display can never disagree with the simulation (GDD §12.3).
+   *
+   * A stack is one pool of health, not N independent models — `damage` spends
+   * it down and the model count is derived from what is left. `atk` and
+   * `maxHp` alone are the per-model stats, which never move during a battle
+   * and so could not show a player why a stack was about to break.
+   */
+  /** what the whole stack swings for: atk x count */
+  power: number
+  /** health left in the pool: count x maxHp - wound */
+  hp: number
+  /** the pool it started the battle with */
+  hpMax: number
   bulwark: number
   alive: boolean
   rooted: boolean
@@ -211,6 +228,16 @@ function snap(s: RStack): StackSnap {
     wound: s.wound,
     atk: s.atk,
     maxHp: s.maxHp,
+    // A dead stack reports zeroes, so the card does not read as a threat
+    // during its death beat. The `alive` test mirrors the `count` line above
+    // and is belt-and-braces rather than load-bearing: the one place that
+    // clears `alive` zeroes count and wound in the same breath, so both
+    // expressions are already 0 by then. Deleting it fails no test, and
+    // tests/battle.test.ts pins the *outcome* rather than pretending to cover
+    // the guard.
+    power: s.alive ? s.atk * s.count : 0,
+    hp: s.alive ? pool(s) : 0,
+    hpMax: maxPool(s),
     bulwark: s.bulwark,
     alive: s.alive,
     rooted: false,

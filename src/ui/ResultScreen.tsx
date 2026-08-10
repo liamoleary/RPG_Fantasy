@@ -142,7 +142,7 @@ export function ResultScreen({ run }: { run: RunState }) {
               const def = unit(sv.unitId)
               return (
                 <span key={sv.uid} className="survivor">
-                  <StackCard unitId={sv.unitId} count={sv.count} atk={def.atk} hp={def.hp} eager />
+                  <StackCard unitId={sv.unitId} count={sv.count} atk={def.atk * sv.count} hp={def.hp * sv.count} eager />
                 </span>
               )
             })}

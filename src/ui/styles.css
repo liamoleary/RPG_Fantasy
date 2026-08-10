@@ -4177,3 +4177,48 @@ h3 {
     grid-template-rows: auto auto auto auto;
   }
 }
+
+/* ── a wounded stack has to look wounded ─────────────────────────────────── */
+
+/* During a battle the HP chip carries the stack's remaining pool, not one
+   model's printed health, so it moves. Colouring it while it is below full is
+   what turns "12" into "12 and falling" at a glance — the health bar alone was
+   too quiet to answer "why is this stack about to break?" mid-fight. The buff
+   state still wins: a stack that is both buffed and hurt is worth flagging as
+   buffed, because that is the surprising half. */
+.chip-hp[data-hurt='true'],
+.stack .chips .chip-hp[data-hurt='true'] {
+  color: var(--dmg);
+}
+.chip-hp[data-buff='true'],
+.stack .chips .chip-hp[data-buff='true'] {
+  color: var(--buff);
+}
+
+/* And it has to be *seen* moving. A number that changes between frames of a
+   fast replay reads as a redraw, not as damage; a single beat of scale and
+   colour on the way down makes it an event. Keyed off the value itself in
+   StackCard, so it fires once per change rather than once per render. */
+.chip-hp[data-hurt='true'] {
+  /* transform needs a box; the chip is an inline span by default. */
+  display: inline-block;
+  animation: hp-tick 0.32s ease-out;
+}
+@keyframes hp-tick {
+  0% {
+    transform: scale(1);
+    color: var(--dmg);
+  }
+  35% {
+    transform: scale(1.45);
+    color: var(--dmg-bright);
+    text-shadow: 0 0 8px var(--dmg-halo);
+  }
+  100% {
+    transform: scale(1);
+    color: var(--dmg);
+  }
+}
+.reduced-motion .chip-hp[data-hurt='true'] {
+  animation: none;
+}

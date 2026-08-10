@@ -70,6 +70,24 @@ function dropPreWarCouncilRun(raw: SaveData): SaveData['activeRun'] {
   return usesTalents ? run : null
 }
 
+/**
+ * A run saved before The Long March has no campaign fields on it (DN10). It is
+ * still a perfectly good lobby, so rather than discard it, adopt it as a
+ * one-lobby campaign at its own tier: its seed becomes the campaign seed, no
+ * rounds precede it, and it has been granted no Interlude points. A player who
+ * closed the app mid-run keeps that run and can march from it.
+ */
+function adoptRunIntoCampaign(run: SaveData['activeRun']): SaveData['activeRun'] {
+  if (!run) return null
+  const r = run as RunState & Partial<Pick<RunState, 'campaignSeed' | 'roundsBefore' | 'bonusTalentPoints'>>
+  return {
+    ...r,
+    campaignSeed: typeof r.campaignSeed === 'number' ? r.campaignSeed : r.seed,
+    roundsBefore: typeof r.roundsBefore === 'number' ? r.roundsBefore : 0,
+    bonusTalentPoints: typeof r.bonusTalentPoints === 'number' ? r.bonusTalentPoints : 0,
+  }
+}
+
 function migrate(raw: SaveData): SaveData {
   // Future schema bumps land here, keyed off `version`.
   // A save written before War Tiers has no `tiers` block; spreading DEFAULT
@@ -79,7 +97,7 @@ function migrate(raw: SaveData): SaveData {
     ...DEFAULT_SAVE,
     ...raw,
     tiers: { ...DEFAULT_SAVE.tiers, ...raw.tiers, records: { ...raw.tiers?.records }, bestByHero: { ...raw.tiers?.bestByHero } },
-    activeRun: dropPreWarCouncilRun(raw),
+    activeRun: adoptRunIntoCampaign(dropPreWarCouncilRun(raw)),
     version: SAVE_VERSION,
   }
 }

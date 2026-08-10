@@ -70,8 +70,14 @@ export function offersFor(tree: readonly TalentNode[], taken: readonly string[])
 }
 
 /** Is this node a legal pick right now? The only gate that exists (§2.1). */
-export function canTake(tree: readonly TalentNode[], taken: readonly string[], nodeId: string): boolean {
-  if (taken.length >= MAX_TALENT_POINTS) return false
+export function canTake(
+  tree: readonly TalentNode[],
+  taken: readonly string[],
+  nodeId: string,
+  /** DN10 §3: an Interlude raises this above the base six, one per tier. */
+  max = MAX_TALENT_POINTS,
+): boolean {
+  if (taken.length >= max) return false
   if (taken.includes(nodeId)) return false
   return offersFor(tree, taken).some((o) => o.options.some((n) => n.id === nodeId))
 }

@@ -4,12 +4,23 @@ import type { TalentNode } from '../data/talents/index'
 import type { FactionId, HeroDef, HeroMods } from '../data/types'
 import { ZERO_MODS, addMods } from '../data/types'
 import { economyGold, FRONT_SLOTS, simulateBattle, type BattleResult, type BoardStack, type HeroState, type Survivor } from './battle'
-import { canTake, heroLevel, isLevelUpRound, offersFor, rivalPick, scoreNode, treeForWarlord, type TalentOffer } from './talents'
+import {
+  MAX_TALENT_POINTS,
+  canTake,
+  heroLevel,
+  isLevelUpRound,
+  offersFor,
+  rivalPick,
+  scoreNode,
+  treeForWarlord,
+  type TalentOffer,
+} from './talents'
 import { BASE_INCOME_CAP, MAX_CAMP_TIER, income, newCamp, rollOffer, type CampState } from './camp'
 import { applyRankProgress, rankDefOf, refreshRanks } from './ranks'
 import { autoPosition, NOISE, rivalMuster, type Archetype, type Difficulty } from './rivals'
 import { hashSeed, makeRng, type RNG } from './rng'
-import { BOSS_BOARDS, clampTier, modsForTier, type TierMods } from '../data/tiers'
+import { BOSS_BOARDS, MAX_WAR_TIER, clampTier, modsForTier, type TierMods } from '../data/tiers'
+import { INTERLUDE_TALENT_POINTS, stipendFor } from '../data/arrival'
 
 export const LOBBY_SIZE = 8
 export const START_HP = 30
@@ -57,11 +68,27 @@ export interface BattleReport {
 }
 
 export interface RunState {
+  /** this lobby's seed — derived from the campaign seed and tier (DN10 §7.6) */
   seed: number
+  /**
+   * The campaign's root seed, fixed for the whole climb. Replaying it
+   * reproduces every lobby, not just the first: `lobbySeedFor` derives the
+   * rest. At Tier 1 the two are the same number, which is what makes a
+   * campaign that never marches identical to a pre-DN10 run.
+   */
+  campaignSeed: number
+  /**
+   * Rounds played in this campaign's earlier lobbies (DN10 §5). Added to the
+   * lobby round only where banner damage is worked out; economy and level-up
+   * cadence deliberately do not see it.
+   */
+  roundsBefore: number
+  /** talent points granted by Interludes, on top of the level-up six (§3) */
+  bonusTalentPoints: number
   round: number
   phase: Phase
   difficulty: Difficulty
-  /** War Tier this run is climbing (DN09). 1 is the game as shipped. */
+  /** War Tier this lobby is fought under (DN09). 1 is the game as shipped. */
   tier: number
   warlords: Warlord[]
   playerId: string
@@ -134,16 +161,38 @@ export interface NewRunOptions {
  */
 export const tierMods = (run: RunState): TierMods => modsForTier(run.tier)
 
-export function newRun(opts: NewRunOptions): RunState {
-  const rng = makeRng(opts.seed)
-  const warlords: Warlord[] = []
-  // Ids are positional, not generated, so a serialized run resumes identically.
-  const playerId = 'w0'
+/**
+ * The seed a campaign's lobby at this tier runs on (DN10 §7.6).
+ *
+ * Tier 1 is the campaign seed itself, unchanged — that identity is what keeps
+ * a campaign that never marches fingerprint-identical to a pre-DN10 run.
+ * Every rung above derives, so replaying a seed reproduces the whole climb and
+ * not merely its first lobby.
+ */
+export const lobbySeedFor = (campaignSeed: number, tier: number): number =>
+  clampTier(tier) <= 1 ? campaignSeed : hashSeed(`${campaignSeed}|lobby|${clampTier(tier)}`)
 
-  warlords.push(
-    makeWarlord(playerId, opts.playerName ?? 'You', opts.factionId, opts.heroId, true, 'balanced'),
-  )
+/**
+ * Rounds played across the whole campaign, not this lobby.
+ *
+ * DN10 §5 splits the two deliberately: economy and level-up cadence restart
+ * with each lobby (that is the draft arc, and it has to breathe again), but
+ * banner damage keeps climbing so a Tier 3 lobby cannot be coasted through on
+ * a full HP pool. This is the only number that crosses the boundary.
+ */
+export const campaignRound = (run: RunState): number => run.roundsBefore + run.round
 
+/** The banner a player marches with at this tier — Thin Rations and friends. */
+export const startingHp = (tier: number): number =>
+  Math.max(1, START_HP + (modsForTier(tier).playerHp ?? 0))
+
+/** How many talent points this warlord may hold: the base six plus Interludes. */
+export const talentBudget = (run: RunState, w: Warlord): number =>
+  MAX_TALENT_POINTS + (w.isPlayer ? run.bonusTalentPoints : 0)
+
+/** The seven rivals a fresh lobby is drawn from. */
+function freshRivals(rng: RNG): Warlord[] {
+  const out: Warlord[] = []
   const usedNames = new Set<string>()
   for (let i = 0; i < LOBBY_SIZE - 1; i++) {
     const f = rng.pick(FACTIONS)
@@ -156,17 +205,20 @@ export function newRun(opts: NewRunOptions): RunState {
       if (!usedNames.has(name)) break
     }
     usedNames.add(name)
-    warlords.push(
+    out.push(
       makeWarlord(`w${i + 1}`, name, f.id, hero.id, false, rng.pick(['aggro', 'greedy', 'balanced', 'economy'] as Archetype[])),
     )
   }
+  return out
+}
 
-  const tier = clampTier(opts.tier ?? 1)
+/**
+ * The tier rules that land on a warlord before the first round of a lobby.
+ * Shared by `newRun` and `marchOn` so a lobby entered by marching carries
+ * exactly what a lobby entered fresh would.
+ */
+function applyLobbyMods(warlords: Warlord[], tier: number) {
   const mods = modsForTier(tier)
-
-  // Thin Rations and anything else that trims the player's banner lands before
-  // the first round begins, so nothing has to re-read it later.
-  if (mods.playerHp) warlords[0].hp = Math.max(1, warlords[0].hp + mods.playerHp)
   // Iron Banners is a mod the battle engine already reads — no engine edit,
   // the rivals simply march with thicker front lines.
   if (mods.rivalFrontBulwark) {
@@ -182,9 +234,32 @@ export function newRun(opts: NewRunOptions): RunState {
       w.mods = { ...w.mods, income: w.mods.income + mods.rivalIncome }
     }
   }
+}
+
+export function newRun(opts: NewRunOptions): RunState {
+  const tier = clampTier(opts.tier ?? 1)
+  const campaignSeed = opts.seed
+  const seed = lobbySeedFor(campaignSeed, tier)
+  const rng = makeRng(seed)
+  const warlords: Warlord[] = []
+  // Ids are positional, not generated, so a serialized run resumes identically.
+  const playerId = 'w0'
+
+  warlords.push(
+    makeWarlord(playerId, opts.playerName ?? 'You', opts.factionId, opts.heroId, true, 'balanced'),
+  )
+  warlords.push(...freshRivals(rng))
+
+  // Thin Rations and anything else that trims the player's banner lands before
+  // the first round begins, so nothing has to re-read it later.
+  warlords[0].hp = startingHp(tier)
+  applyLobbyMods(warlords, tier)
 
   const run: RunState = {
-    seed: opts.seed,
+    seed,
+    campaignSeed,
+    roundsBefore: 0,
+    bonusTalentPoints: 0,
     round: 1,
     phase: 'muster',
     difficulty: opts.difficulty ?? 'standard',
@@ -343,7 +418,7 @@ export function applyTalent(w: Warlord, node: TalentNode, tm: TierMods = {}) {
 export function choosePlayerTalent(run: RunState, nodeId: string) {
   const p = player(run)
   const tree = treeForWarlord(p.factionId, p.heroId)
-  if (!canTake(tree, p.talentsTaken, nodeId)) return
+  if (!canTake(tree, p.talentsTaken, nodeId, talentBudget(run, p))) return
   const node = tree.find((n) => n.id === nodeId)
   if (!node) return
   applyTalent(p, node)
@@ -490,7 +565,9 @@ export function resolveBattles(run: RunState): BattleReport[] {
       heroDef(a.heroId),
       heroDef(bSource.heroId),
       seed,
-      { round: run.round },
+      // DN10 5: the damage curve is the campaign's, not the lobby's, so a
+      // late-campaign lobby cannot be coasted through on a fresh HP pool.
+      { round: campaignRound(run) },
     )
     reports.push({ aId: p.aId, bId: p.bId, ghost: p.ghost, winner: result.winner, damage: result.damageToLoser, result })
   }
@@ -700,6 +777,107 @@ function eliminate(run: RunState) {
   } else if (alive.length === 0) {
     run.finished = true
     run.phase = 'over'
+  }
+}
+
+// ── the March On boundary (Design Notes 10) ────────────────────────────────
+
+/** Everything an Interlude hands you, so the screen can list it exactly (§3). */
+export interface InterludeGrants {
+  tier: number
+  hp: number
+  gold: number
+  talentPoints: number
+}
+
+/** Has this campaign won its lobby and got somewhere left to climb? */
+export function canMarchOn(run: RunState): boolean {
+  return run.finished && player(run).placement === 1 && clampTier(run.tier) < MAX_WAR_TIER
+}
+
+/**
+ * The crossing itself: one warband, moved to the next tier, with no lobby
+ * around it yet.
+ *
+ * Split out from `marchOn` because this — and only this — is where DN10 §3's
+ * promise lives. Once the new lobby's first Muster runs, Growth ticks and
+ * income land legitimately, so a fingerprint taken after it could not tell a
+ * preserved warband from a re-rolled one. Taken here, it can: everything
+ * except the three Interlude grants must survive byte for byte.
+ *
+ * Deep-copied throughout, so the finished lobby can be kept for the recap
+ * without the next one writing through it.
+ */
+export function marchedWarband(you: Warlord, tier: number): Warlord {
+  return {
+    ...you,
+    hp: startingHp(tier),
+    alive: true,
+    placement: null,
+    eliminatedRound: null,
+    gold: 0,
+    board: you.board.map((s) => ({ ...s })),
+    camp: { ...you.camp, offer: [...you.camp.offer], frozen: false, rerollsUsedThisRound: 0 },
+    mods: { ...you.mods },
+    talentsTaken: [...you.talentsTaken],
+    lastOpponentId: null,
+    wins: 0,
+    losses: 0,
+  }
+}
+
+/**
+ * March On (DN10 §2): the campaign's next lobby, carrying the warband.
+ *
+ * The player warlord is *moved*, not rebuilt. Board, camp, ranks, promotions,
+ * talents and mods all cross untouched — DN10 §3 is categorical that nothing
+ * the player built is ever taken away by the climb, and the fingerprint test
+ * in tests/campaign.test.ts is what holds that line. Only the three things the
+ * Interlude explicitly grants may differ on the far side, and they are
+ * returned so the screen can list them rather than describe them.
+ *
+ * The lobby around them is new: seven fresh rivals, a derived seed, the next
+ * tier's cumulative rules, and a round counter back at 1. `roundsBefore` is
+ * the one thread that does not reset (§5).
+ */
+export function marchOn(run: RunState): { run: RunState; grants: InterludeGrants } {
+  const tier = clampTier(run.tier + 1)
+  const seed = lobbySeedFor(run.campaignSeed, tier)
+  const rng = makeRng(seed)
+  const marched = marchedWarband(player(run), tier)
+  const warlords: Warlord[] = [marched, ...freshRivals(rng)]
+  applyLobbyMods(warlords, tier)
+
+  const next: RunState = {
+    seed,
+    campaignSeed: run.campaignSeed,
+    roundsBefore: run.roundsBefore + run.round,
+    bonusTalentPoints: run.bonusTalentPoints + INTERLUDE_TALENT_POINTS,
+    round: 1,
+    phase: 'muster',
+    difficulty: run.difficulty,
+    tier,
+    warlords,
+    playerId: marched.id,
+    pairings: [],
+    reports: [],
+    talentOffer: [],
+    ghostBoards: {},
+    finished: false,
+    placementCounter: LOBBY_SIZE,
+    log: [`The march reaches War Tier ${tier}.`],
+  }
+
+  beginRound(next)
+  // beginRound pays round-1 income like any other round; the stipend replaces
+  // it rather than stacking, so "gold resets to the tier's opening stipend"
+  // (§3) is literally true and hoarding across a boundary is impossible.
+  const arrived = player(next)
+  arrived.gold = stipendFor(tier)
+
+  return {
+    run: next,
+    grants: { tier, hp: arrived.hp, gold: arrived.gold, talentPoints: INTERLUDE_TALENT_POINTS },
   }
 }
 

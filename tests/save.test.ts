@@ -37,7 +37,7 @@ describe('the client and server agree on the save version', () => {
 })
 
 describe('meta slice (§2 split)', () => {
-  it('extracts exactly the four server-owned fields', () => {
+  it('extracts exactly the server-owned fields, and no local ones', () => {
     const save: SaveData = {
       ...DEFAULT_SAVE,
       renown: 12,
@@ -47,7 +47,9 @@ describe('meta slice (§2 split)', () => {
       settings: { speedDefault: 2, reducedMotion: true, difficulty: 'warlord' },
       activeRun: { seed: 1 } as never,
     }
-    expect(Object.keys(metaOf(save)).sort()).toEqual(['feats', 'renown', 'stats', 'unlocks'])
+    // War Tiers joined the slice (DN09 §7.4): the climb is progression, so the
+    // server owns it. `activeRun` and `settings` stay local by design.
+    expect(Object.keys(metaOf(save)).sort()).toEqual(['feats', 'renown', 'stats', 'tiers', 'unlocks'])
   })
 
   it('never carries the run or the settings — the device owns those', () => {

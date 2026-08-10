@@ -15,6 +15,17 @@ export interface SaveData {
     wins: number
     bestPlacementByHero: Record<string, number>
   }
+  /** War Tiers (DN09 §7.4). The climb, and what it has cost so far. */
+  tiers: {
+    /** the highest tier you may choose from Home */
+    highestUnlocked: number
+    /** the highest tier you have actually won at — separate on purpose (§4) */
+    highestWon: number
+    /** attempts and wins per tier, for the picker's record column */
+    records: Record<string, { runs: number; wins: number }>
+    /** the best tier each hero has won at, for the hero-select chip */
+    bestByHero: Record<string, number>
+  }
   settings: {
     speedDefault: 1 | 2
     reducedMotion: boolean
@@ -29,6 +40,7 @@ export const DEFAULT_SAVE: SaveData = {
   unlocks: [],
   feats: {},
   stats: { runs: 0, wins: 0, bestPlacementByHero: {} },
+  tiers: { highestUnlocked: 1, highestWon: 1, records: {}, bestByHero: {} },
   settings: { speedDefault: 1, reducedMotion: false, difficulty: 'standard' },
   activeRun: null,
 }
@@ -60,7 +72,16 @@ function dropPreWarCouncilRun(raw: SaveData): SaveData['activeRun'] {
 
 function migrate(raw: SaveData): SaveData {
   // Future schema bumps land here, keyed off `version`.
-  return { ...DEFAULT_SAVE, ...raw, activeRun: dropPreWarCouncilRun(raw), version: SAVE_VERSION }
+  // A save written before War Tiers has no `tiers` block; spreading DEFAULT
+  // first covers the missing key, but a *partial* one (an older client, a
+  // half-written record) would still leave holes, so it is filled explicitly.
+  return {
+    ...DEFAULT_SAVE,
+    ...raw,
+    tiers: { ...DEFAULT_SAVE.tiers, ...raw.tiers, records: { ...raw.tiers?.records }, bestByHero: { ...raw.tiers?.bestByHero } },
+    activeRun: dropPreWarCouncilRun(raw),
+    version: SAVE_VERSION,
+  }
 }
 
 export function loadSave(): SaveData {

@@ -14,7 +14,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "sim": "tsx scripts/sim.ts",
-    "sweep": "tsx scripts/sweep.ts"
+    "sweep": "tsx scripts/sweep.ts",
+    "tiers": "tsx scripts/sim.ts --tiers"
   },
   "dependencies": {
     "express": "^4.21.2",

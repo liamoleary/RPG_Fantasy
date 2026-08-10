@@ -13,7 +13,8 @@ import type { FactionId } from '../src/data/types'
 import { ALL_TALENTS, TALENT_BY_ID, type TalentNode } from '../src/data/talents/index'
 import { FRONT_SLOTS } from '../src/engine/battle'
 import { HARD_CAP_ROUND, advanceRound, newRun, resolveBattles, type RunState } from '../src/engine/run'
-import { boardPower, rivalMuster, NOISE, type Difficulty } from '../src/engine/rivals'
+import { MAX_WAR_TIER, clampTier, rulesForTier } from '../src/data/tiers'
+import { boardPower, rivalMuster, type Difficulty } from '../src/engine/rivals'
 import { MAX_TALENT_POINTS, isLevelUpRound, scoreNode, type TalentOffer } from '../src/engine/talents'
 import { applyTalent } from '../src/engine/run'
 import { lineOf } from '../src/engine/camp'
@@ -26,6 +27,10 @@ interface Args {
   seed: number
   /** 'off' strips Cover from the data, for a like-for-like before/after */
   cover: 'on' | 'off'
+  /** War Tier to run every lobby at (DN09) */
+  tier: number
+  /** climb the whole ladder and print the §6 curve instead of the usual report */
+  tiers: boolean
 }
 
 function parseArgs(): Args {
@@ -39,6 +44,8 @@ function parseArgs(): Args {
     difficulty: get('difficulty', 'standard') as Difficulty,
     seed: Number(get('seed', '12345')),
     cover: get('cover', 'on') === 'off' ? 'off' : 'on',
+    tier: clampTier(Number(get('tier', '1'))),
+    tiers: a.includes('--tiers'),
   }
 }
 
@@ -231,7 +238,11 @@ function playRunHeadless(run: RunState): RunState {
           round: run.round,
           archetype: p.archetype,
           factionId: p.factionId,
-          noise: NOISE[run.difficulty],
+          // The player policy is deliberately sharper than a rival's: DN09 §6
+          // frames its curve around a *competent* player, and a player driven
+          // at rival noise wins 1-in-8 by construction, which would leave every
+          // tier's effect buried under lobby noise.
+          noise: 0,
         },
         rng,
       )
@@ -316,9 +327,72 @@ function table(title: string, rows: [string, string][][]) {
   }
 }
 
+/**
+ * The §6 ladder report. One column per tier: does the player's win rate fall
+ * monotonically, does each rung bite, and does any rung reorder the factions?
+ * That last one is §7.2's warning made measurable — a modifier can interact
+ * with a mechanic unevenly (Rich Foes feeds AI Verdant Growth), and a ladder
+ * that quietly re-breaks the faction balance at Tier 6 is worse than no ladder.
+ */
+function ladderReport(args: Args) {
+  console.log(`BANNERFELL — war tier ladder\n${args.runs} lobbies per tier · difficulty ${args.difficulty} · seed ${args.seed}\n`)
+  console.log('tier  rule                    player win%   delta   med rounds   faction spread (avg place)')
+  console.log('─'.repeat(102))
+  let prev: number | null = null
+  const cliffs: string[] = []
+  const bands: string[] = []
+  for (let tier = 1; tier <= MAX_WAR_TIER; tier++) {
+    let wins = 0
+    const lens: number[] = []
+    const place = new Map<string, { n: number; sum: number }>()
+    for (let i = 0; i < args.runs; i++) {
+      const seed = args.seed + i * 7919
+      const rng = makeRng(seed)
+      const f = rng.pick(FACTIONS)
+      const heroes = HEROES.filter((h) => h.faction === f.id)
+      const hero = rng.pick(heroes)
+      let run = newRun({ seed, factionId: f.id, heroId: hero.id, difficulty: args.difficulty, tier })
+      run = playRunHeadless(run)
+      lens.push(run.round)
+      for (const w of run.warlords) {
+        const e = place.get(w.factionId) ?? { n: 0, sum: 0 }
+        e.n += 1
+        e.sum += w.placement ?? 1
+        place.set(w.factionId, e)
+      }
+      if ((run.warlords.find((w) => w.isPlayer)?.placement ?? 9) === 1) wins += 1
+    }
+    const win = (wins / args.runs) * 100
+    const delta = prev === null ? null : win - prev
+    prev = win
+    const med = lens.sort((a, b) => a - b)[Math.floor(lens.length / 2)]
+    const avgs = FACTIONS.map((f) => {
+      const e = place.get(f.id)
+      return { id: f.id, v: e ? e.sum / e.n : NaN }
+    })
+    const spread = Math.max(...avgs.map((a) => a.v)) - Math.min(...avgs.map((a) => a.v))
+    if (delta !== null && delta < -20) cliffs.push(`tier ${tier} drops ${(-delta).toFixed(1)} points`)
+    if (avgs.some((a) => a.v < 4.2 - 0.4 || a.v > 4.8 + 0.4)) bands.push(`tier ${tier}`)
+    const rule = tier === 1 ? '(the game as shipped)' : (rulesForTier(tier).slice(-1)[0]?.name ?? '')
+    console.log(
+      `${String(tier).padStart(4)}  ${rule.padEnd(22)} ${win.toFixed(1).padStart(8)}%  ` +
+        `${(delta === null ? '   —' : (delta >= 0 ? '+' : '') + delta.toFixed(1)).padStart(6)}  ` +
+        `${String(med).padStart(10)}   ` +
+        avgs.map((a) => `${a.id.slice(0, 4)} ${a.v.toFixed(2)}`).join('  ') +
+        `  (${spread.toFixed(2)})`,
+    )
+  }
+  console.log('')
+  console.log(`§6 target: T1 45-55%, each tier -8 to -12 points, T10 3-8%, no drop over 20 points`)
+  console.log(`CLIFFS       ${cliffs.length === 0 ? 'none' : cliffs.join('; ') + '  ⚠'}`)
+  console.log(`FACTION BAND ${bands.length === 0 ? 'every tier within ±0.4 of the global band' : 'outside ±0.4 at ' + bands.join(', ') + '  ⚠'}`)
+  console.log('')
+}
+
 function main() {
   const args = parseArgs()
   if (args.cover === 'off') disableCover()
+  if (args.tiers) return ladderReport(args)
   const t0 = Date.now()
 
   const byFaction = new Map<string, Bucket>()
@@ -358,7 +432,7 @@ function main() {
     const f = rng.pick(FACTIONS)
     const heroes = HEROES.filter((h) => h.faction === f.id)
     const hero = rng.pick(heroes)
-    let run = newRun({ seed, factionId: f.id, heroId: hero.id, difficulty: args.difficulty })
+      let run = newRun({ seed, factionId: f.id, heroId: hero.id, difficulty: args.difficulty, tier: args.tier })
     run = playRunHeadless(run)
 
     lengths.push(run.round)

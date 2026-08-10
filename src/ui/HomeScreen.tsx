@@ -9,6 +9,8 @@ import type { FactionId } from '../data/types'
 import type { Difficulty } from '../engine/rivals'
 import { useGame } from '../state/store'
 import { GlossarySheet } from './Glossary'
+import { TierCrest, TierPicker, TierRules } from './WarTier'
+import { clampTier } from '../data/tiers'
 import { Plate } from './Plate'
 import { Sigil } from './Sigil'
 
@@ -27,6 +29,10 @@ export function HomeScreen() {
   const [showKeywords, setShowKeywords] = useState(false)
   const [showAccount, setShowAccount] = useState(false)
   const [showFeedback, setShowFeedback] = useState(false)
+  const [showTiers, setShowTiers] = useState(false)
+  // Default to the top of your ladder — chasing the next rung is the common
+  // case — but any unlocked tier stays runnable (§4).
+  const [tier, setTier] = useState(() => clampTier(save.tiers.highestUnlocked))
 
   const heroes = HEROES.filter((h) => h.faction === factionId)
   const heroUnlocked = (renown: number) => renown === 0 || save.renown >= renown
@@ -53,6 +59,21 @@ export function HomeScreen() {
           onFeedback={() => setShowFeedback(true)}
           onSettings={() => setShowSettings(true)}
         />
+
+        {/* The crest is the biggest new element on Home (§5): what you are
+            climbing, and what you have actually taken. */}
+        <div className="row crest-row">
+          <TierCrest tiers={save.tiers} onClick={() => setShowTiers(true)} />
+          <div className="grow">
+            <div className="eyebrow">The climb</div>
+            <div className="small dim">
+              {save.tiers.highestWon >= save.tiers.highestUnlocked
+                ? 'Win here to open the next rung.'
+                : `Conquered ${save.tiers.highestWon}. Tier ${save.tiers.highestUnlocked} is still standing.`}
+            </div>
+            <TierRules tier={tier} compact />
+          </div>
+        </div>
 
         <InstallCard runsFinished={save.stats.runs} />
 
@@ -147,10 +168,14 @@ export function HomeScreen() {
       </div>
 
       <div className="action-bar">
-        <button className="btn btn-primary" disabled={!canStart} onClick={() => start(factionId, activeHero.id, difficulty)}>
-          New Run
+        <button className="btn btn-primary" disabled={!canStart} onClick={() => start(factionId, activeHero.id, difficulty, tier)}>
+          {tier > 1 ? `New Run — War Tier ${tier}` : 'New Run'}
         </button>
       </div>
+
+      {showTiers && (
+        <TierPicker tiers={save.tiers} selected={tier} onPick={setTier} onClose={() => setShowTiers(false)} />
+      )}
 
       {showSettings && (
         <div className="scrim" onClick={() => setShowSettings(false)}>

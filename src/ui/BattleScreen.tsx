@@ -12,6 +12,7 @@ import { Sigil } from './Sigil'
 import { describe, HEAVY_HIT_FRACTION, poolOf, spellSummary } from './battleLog'
 import { castFxOfFaction, projectileOf, SnapCard } from './StackCard'
 import { OutcomeFlash } from './OutcomeFlash'
+import { TierRules } from './WarTier'
 import { ResultScreen } from './ResultScreen'
 
 /** Volley is a unit property, so the log does not need to repeat it. */
@@ -258,6 +259,8 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
   const [done, setDone] = useState(false)
   /** the player asked for the round-up behind the flash */
   const [detail, setDetail] = useState(false)
+  /** §8.2: every active tier rule readable from the pause controls */
+  const [rules, setRules] = useState(false)
   /** the snapshot the player tapped; inspecting holds the replay (§2.1) */
   const [peek, setPeek] = useState<StackSnap | null>(null)
   /** the hero whose plaque was tapped — pauses the replay and shows their kit */
@@ -525,6 +528,11 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
         <button className="btn btn-sm grow" onClick={() => setPaused((v) => !v)} disabled={done}>
           {paused ? '▶ Resume' : '❚❚ Pause'}
         </button>
+        {run.tier > 1 && (
+          <button className="btn btn-sm tier-chip" onClick={() => setRules(true)} aria-label={`War Tier ${run.tier} — banner rules`}>
+            T{run.tier}
+          </button>
+        )}
         <button className="btn btn-sm grow" onClick={() => store.setSpeed(store.speed === 1 ? 2 : 1)}>
           {store.speed}× speed
         </button>
@@ -550,6 +558,20 @@ export function BattleScreen({ run, result }: { run: RunState; result: BattleRes
       )}
 
       {heroPeek && <HeroSheet warlord={heroPeek} round={run.round} onClose={() => setHeroPeek(null)} />}
+      {rules && (
+        <div className="scrim" onClick={() => setRules(false)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="center">
+              <div className="eyebrow">In force this run</div>
+              <h2>War Tier {run.tier}</h2>
+            </div>
+            <TierRules tier={run.tier} />
+            <button className="btn btn-primary" onClick={() => setRules(false)}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* The round ends here now (DN08): the verdict is stamped over the board
           that produced it and the game moves itself on. The old result page

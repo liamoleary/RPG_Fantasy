@@ -30,15 +30,18 @@ export function runRoutes() {
     const rounds = int(req.body?.rounds, 0, MAX_ROUNDS, 0)
     const durationMs = int(req.body?.durationMs, 0, MAX_HOURS_MS, null)
     const buildId = str(req.body?.buildId, 64) || null
+    // Bounded like every other field: a bad client can lie about its tier, but
+    // it cannot put anything outside the ladder into the column (DN09 §7.4).
+    const tier = int(req.body?.tier, 1, 10, 1)
 
     const details = jsonWithin(req.body?.details, DETAILS_MAX_BYTES)
     if (details === null) return badRequest(res, `details must serialise to under ${DETAILS_MAX_BYTES} bytes`)
 
     try {
       const { rows } = await query(
-        `INSERT INTO runs (account_id, hero_id, faction_id, placement, rounds, duration_ms, build_id, details)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-        [req.account.id, heroId, factionId, placement, rounds, durationMs, buildId, JSON.stringify(details)],
+        `INSERT INTO runs (account_id, hero_id, faction_id, placement, rounds, duration_ms, build_id, tier, details)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+        [req.account.id, heroId, factionId, placement, rounds, durationMs, buildId, tier, JSON.stringify(details)],
       )
       return res.status(201).json({ ok: true, id: Number(rows[0].id) })
     } catch (err) {

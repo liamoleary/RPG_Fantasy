@@ -32,6 +32,7 @@ import { Sigil } from './Sigil'
 import { StackCard, rowGlyph, unitColor } from './StackCard'
 import { FeedbackButton } from './Feedback'
 import { MagicPreview } from './MagicPreview'
+import { TierBanners, TierRules } from './WarTier'
 import type { TalentOffer } from '../engine/talents'
 import { TALENT_BY_ID } from '../data/talents/index'
 
@@ -99,6 +100,10 @@ export function MusterScreen({ run }: { run: RunState }) {
   /** uid whose promotion is one confirm away, straight from the board (§8) */
   const [promoteUid, setPromoteUid] = useState<string | null>(null)
   const [pathToast, setPathToast] = useState<{ branch: BoonBranch; title: string } | null>(null)
+  // "Here is what you signed up for" (DN09 §5) — once, at the top of the run.
+  const [banners, setBanners] = useState(() => run.round === 1 && run.tier > 1)
+  // §8.2: the rules must be readable at any point, not only at the start.
+  const [rules, setRules] = useState(false)
   const foeId = opponentOf(run, p.id)
   const foe = foeId ? run.warlords.find((w) => w.id === foeId) : null
   const rCost = rerollCost(p.camp, p.mods)
@@ -219,6 +224,11 @@ export function MusterScreen({ run }: { run: RunState }) {
             <button className="btn btn-sm btn-ghost" onClick={() => setGlossary(true)} aria-label="Symbols and keywords">
               ?
             </button>
+            {run.tier > 1 && (
+              <button className="btn btn-sm btn-ghost tier-chip" onClick={() => setRules(true)} aria-label={`War Tier ${run.tier} — banner rules`}>
+                T{run.tier}
+              </button>
+            )}
             <button className="btn btn-sm btn-ghost" onClick={store.autoArrange} aria-label="Auto-arrange your board">
               ⇄
             </button>
@@ -434,6 +444,21 @@ export function MusterScreen({ run }: { run: RunState }) {
       {store.inspecting && <WarlordSheet run={run} id={store.inspecting} onClose={() => store.inspect(null)} />}
       {heroOpen && <HeroSheet warlord={p} round={run.round} onClose={() => setHeroOpen(false)} />}
       {glossary && <GlossarySheet onClose={() => setGlossary(false)} />}
+      {banners && <TierBanners tier={run.tier} onClose={() => setBanners(false)} />}
+      {rules && (
+        <div className="scrim" onClick={() => setRules(false)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="center">
+              <div className="eyebrow">In force this run</div>
+              <h2>War Tier {run.tier}</h2>
+            </div>
+            <TierRules tier={run.tier} />
+            <button className="btn btn-primary" onClick={() => setRules(false)}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
       {pathToast && (
         <div className="path-toast" style={{ ['--bc' as string]: branchColor(pathToast.branch) }} role="status">
           Your {pathToast.branch} is now <strong>{pathToast.title}</strong>

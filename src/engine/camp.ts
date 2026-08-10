@@ -32,8 +32,9 @@ export function offerSlots(camp: CampState, mods: HeroMods): number {
   return Math.min(8, camp.tier + 2 + mods.extraOfferSlots)
 }
 
-export function income(round: number, mods: HeroMods): number {
-  return Math.min(BASE_INCOME_CAP, 2 + round) + mods.income
+/** `cap` overrides BASE_INCOME_CAP — War Tier 7 trims the player's ceiling. */
+export function income(round: number, mods: HeroMods, cap = BASE_INCOME_CAP): number {
+  return Math.min(cap, 2 + round) + mods.income
 }
 
 export function tierUpCost(camp: CampState, mods: HeroMods): number | null {

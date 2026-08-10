@@ -4113,3 +4113,67 @@ h3 {
   font-size: 16px;
   letter-spacing: 0.02em;
 }
+
+/* ── desktop: the horizontal strips have to be reachable with a mouse ─────── */
+
+/* The hand, the ladder and the survivor row were built as swipeable rows with
+   the scrollbar deliberately hidden — right on a phone, where the peek is the
+   affordance and a thumb does the work. On a desktop that leaves a row that
+   cannot be moved at all: no swipe, no bar to grab, and a hidden bar is not a
+   hint that anything is off-screen. Wheel support lives in App.tsx; this is the
+   part a player has to be able to *see*.
+
+   Gated on a fine pointer rather than a width, because the thing that changed
+   is the input device, not the screen. A touch laptop keeps the clean row. */
+@media (pointer: fine) {
+  [data-hscroll] {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line) transparent;
+  }
+  [data-hscroll]::-webkit-scrollbar {
+    display: block;
+    height: 6px;
+  }
+  [data-hscroll]::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  [data-hscroll]::-webkit-scrollbar-thumb {
+    background: var(--line);
+    border-radius: 3px;
+  }
+  [data-hscroll]::-webkit-scrollbar-thumb:hover {
+    background: var(--gold);
+  }
+  /* The bar needs somewhere to sit that is not on top of a card's foot. */
+  .screen-muster .camp-hand {
+    padding-bottom: 8px;
+  }
+}
+
+/* Past 520px the app stops filling the viewport and becomes a fixed column, so
+   the scarce axis flips. On a phone a hand card takes the height left over and
+   its width follows from 4:5 — correct, because height is what runs out. On a
+   desktop height is abundant and the column is capped, so that same derivation
+   grew cards until only two of them fit a 486px row: at 1440x1000 the hand was
+   665px of content in 486px with no visible bar. Cap the height so at least
+   three cards and a peek of the fourth always share the row, which is both the
+   readable state and the one that looks scrollable. */
+@media (min-width: 540px) {
+  /* Explicit, not a max: a hand card is `height: 100%` and takes its width from
+     4:5, so it needs a row with a resolved height to measure against. Left as
+     `auto` the whole row collapses to the aspect ratio's minimum. */
+  .screen-muster .camp-hand {
+    height: 176px;
+    max-height: none;
+  }
+  /* Fixing the hand's height leaves the panel with height it no longer needs,
+     and a stretched panel puts that as a hole between the cards and the Reroll
+     row. Let the panel size to its content and push it down instead: the camp
+     stays bottom-anchored, which is where it belongs on a phone for thumb reach
+     and on a desktop simply because that is where the screen's actions live. */
+  .screen-muster .camp-panel {
+    flex: 0 0 auto;
+    margin-top: auto;
+    grid-template-rows: auto auto auto auto;
+  }
+}

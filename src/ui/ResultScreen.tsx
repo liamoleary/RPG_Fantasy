@@ -137,7 +137,7 @@ export function ResultScreen({ run }: { run: RunState }) {
           {/* The parade uses the shared card, not a bespoke thumbnail (DN07
               §2): what survived the battle should look like what stood on the
               board, because it is the same stack. */}
-          <div className="survivor-strip">
+          <div className="survivor-strip" data-hscroll>
             {winnersSurvivors.map((sv) => {
               const def = unit(sv.unitId)
               return (

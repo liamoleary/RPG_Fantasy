@@ -42,6 +42,39 @@ export function App() {
     document.body.classList.toggle('reduced-motion', save.settings.reducedMotion)
   }, [save.settings.reducedMotion])
 
+  /**
+   * Let a plain mouse wheel drive the horizontal strips — the hand, the ladder,
+   * the survivor row.
+   *
+   * These were built as swipeable rows and on touch they are exactly right. On
+   * a desktop with a mouse they were unreachable: the scrollbar is hidden by
+   * design, there is no swipe, and a vertical wheel over an `overflow-x` row
+   * does nothing in Chrome once `scroll-snap-type` is on. That left the War
+   * Camp with recruits a player could not scroll to.
+   *
+   * One delegated listener rather than a hook per strip, so a row added later
+   * only has to opt in with `data-hscroll`. Non-passive because it must be able
+   * to take the event — but only when the row can actually move in that
+   * direction, so a wheel at either end still scrolls the page behind it.
+   */
+  useEffect(() => {
+    const onWheel = (e: WheelEvent) => {
+      const target = e.target as Element | null
+      const strip = target?.closest?.('[data-hscroll]') as HTMLElement | null
+      if (!strip) return
+      // A trackpad's horizontal gesture already works; don't fight it.
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return
+      const max = strip.scrollWidth - strip.clientWidth
+      if (max <= 0) return
+      const next = Math.max(0, Math.min(max, strip.scrollLeft + e.deltaY))
+      if (next === strip.scrollLeft) return
+      e.preventDefault()
+      strip.scrollLeft = next
+    }
+    window.addEventListener('wheel', onWheel, { passive: false })
+    return () => window.removeEventListener('wheel', onWheel)
+  }, [])
+
   // Camp is plum-dark, the battlefield is night (DN07 §4). The ground is
   // painted on <body>, so the shift has to live there too — and putting it on
   // a data attribute rather than a class means the theme redefines a handful

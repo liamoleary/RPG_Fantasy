@@ -286,7 +286,7 @@ export function MusterScreen({ run }: { run: RunState }) {
             grid; it is where every purchase decision is made, so it gets the
             biggest always-visible art on the screen. Swipeable, with the next
             card peeking — the peek IS the scroll affordance. */}
-        <div className="camp-hand" role="list" aria-label="Recruits available">
+        <div className="camp-hand" data-hscroll role="list" aria-label="Recruits available">
           {p.camp.offer.map((unitId, i) => (
             <HandCard
               key={i}

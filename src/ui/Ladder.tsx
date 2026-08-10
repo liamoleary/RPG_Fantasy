@@ -11,7 +11,7 @@ export function Ladder({ run, onInspect }: { run: RunState; onInspect: (id: stri
   const foeId = opponentOf(run, run.playerId)
   const order = [...run.warlords].sort((a, b) => Number(b.alive) - Number(a.alive) || b.hp - a.hp)
   return (
-    <div className="ladder">
+    <div className="ladder" data-hscroll>
       {order.map((w) => (
         <BannerChip key={w.id} w={w} you={w.id === run.playerId} foe={w.id === foeId} onClick={() => onInspect(w.id)} />
       ))}

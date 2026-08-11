@@ -127,10 +127,13 @@ function mergeTiers(a?: SaveData['tiers'], b?: SaveData['tiers']): SaveData['tie
   b = b ?? EMPTY
   const records: SaveData['tiers']['records'] = {}
   for (const key of new Set([...Object.keys(a.records), ...Object.keys(b.records)])) {
-    const x = a.records[key] ?? { runs: 0, wins: 0 }
-    const y = b.records[key] ?? { runs: 0, wins: 0 }
-    const runs = Math.max(x.runs, y.runs)
-    records[key] = { runs, wins: Math.min(runs, Math.max(x.wins, y.wins)) }
+    const x = a.records[key] ?? { reached: 0, fallen: 0 }
+    const y = b.records[key] ?? { reached: 0, fallen: 0 }
+    // Larger side wins rather than summing: a campaign that synced from two
+    // devices must not be counted twice. `fallen` can never exceed `reached`,
+    // or the history column would claim more endings than arrivals.
+    const reached = Math.max(x.reached, y.reached)
+    records[key] = { reached, fallen: Math.min(reached, Math.max(x.fallen, y.fallen)) }
   }
   const bestByHero: Record<string, number> = { ...a.bestByHero }
   for (const [heroId, tier] of Object.entries(b.bestByHero)) {

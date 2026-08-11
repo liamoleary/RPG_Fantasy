@@ -32,7 +32,9 @@ export function HomeScreen() {
   const [showTiers, setShowTiers] = useState(false)
   // Default to the top of your ladder — chasing the next rung is the common
   // case — but any unlocked tier stays runnable (§4).
-  const [tier, setTier] = useState(() => clampTier(save.tiers.highestUnlocked))
+  // The rung a campaign in flight is standing on, or the foot of the mountain.
+  // No longer a choice: DN10 §2 starts every campaign at Tier 1.
+  const tier = clampTier(save.activeRun?.tier ?? 1)
 
   const heroes = HEROES.filter((h) => h.faction === factionId)
   const heroUnlocked = (renown: number) => renown === 0 || save.renown >= renown
@@ -67,9 +69,11 @@ export function HomeScreen() {
           <div className="grow">
             <div className="eyebrow">The climb</div>
             <div className="small dim">
-              {save.tiers.highestWon >= save.tiers.highestUnlocked
-                ? 'Win here to open the next rung.'
-                : `Conquered ${save.tiers.highestWon}. Tier ${save.tiers.highestUnlocked} is still standing.`}
+              {save.activeRun
+                ? 'A campaign is on the march.'
+                : save.tiers.highestWon > 1
+                  ? `Your highest campaign reached Tier ${save.tiers.highestUnlocked}.`
+                  : 'Win a lobby and march on with your whole warband.'}
             </div>
             <TierRules tier={tier} compact />
           </div>
@@ -94,9 +98,21 @@ export function HomeScreen() {
           </div>
         </div>
 
-        {save.activeRun && !save.activeRun.finished && (
-          <button className="btn btn-gold" onClick={resume}>
-            Resume run — round {save.activeRun.round}
+        {/* DN10 §4: a campaign is many sittings, so the one in flight is the
+            first thing on Home — above New Campaign, and saying where it got
+            to. A campaign paused at the fork reads differently from one paused
+            mid-lobby, because answering "March On" tomorrow is the whole
+            point of the Interlude being a stopping place. */}
+        {save.activeRun && (
+          <button className="btn btn-gold resume-card" onClick={resume}>
+            <strong>
+              {save.activeRun.finished ? 'The fork awaits' : 'Resume the march'} — War Tier {clampTier(save.activeRun.tier)}
+            </strong>
+            <span className="tiny">
+              {save.activeRun.finished
+                ? 'A lobby won. March on, or claim victory.'
+                : `Round ${save.activeRun.round}${save.activeRun.roundsBefore > 0 ? ` · ${save.activeRun.roundsBefore + save.activeRun.round} rounds of campaigning` : ''}`}
+            </span>
           </button>
         )}
 
@@ -168,13 +184,13 @@ export function HomeScreen() {
       </div>
 
       <div className="action-bar">
-        <button className="btn btn-primary" disabled={!canStart} onClick={() => start(factionId, activeHero.id, difficulty, tier)}>
-          {tier > 1 ? `New Run — War Tier ${tier}` : 'New Run'}
+        <button className="btn btn-primary" disabled={!canStart} onClick={() => start(factionId, activeHero.id, difficulty)}>
+          New Campaign
         </button>
       </div>
 
       {showTiers && (
-        <TierPicker tiers={save.tiers} selected={tier} onPick={setTier} onClose={() => setShowTiers(false)} />
+        <TierPicker tiers={save.tiers} selected={tier} onClose={() => setShowTiers(false)} />
       )}
 
       {showSettings && (

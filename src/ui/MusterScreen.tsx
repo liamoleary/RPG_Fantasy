@@ -32,7 +32,7 @@ import { Sigil } from './Sigil'
 import { StackCard, rowGlyph, unitColor } from './StackCard'
 import { FeedbackButton } from './Feedback'
 import { MagicPreview } from './MagicPreview'
-import { TierBanners, TierRules } from './WarTier'
+import { TierRules } from './WarTier'
 import type { TalentOffer } from '../engine/talents'
 import { TALENT_BY_ID } from '../data/talents/index'
 
@@ -101,7 +101,6 @@ export function MusterScreen({ run }: { run: RunState }) {
   const [promoteUid, setPromoteUid] = useState<string | null>(null)
   const [pathToast, setPathToast] = useState<{ branch: BoonBranch; title: string } | null>(null)
   // "Here is what you signed up for" (DN09 §5) — once, at the top of the run.
-  const [banners, setBanners] = useState(() => run.round === 1 && run.tier > 1)
   // §8.2: the rules must be readable at any point, not only at the start.
   const [rules, setRules] = useState(false)
   const foeId = opponentOf(run, p.id)
@@ -444,7 +443,6 @@ export function MusterScreen({ run }: { run: RunState }) {
       {store.inspecting && <WarlordSheet run={run} id={store.inspecting} onClose={() => store.inspect(null)} />}
       {heroOpen && <HeroSheet warlord={p} round={run.round} onClose={() => setHeroOpen(false)} />}
       {glossary && <GlossarySheet onClose={() => setGlossary(false)} />}
-      {banners && <TierBanners tier={run.tier} onClose={() => setBanners(false)} />}
       {rules && (
         <div className="scrim" onClick={() => setRules(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>

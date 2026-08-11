@@ -1,5 +1,6 @@
 import { MAX_WAR_TIER, clampTier, renownMultiplier, rulesForTier, tierDef } from '../data/tiers'
 import type { SaveData } from '../state/persist'
+import type { InterludeGrants } from '../engine/run'
 
 /**
  * The climb, worn (Design Notes 09 §5).
@@ -64,12 +65,11 @@ export function TierRules({ tier, compact }: { tier: number; compact?: boolean }
 export function TierPicker({
   tiers,
   selected,
-  onPick,
   onClose,
 }: {
   tiers: SaveData['tiers']
+  /** the tier to detail at the foot — the campaign's current rung, or 1 */
   selected: number
-  onPick: (tier: number) => void
   onClose: () => void
 }) {
   const unlocked = clampTier(tiers.highestUnlocked)
@@ -80,7 +80,8 @@ export function TierPicker({
           <div className="eyebrow">The climb</div>
           <h2>War Tiers</h2>
           <div className="small dim">
-            Win at a tier to unlock the next. Losing never costs you a rung — and altitude pays renown either way.
+            Every campaign starts at Tier 1. Win a lobby and you may march on with your whole warband, one rung
+            higher, into a lobby that has been building without you. Altitude pays renown either way.
           </div>
         </div>
 
@@ -88,28 +89,30 @@ export function TierPicker({
           {Array.from({ length: MAX_WAR_TIER }, (_, i) => i + 1).map((tier) => {
             const def = tierDef(tier)
             const open = tier <= unlocked
-            const rec = tiers.records[String(tier)] ?? { runs: 0, wins: 0 }
+            const rec = tiers.records[String(tier)] ?? { reached: 0, fallen: 0 }
             return (
               <button
                 key={tier}
                 className="tier-row"
                 data-on={tier === selected ? 'true' : undefined}
                 data-locked={open ? undefined : 'true'}
-                disabled={!open}
-                onClick={() => onPick(tier)}
+                disabled
               >
                 <span className="tier-row-n">{tier}</span>
                 <span className="tier-row-body">
                   <strong>{def.name ?? 'The foot of the mountain'}</strong>
                   <span className="tiny dim">{def.text ?? 'The game as it ships. Nothing added.'}</span>
                 </span>
+                {/* Campaign history, not a scoreboard (DN10 §7.4): how many
+                    campaigns got this far, and how many got no further. */}
                 <span className="tier-row-rec tiny">
-                  {rec.runs === 0 ? (
-                    <span className="dim">{open ? 'unattempted' : 'locked'}</span>
+                  {rec.reached === 0 ? (
+                    <span className="dim">{open ? 'unreached' : 'locked'}</span>
                   ) : (
                     <>
-                      <b>{rec.wins}</b>
-                      <span className="dim">/{rec.runs}</span>
+                      <b>{rec.reached}</b>
+                      <span className="dim"> reached</span>
+                      {rec.fallen > 0 && <span className="dim"> · {rec.fallen} fell</span>}
                     </>
                   )}
                 </span>
@@ -120,12 +123,12 @@ export function TierPicker({
 
         <div className="panel tiny">
           <div className="eyebrow" style={{ marginBottom: 4 }}>
-            Running Tier {selected} — every rule in force
+            Tier {selected} — every rule in force
           </div>
           <TierRules tier={selected} compact />
           <div className="dim" style={{ marginTop: 6 }}>
-            Renown ×{renownMultiplier(selected).toFixed(2)}, win or lose. No units, heroes or factions are ever locked
-            behind a tier.
+            Renown ×{renownMultiplier(selected).toFixed(2)}, win or lose, banked for each lobby you take at this
+            altitude. No units, heroes or factions are ever locked behind a tier.
           </div>
         </div>
 
@@ -138,20 +141,78 @@ export function TierPicker({
 }
 
 /**
- * "Here is what you signed up for" — three seconds at the top of a run (§5).
- * Dismissible immediately: it is a statement, not a gate, and a player on
- * their twelfth Tier 4 attempt should not have to read it again.
+ * The Interlude (DN10 §3) — one screen, not a phase.
+ *
+ * This replaces DN09's "Banners of war" card outright. That card existed to
+ * tell you what you had signed up for at the top of a tier-N run; under DN10
+ * a campaign always begins at Tier 1, so the only moment it could ever have
+ * fired is the moment you arrive by marching — and then it was one of two
+ * sheets saying overlapping things with the same button on them.
+ *
+ * The whole point is that it is a *receipt*. §3 is explicit that nothing may
+ * change on arrival without being listed here, so this reads the grants the
+ * engine actually applied rather than describing what it believes happened —
+ * if the two ever drift, the screen is wrong on purpose rather than by
+ * accident, and the test that pins `marchOn`'s return value catches it.
+ *
+ * It is also a stopping point. §4 wants a campaign to be many sittings, and
+ * this is the natural place to put the app down: the march is already saved by
+ * the time this appears.
  */
-export function TierBanners({ tier, onClose }: { tier: number; onClose: () => void }) {
-  if (clampTier(tier) <= 1) return null
+export function Interlude({ grants, onClose }: { grants: InterludeGrants; onClose: () => void }) {
+  const def = tierDef(grants.tier)
   return (
     <div className="scrim scrim-solid" onClick={onClose}>
       <div className="sheet tier-banners" onClick={(e) => e.stopPropagation()}>
         <div className="center">
-          <div className="eyebrow">Banners of war</div>
-          <h2>War Tier {clampTier(tier)}</h2>
+          <div className="eyebrow">The army rests</div>
+          <h2>War Tier {grants.tier}</h2>
+          <div className="small dim">{def.name ? `${def.name} — ${def.text}` : 'A new war, on the same march.'}</div>
         </div>
-        <TierRules tier={tier} />
+
+        <ul className="tier-rules interlude-grants">
+          <li>
+            <span className="tier-rule-n">♥</span>
+            <span className="tier-rule-body">
+              <strong>Banner restored — {grants.hp} HP</strong>
+              <span className="tiny dim"> Each lobby is a fresh war; the tier rules are the difficulty, not attrition.</span>
+            </span>
+          </li>
+          <li>
+            <span className="tier-rule-n">◆</span>
+            <span className="tier-rule-body">
+              <strong>{grants.gold} gold to muster with</strong>
+              <span className="tiny dim"> The tier's opening stipend. Nothing banks across a march.</span>
+            </span>
+          </li>
+          <li>
+            <span className="tier-rule-n">✦</span>
+            <span className="tier-rule-body">
+              <strong>
+                +{grants.talentPoints} talent point{grants.talentPoints === 1 ? '' : 's'}
+              </strong>
+              <span className="tiny dim"> On top of the level-up cadence, which restarts with the new lobby.</span>
+            </span>
+          </li>
+        </ul>
+
+        <div className="panel tiny">
+          <div className="eyebrow" style={{ marginBottom: 4 }}>
+            Everything else marches with you
+          </div>
+          <div className="dim">
+            Your stacks, counts, Banner Ranks, promotions, camp and war council all carry unchanged. The rivals here
+            have been building without you.
+          </div>
+        </div>
+
+        <div className="center">
+          <div className="eyebrow" style={{ marginBottom: 4 }}>
+            Every rule in force
+          </div>
+        </div>
+        <TierRules tier={grants.tier} compact />
+
         <button className="btn btn-primary" onClick={onClose}>
           March
         </button>

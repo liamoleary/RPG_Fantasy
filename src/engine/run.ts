@@ -610,13 +610,16 @@ export interface WarBank {
 }
 
 export const WAR_BANKS: Record<string, WarBank> = {
-  // The wall gets tougher faster than it gets sharper.
-  vanguard: { trigger: 'held', atk: 2, hp: 4 },
-  // Anything that walks off the field carries the rage with it. 'stood' rather
-  // than 'bled': a trigger that needs you to take casualties AND survive fails
-  // exactly when you are losing, which is rich-get-richer and measured 1.5
-  // places worse for them.
+  // Every banner banks, and all three on the same trigger. `held` used to be
+  // Vanguard's and it paid only on *front-row* survivors — the row whose job
+  // is to absorb damage and die — so it rewarded you for already winning and
+  // measured 32% of the board against Stormtide's 44%. Verdant banked nothing
+  // at all and fell from the strongest banner to nearly the weakest when the
+  // banks landed. The trigger is now the same for everyone and the identity
+  // lives in the split: Vanguard endures, Stormtide sharpens, Verdant roots.
+  vanguard: { trigger: 'stood', atk: 2, hp: 4 },
   stormtide: { trigger: 'stood', atk: 2, hp: 2 },
+  verdant: { trigger: 'stood', atk: 1, hp: 4 },
 }
 
 function bankWarSpoils(w: Warlord, survivors: Survivor[]) {

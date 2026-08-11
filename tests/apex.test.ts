@@ -199,11 +199,18 @@ describe('caster attribution (§10)', () => {
    * is Mule Carts (0 ATK, nothing to retaliate with) and the wounds come from
    * a Crossbow Levy volleying over the top, which draws no retaliation either.
    * Berrik on both sides: his spell grants Bulwark, so no hero heal is mixed in.
+   *
+   * The volley was widened from 8 to 14. Berrik's Shield Line got stronger and
+   * much more frequent in the hero rebalance, and at the old size it simply
+   * prevented the wound this fixture needs — the test went red for a reason
+   * that had nothing to do with attribution. It wants a volley big enough to
+   * wound the Cleric through the shield but not so big it deletes the stack
+   * before it can heal anyone.
    */
   const clericBattle = () =>
     simulateBattle(
       { board: [stack('vg_cleric', 4, 4), stack('vg_mule', 20, 0)], hero: hero('h_berrik') },
-      { board: [stack('vg_mule', 60, 0), stack('vg_crossbow', 8, 4)], hero: hero('h_berrik') },
+      { board: [stack('vg_mule', 60, 0), stack('vg_crossbow', 14, 4)], hero: hero('h_berrik') },
       berrik,
       berrik,
       13,

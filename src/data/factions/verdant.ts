@@ -4,7 +4,8 @@ export const VERDANT: FactionDef = {
   id: 'verdant',
   name: 'The Verdant Court',
   mechanic: 'Growth',
-  mechanicText: 'At the end of every Muster, Growth stacks permanently gain +ATK/+HP per unit.',
+  mechanicText:
+    'At the end of every Muster, Growth stacks permanently gain +ATK/+HP per unit. Every stack that walks off the field keeps +1 ATK / +4 HP for the rest of the run.',
   blurb: 'Elves, treants and wild spirits. Weak early, terrifying if left alone.',
   unlockRenown: 0,
   colors: { primary: '#5fb87c', secondary: '#d8ead9', accent: '#9fe8ad', ink: '#0b1710' },

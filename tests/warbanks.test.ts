@@ -47,11 +47,18 @@ const bankedOn = (p: Warlord, uid: string) => {
 }
 
 describe('war banks — the configuration', () => {
-  it('gives Vanguard and Stormtide a bank, and leaves Verdant to the Growth keyword', () => {
-    expect(WAR_BANKS.vanguard.trigger).toBe('held')
-    expect(WAR_BANKS.stormtide.trigger).toBe('stood')
-    // Verdant already banks through Growth; a second source would double-dip.
-    expect(WAR_BANKS.verdant).toBeUndefined()
+  it('gives every banner one, on the same trigger', () => {
+    // Verdant used to be left to the Growth keyword on the reasoning that a
+    // second source would double-dip. Measured, that cost it the run: with the
+    // other two banking every battle, Verdant's Tier 1 win rate fell from
+    // 40.7% to 11.7%. And `held` — Vanguard's old trigger, which paid only on
+    // front-row survivors — rewarded already winning, banking on 32% of the
+    // board against Stormtide's 44%. One trigger for all three; the identity
+    // is in the split.
+    for (const id of ['vanguard', 'verdant', 'stormtide']) {
+      expect(WAR_BANKS[id], `${id} has no war bank`).toBeDefined()
+      expect(WAR_BANKS[id].trigger).toBe('stood')
+    }
   })
 
   it('banks something on every faction that has one', () => {
@@ -70,14 +77,15 @@ describe('Vanguard — the wall thickens', () => {
     expect(bankedOn(player(run), 'front')).toEqual({ atk: WAR_BANKS.vanguard.atk, hp: WAR_BANKS.vanguard.hp })
   })
 
-  it('banks nothing on a back-row stack, however well it did', () => {
+  it('banks on a back-row stack too, now the trigger is what it survived', () => {
     const board = [stack('vg_footman', 12, 0, 'front'), stack('vg_crossbow', 10, FRONT_SLOTS, 'back')]
     const run = runWith('vanguard', 'h_berrik', 3, board)
     resolveBattles(run)
     const back = survivorsOf(run, 'back')
     expect(back?.count, 'fixture must survive for this to test anything').toBeGreaterThan(0)
-    // The line it held is the point; archers behind it did not hold anything.
-    expect(bankedOn(player(run), 'back')).toEqual({ atk: 0, hp: 0 })
+    // Under `held` this banked nothing, which is what made Vanguard's mechanic
+    // pay out on a third less of its board than Stormtide's.
+    expect(bankedOn(player(run), 'back')).toEqual({ atk: WAR_BANKS.vanguard.atk, hp: WAR_BANKS.vanguard.hp })
   })
 })
 

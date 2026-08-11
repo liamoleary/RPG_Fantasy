@@ -244,12 +244,17 @@ describe('keywords and passives', () => {
     expect(frenzies.every((e) => e.t === 'frenzy' && e.uid === 'st_raider@0')).toBe(true)
   })
 
-  it("Marshal Yseult's Last Stand saves one stack from a wipe, once", () => {
+  it("Marshal Yseult's Last Stand saves a stack from a wipe, up to her passive's count", () => {
     const yseult = HERO_BY_ID.get('h_yseult')!
     const a = { board: [stack('vg_cannon', 3, 4)], hero: hero('h_berrik') }
     const b = { board: [stack('vg_militia', 1, 0), stack('vg_crossbow', 1, 4)], hero: hero('h_yseult') }
     const res = simulateBattle(a, b, berrik, yseult, 33, { round: 6 })
-    expect(res.events.filter((e) => e.t === 'lastStand').length).toBeLessThanOrEqual(1)
+    // Her passive is a count now, not a flag: it is her only knob, and a
+    // passive with no number in it could not be balanced against five that
+    // have one. The cap is whatever the data says, never a hard-coded 1.
+    const saves = res.events.filter((e) => e.t === 'lastStand').length
+    expect(saves).toBeGreaterThan(0)
+    expect(saves).toBeLessThanOrEqual(yseult.passive.x ?? 1)
   })
 
   it('hero spells appear in the event log', () => {

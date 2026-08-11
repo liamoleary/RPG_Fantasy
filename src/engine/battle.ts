@@ -208,7 +208,8 @@ interface Ctx {
   stacks: RStack[]
   heroes: Record<Side, HeroState>
   heroDefs: Record<Side, HeroDef>
-  lastStandUsed: Record<Side, boolean>
+  /** Last Stands already spent this battle, per side (Yseult's passive `x`). */
+  lastStandUsed: Record<Side, number>
   exchange: number
   /** Frenzy triggers per side this battle — Bloodcall reads it (§3) */
   frenzyCount: Record<Side, number>
@@ -430,8 +431,10 @@ function applyDamage(ctx: Ctx, target: RStack, raw: number, opts: { siege?: bool
     out.overkill = -remaining
     // Marshal Yseult: the first wipe each battle leaves one unit standing.
     const heroDef = ctx.heroDefs[target.side]
-    if (heroDef.passive.id === 'lastStand' && !ctx.lastStandUsed[target.side]) {
-      ctx.lastStandUsed[target.side] = true
+    // Yseult's Last Stand is a count, not a flag: it is her only knob, and a
+    // passive with no number in it cannot be balanced against five that have one.
+    if (heroDef.passive.id === 'lastStand' && ctx.lastStandUsed[target.side] < (heroDef.passive.x ?? 1)) {
+      ctx.lastStandUsed[target.side] += 1
       target.count = 1
       target.wound = target.maxHp - 1
       out.killed = before - 1
@@ -1098,7 +1101,7 @@ export function simulateBattle(a: BattleSide, b: BattleSide, heroA: HeroDef, her
     stacks: [],
     heroes: { a: a.hero, b: b.hero },
     heroDefs: { a: heroA, b: heroB },
-    lastStandUsed: { a: false, b: false },
+    lastStandUsed: { a: 0, b: 0 },
     exchange: 0,
     frenzyCount: { a: 0, b: 0 },
   }

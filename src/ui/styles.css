@@ -4222,24 +4222,3 @@ h3 {
 .reduced-motion .chip-hp[data-hurt='true'] {
   animation: none;
 }
-
-/* The campaign in flight, on Home (DN10 §4). Two lines, because "Tier 3,
-   round 4" is the thing a player needs to recognise their own march by. */
-.resume-card {
-  display: grid;
-  gap: 1px;
-  padding: 9px 12px;
-  text-align: left;
-}
-.resume-card > strong {
-  font-size: 15px;
-}
-.resume-card > .tiny {
-  opacity: 0.8;
-}
-/* The Interlude receipt: same rule-list furniture, warmer markers, because
-   these are grants rather than conditions. */
-.interlude-grants .tier-rule-n {
-  color: var(--gold);
-  background: var(--veil);
-}

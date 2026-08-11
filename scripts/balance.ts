@@ -31,8 +31,18 @@ const RUNS = Number(arg('runs', '500'))
 const SEED = Number(arg('seed', '60000'))
 const DIFFICULTY = arg('difficulty', 'standard') as Difficulty
 
-/** §6 targets. A hero outside the band is a hero nobody should have to avoid. */
-const WIN_BAND = { lo: 18, hi: 34 }
+/**
+ * The band is defined *around the measured mean*, not as fixed percentages.
+ *
+ * An absolute band was wrong and briefly hid a real result: lengthening a run
+ * from 30 HP to 50 dropped every hero's win rate by about six points at once —
+ * a longer lobby gives seven rivals more rounds to converge on you, so the
+ * sharp seat's edge decays. Nothing about hero fairness changed, but a fixed
+ * 18-34% band flagged five of six heroes as broken. What this file is for is
+ * whether one hero is a trap relative to the others; that is a question about
+ * the spread, and it has to survive the game getting longer or shorter.
+ */
+const BAND_WIDTH = 5
 /**
  * Average placement is reported but deliberately not a pass/fail band. Two
  * heroes on the same win rate can sit two places apart and both be correct:
@@ -123,8 +133,10 @@ const mean = (xs: number[]) => xs.reduce((n, x) => n + x, 0) / xs.length
 console.log(`BANNERFELL — hero and faction balance\n${RUNS} lobbies per hero · same seeds for every hero · difficulty ${DIFFICULTY} · seed ${SEED}\n`)
 console.log('hero                     banner      unlock     win%   avg place   avg rounds   end power')
 console.log('─'.repeat(96))
+const meanWin = rows.reduce((n, r) => n + r.win, 0) / rows.length
+const inBand = (w: number) => Math.abs(w - meanWin) <= BAND_WIDTH
 for (const r of [...rows].sort((a, b) => b.win - a.win)) {
-  const flag = r.win < WIN_BAND.lo || r.win > WIN_BAND.hi ? '  ⚠' : ''
+  const flag = inBand(r.win) ? '' : '  ⚠'
   console.log(
     `${r.hero.padEnd(24)} ${r.faction.padEnd(11)} ${String(r.unlock).padStart(4)}r ${r.win.toFixed(1).padStart(8)}% ` +
       `${r.place.toFixed(2).padStart(11)} ${r.rounds.toFixed(1).padStart(12)} ${Math.round(r.power).toString().padStart(11)}${flag}`,
@@ -161,9 +173,15 @@ line('hero win-rate spread (want ≤ 12 pts)', `${winSpread.toFixed(1)} pts`, wi
 line('faction win-rate spread (want ≤ 8 pts)', `${facSpread.toFixed(1)} pts`, facSpread <= 8)
 line('paid-minus-free advantage (want ≤ 4 pts)', `${gate >= 0 ? '+' : ''}${gate.toFixed(1)} pts`, Math.abs(gate) <= 4)
 line(
-  `every hero inside ${WIN_BAND.lo}–${WIN_BAND.hi}% win`,
-  `${rows.filter((r) => r.win >= WIN_BAND.lo && r.win <= WIN_BAND.hi).length}/${rows.length}`,
-  rows.every((r) => r.win >= WIN_BAND.lo && r.win <= WIN_BAND.hi),
+  `every hero within ±${BAND_WIDTH} pts of the mean (${meanWin.toFixed(1)}%)`,
+  `${rows.filter((r) => inBand(r.win)).length}/${rows.length}`,
+  rows.every((r) => inBand(r.win)),
+)
+// The level a lobby settles at is a separate question from whether the heroes
+// are fair to each other, so it is reported rather than graded. 12.5% is what
+// a seat wins by doing nothing; the gap above it is what skill is worth.
+console.log(
+  `  ${'mean win vs the 12.5% do-nothing seat'.padEnd(38)} ${('+' + (meanWin - 12.5).toFixed(1) + ' pts').padStart(10)}   —`,
 )
 console.log(
   `  ${'placement spread (shape, not balance)'.padEnd(38)} ${spread(rows.map((r) => r.place)).toFixed(2).padStart(10)}   —`,

@@ -15,8 +15,14 @@ import { ALL_TALENTS, nodesAt, treeFor, type Branch, type TalentNode, type Tier 
 import { BRANCHES, TIER_WEIGHT } from '../data/talents/index'
 import type { FactionId, HeroMods } from '../data/types'
 
-export const LEVEL_UP_ROUNDS = [2, 4, 6, 8, 10, 12]
-/** §2.1: six points a run — capstone plus a one-point dip is the deepest build. */
+/**
+ * A banner of 50 HP runs to about round 17, and progression used to stop dead
+ * at 12 — five rounds of a lobby with nothing left to earn, which is exactly
+ * the stretch a longer game adds. Two more level-ups carry the War Council to
+ * the end of the run.
+ */
+export const LEVEL_UP_ROUNDS = [2, 4, 6, 8, 10, 12, 14, 16]
+/** §2.1: one point per level-up — capstone plus a dip is still the deepest build. */
 export const MAX_TALENT_POINTS = LEVEL_UP_ROUNDS.length
 export const MAX_TIER: Tier = 5
 
@@ -70,14 +76,8 @@ export function offersFor(tree: readonly TalentNode[], taken: readonly string[])
 }
 
 /** Is this node a legal pick right now? The only gate that exists (§2.1). */
-export function canTake(
-  tree: readonly TalentNode[],
-  taken: readonly string[],
-  nodeId: string,
-  /** DN10 §3: an Interlude raises this above the base six, one per tier. */
-  max = MAX_TALENT_POINTS,
-): boolean {
-  if (taken.length >= max) return false
+export function canTake(tree: readonly TalentNode[], taken: readonly string[], nodeId: string): boolean {
+  if (taken.length >= MAX_TALENT_POINTS) return false
   if (taken.includes(nodeId)) return false
   return offersFor(tree, taken).some((o) => o.options.some((n) => n.id === nodeId))
 }

@@ -2,7 +2,7 @@ import { HERO_ART_2X } from '../data/art'
 import { FACTION_BY_ID, HERO_BY_ID, unit } from '../data/index'
 import { useState } from 'react'
 import type { BattleEvent, Side, SpellOutcome } from '../engine/battle'
-import { RENOWN_BY_PLACEMENT, canMarchOn, ordinal, player, type BattleReport, type RunState, type Warlord } from '../engine/run'
+import { RENOWN_BY_PLACEMENT, ordinal, player, type BattleReport, type RunState, type Warlord } from '../engine/run'
 import { useGame } from '../state/store'
 import { Ladder } from './Ladder'
 import { Plate } from './Plate'
@@ -10,7 +10,7 @@ import { Sigil } from './Sigil'
 import { describe as describeEvent, keyMoments } from './battleLog'
 import { StackCard } from './StackCard'
 import { FeedbackPrompt } from './Feedback'
-import { clampTier, tierDef } from '../data/tiers'
+import { MAX_WAR_TIER, clampTier, tierDef } from '../data/tiers'
 
 /** How a spell's tally reads on the receipt (Design Notes 03 §2.6). */
 const OUTCOME_WORD: Record<SpellOutcome, string> = {
@@ -246,13 +246,10 @@ export function RunOverScreen({ run }: { run: RunState }) {
   const f = FACTION_BY_ID.get(p.factionId)!
   const hero = HERO_BY_ID.get(p.heroId)!
   const tier = clampTier(run.tier)
-  const record = store.save.tiers.records[String(tier)] ?? { reached: 0, fallen: 0 }
-  // DN10 §2: winning a lobby offers the march. Unlike DN09's "raise the
-  // banner", this is not the seed of a *next run* — it is the same campaign
-  // and the same warband, walking up a rung. Offered on any win with ladder
-  // left, not only at your personal high-water mark: the climb is now
-  // something a single campaign does.
-  const raise = canMarchOn(run)
+  const record = store.save.tiers.records[String(tier)] ?? { runs: 0, wins: 0 }
+  // Winning at the tier you are climbing is what opens the next rung, and the
+  // headline button offers it (§5). At the top of the ladder there is no next.
+  const raise = won && tier === clampTier(store.save.tiers.highestWon) && tier < MAX_WAR_TIER
 
   return (
     <div className="screen" data-scroll="true">
@@ -271,9 +268,9 @@ export function RunOverScreen({ run }: { run: RunState }) {
               Few banners fly this high — {ordinal(placement)} of eight, {hero.name} of {f.name}.
             </div>
             <div className="small dim">
-              {record.reached > 1
-                ? `Tier ${tier}: reached by ${record.reached} campaigns, ended here by ${record.fallen}.`
-                : `Tier ${tier}: your first campaign to march this high.`}
+              {record.wins > 0
+                ? `Tier ${tier}: ${record.runs} attempt${record.runs === 1 ? '' : 's'}, ${record.wins} taken.`
+                : `Tier ${tier}: ${record.runs} attempt${record.runs === 1 ? '' : 's'}, summit unclaimed.`}
             </div>
           </>
         ) : (
@@ -334,36 +331,28 @@ export function RunOverScreen({ run }: { run: RunState }) {
         ))}
       </div>
 
-      {/* The fork (DN10 §2). The headline carries the army forward; the quiet
-          option banks it. Both are real choices, which is why Claim is a
-          button and not a back-out — a campaign banked at Tier 3 is a result,
-          not a refusal. */}
+      {/* The fork (§2/§5): raising the banner seeds the *next* run one tier
+          higher. The climb happens across runs, so every attempt still
+          contains a full draft arc — which is the part that is the game. */}
       {raise && (
-        <button className="btn btn-gold raise-banner" onClick={store.marchOn}>
-          <strong>March On — War Tier {tier + 1}</strong>
-          <span className="tiny">
-            {tierDef(tier + 1).name} · your warband marches with you
-          </span>
+        <button
+          className="btn btn-gold raise-banner"
+          onClick={() => store.start(p.factionId, p.heroId, store.save.settings.difficulty, tier + 1)}
+        >
+          <strong>Raise the Banner</strong>
+          <span className="tiny">War Tier {tier + 1} — {tierDef(tier + 1).name}</span>
         </button>
       )}
       <div className="row" style={{ gap: 8 }}>
-        {raise ? (
-          <button className="btn btn-primary grow" onClick={store.claimVictory}>
-            Claim Victory at Tier {tier}
-          </button>
-        ) : (
-          <>
-            <button className="btn grow" onClick={store.abandon}>
-              Home
-            </button>
-            <button
-              className="btn btn-primary grow"
-              onClick={() => store.start(p.factionId, p.heroId, store.save.settings.difficulty)}
-            >
-              New Campaign
-            </button>
-          </>
-        )}
+        <button className="btn grow" onClick={store.abandon}>
+          Home
+        </button>
+        <button
+          className="btn btn-primary grow"
+          onClick={() => store.start(p.factionId, p.heroId, store.save.settings.difficulty, tier)}
+        >
+          {raise ? 'Claim Victory' : `Run Tier ${tier} again`}
+        </button>
       </div>
     </div>
   )

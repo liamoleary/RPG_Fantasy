@@ -355,14 +355,19 @@ describe('the Crownless Throne', () => {
 describe('the DN08 substitutions are pinned to today’s baselines', () => {
   it('fails loudly when the economy moves under the ladder', () => {
     const why =
-      'DN08 baselines changed. Re-point War Tiers 4, 6 and 7 in this same change — see TODO.md.'
-    expect(START_HP, why).toBe(30)
+      'A baseline changed. Re-point the War Tiers written against it in this same change — see TODO.md.'
+    // The banner moved from 30 to 50 to lengthen a run, and this is what
+    // caught it: Thin Rations was re-pointed from -5 to its authored -8 in
+    // the same change rather than being found later by reading tiers.ts.
+    expect(START_HP, why).toBe(50)
     expect(BASE_INCOME_CAP, why).toBe(10)
   })
 
   it('states the substitutions as proportions of those baselines', () => {
-    // Thin Rations: DN09 asks for 50 -> 42. On a 30 HP banner that is -5.
-    expect(modsForTier(4).playerHp).toBe(-5)
+    // Thin Rations: DN09 asks for 50 -> 42, and the banner is 50, so this is
+    // no longer a substitution at all — it is the authored number.
+    expect(modsForTier(4).playerHp).toBe(-8)
+    expect(START_HP + modsForTier(4).playerHp!).toBe(42)
     // Long Supply Lines: DN09 asks for 18 -> 15; the designer re-pointed it at
     // a 15 -> 13-equivalent after -2 failed to bite. On a 10 ceiling that is -3.
     expect(modsForTier(7).playerIncomeCap).toBe(-3)

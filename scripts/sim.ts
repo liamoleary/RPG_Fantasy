@@ -12,18 +12,8 @@ import { ALL_UNITS, FACTIONS, HEROES, UNIT_BY_ID } from '../src/data/index'
 import type { FactionId } from '../src/data/types'
 import { ALL_TALENTS, TALENT_BY_ID, type TalentNode } from '../src/data/talents/index'
 import { FRONT_SLOTS } from '../src/engine/battle'
-import {
-  HARD_CAP_ROUND,
-  advanceRound,
-  canMarchOn,
-  marchOn,
-  newRun,
-  player,
-  resolveBattles,
-  type RunState,
-} from '../src/engine/run'
+import { HARD_CAP_ROUND, advanceRound, newRun, resolveBattles, type RunState } from '../src/engine/run'
 import { MAX_WAR_TIER, clampTier, rulesForTier } from '../src/data/tiers'
-import { arrivalFor } from '../src/data/arrival'
 import { boardPower, rivalMuster, type Difficulty } from '../src/engine/rivals'
 import { MAX_TALENT_POINTS, isLevelUpRound, scoreNode, type TalentOffer } from '../src/engine/talents'
 import { applyTalent } from '../src/engine/run'
@@ -41,8 +31,6 @@ interface Args {
   tier: number
   /** climb the whole ladder and print the §6 curve instead of the usual report */
   tiers: boolean
-  /** DN10: play campaigns — win a lobby, march, repeat until you fall */
-  campaign: boolean
 }
 
 function parseArgs(): Args {
@@ -58,7 +46,6 @@ function parseArgs(): Args {
     cover: get('cover', 'on') === 'off' ? 'off' : 'on',
     tier: clampTier(Number(get('tier', '1'))),
     tiers: a.includes('--tiers'),
-    campaign: a.includes('--campaign'),
   }
 }
 
@@ -402,157 +389,9 @@ function ladderReport(args: Args) {
   console.log('')
 }
 
-
-/**
- * Campaign mode (DN10 §6). The policy plays a lobby, marches if it won, and
- * repeats until it falls or tops out. Four columns the ladder report cannot
- * produce, because they only exist under carry:
- *
- *   - where campaigns end (the tiers-reached distribution)
- *   - what a warband arriving at tier N is worth, against what the budget
- *     says it should meet there (the arrival delta §6 wants inside ±15%)
- *   - the per-tier win rate *of arriving warbands*, which is not the same
- *     question as DN09's "win rate of a fresh run at tier N"
- *   - the per-tier faction spread, which DN09 §7.2's discipline still applies
- *     to and which carry is the most likely thing to break
- */
-function campaignReport(args: Args) {
-  console.log(
-    `BANNERFELL — the long march\n${args.runs} campaigns · difficulty ${args.difficulty} · seed ${args.seed}\n`,
-  )
-
-  const reached: number[] = []                                    // top tier per campaign
-  const byFaction = new Map<string, number[]>()                   // faction → top tiers
-  const arrivals = new Map<number, { player: number[]; rival: number[] }>()
-  const lobbies = new Map<number, { n: number; wins: number; rounds: number[] }>()
-  const place = new Map<number, Map<string, { n: number; sum: number }>>()
-  const growthShare = new Map<number, number[]>()
-
-  const note = (tier: number) => {
-    if (!arrivals.has(tier)) arrivals.set(tier, { player: [], rival: [] })
-    if (!lobbies.has(tier)) lobbies.set(tier, { n: 0, wins: 0, rounds: [] })
-    if (!place.has(tier)) place.set(tier, new Map())
-    if (!growthShare.has(tier)) growthShare.set(tier, [])
-  }
-
-  for (let i = 0; i < args.runs; i++) {
-    const seed = args.seed + i * 7919
-    const rng = makeRng(seed)
-    const f = rng.pick(FACTIONS)
-    const hero = rng.pick(HEROES.filter((h) => h.faction === f.id))
-    let run = playRunHeadless(newRun({ seed, factionId: f.id, heroId: hero.id, difficulty: args.difficulty }))
-    let top = run.tier
-
-    for (let guard = 0; guard < MAX_WAR_TIER + 1; guard++) {
-      const tier = run.tier
-      note(tier)
-      const L = lobbies.get(tier)!
-      L.n += 1
-      L.rounds.push(run.round)
-      const won = (run.warlords.find((w) => w.isPlayer)?.placement ?? 9) === 1
-      if (won) L.wins += 1
-      const P = place.get(tier)!
-      for (const w of run.warlords) {
-        // Rivals only. At Tier 1 the player is a mediocre 1-in-8 and including
-        // them is harmless, but above it only campaign *winners* are present
-        // and they dominate their lobby — folding that into the faction spread
-        // measures the player's carry, not the factions. The BY BANNER block
-        // below is where the player's faction belongs.
-        if (w.isPlayer) continue
-        const e = P.get(w.factionId) ?? { n: 0, sum: 0 }
-        e.n += 1
-        e.sum += w.placement ?? 1
-        P.set(w.factionId, e)
-      }
-      top = tier
-      if (!canMarchOn(run)) break
-
-      const next = marchOn(run).run
-      note(next.tier)
-      const A = arrivals.get(next.tier)!
-      const board = player(next).board
-      A.player.push(boardPower(board))
-      for (const w of next.warlords) if (!w.isPlayer) A.rival.push(boardPower(w.board))
-      // How much of a carried board is accumulated Growth and war banks rather
-      // than bodies — DN10 §6's number-one thing to watch.
-      const bare = board.reduce((n, st) => n + boardPower([{ ...st, bonusAtk: 0, bonusHp: 0 }]), 0)
-      const tot = boardPower(board)
-      growthShare.get(next.tier)!.push(tot > 0 ? (100 * (tot - bare)) / tot : 0)
-      run = playRunHeadless(next)
-    }
-    reached.push(top)
-    if (!byFaction.has(f.id)) byFaction.set(f.id, [])
-    byFaction.get(f.id)!.push(top)
-  }
-
-  const med = (a: number[]) => (a.length ? a.slice().sort((x, y) => x - y)[Math.floor(a.length / 2)] : 0)
-
-  console.log('TIERS REACHED — where campaigns ended')
-  console.log('─'.repeat(102))
-  for (let t = 1; t <= MAX_WAR_TIER; t++) {
-    const n = reached.filter((x) => x === t).length
-    if (n === 0) continue
-    const share = (100 * n) / args.runs
-    console.log(`  T${String(t).padEnd(3)} ${share.toFixed(1).padStart(5)}%  ${'█'.repeat(Math.round(share / 2))}${n < 5 ? ` (${n})` : ''}`)
-  }
-  console.log(`  median T${med(reached)} · §6 target: median T2–3`)
-
-  console.log('\nARRIVAL — what a carried warband meets (§6 wants delta inside ±15%)')
-  console.log('─'.repeat(102))
-  console.log('tier    n   player arrives   rivals arrive   delta   budget spend   of it Growth')
-  for (const t of [...arrivals.keys()].sort((a, b) => a - b)) {
-    const A = arrivals.get(t)!
-    if (A.player.length === 0) continue
-    const pw = med(A.player)
-    const rw = med(A.rival)
-    const d = pw > 0 ? ((rw - pw) / pw) * 100 : 0
-    const flag = Math.abs(d) > 15 ? '  ⚠' : ''
-    console.log(
-      `${String(t).padStart(4)} ${String(A.player.length).padStart(4)}   ${String(Math.round(pw)).padStart(14)}  ${String(Math.round(rw)).padStart(14)}  ` +
-        `${((d >= 0 ? '+' : '') + d.toFixed(1) + '%').padStart(7)}  ${String(arrivalFor(t).spend).padStart(13)}   ${med(growthShare.get(t) ?? []).toFixed(0).padStart(9)}%${flag}`,
-    )
-  }
-
-  console.log('\nPER-TIER LOBBIES — how arriving warbands fare')
-  console.log('─'.repeat(102))
-  console.log('tier  rule                    lobbies   win%   med rounds   rival faction spread (avg place)')
-  const bands: string[] = []
-  for (const t of [...lobbies.keys()].sort((a, b) => a - b)) {
-    const L = lobbies.get(t)!
-    if (L.n === 0) continue
-    const avgs = FACTIONS.map((f) => {
-      const e = place.get(t)!.get(f.id)
-      return { id: f.id, v: e && e.n > 0 ? e.sum / e.n : NaN }
-    })
-    const seen = avgs.filter((a) => !Number.isNaN(a.v))
-    const spread = seen.length > 1 ? Math.max(...seen.map((a) => a.v)) - Math.min(...seen.map((a) => a.v)) : 0
-    if (seen.some((a) => a.v < 3.8 || a.v > 5.2)) bands.push(`tier ${t}`)
-    const rule = t === 1 ? '(the game as shipped)' : (rulesForTier(t).slice(-1)[0]?.name ?? '')
-    console.log(
-      `${String(t).padStart(4)}  ${rule.padEnd(22)} ${String(L.n).padStart(7)}  ${((100 * L.wins) / L.n).toFixed(1).padStart(5)}%  ` +
-        `${String(med(L.rounds)).padStart(10)}   ` +
-        seen.map((a) => `${a.id.slice(0, 4)} ${a.v.toFixed(2)}`).join('  ') +
-        `  (${spread.toFixed(2)})`,
-    )
-  }
-  console.log(`\nFACTION BAND ${bands.length === 0 ? 'every tier within ±0.4 of the global band' : 'outside ±0.4 at ' + bands.join(', ') + '  ⚠'}`)
-
-  console.log('\nBY BANNER — does one faction climb further? (§6: watch Growth compounding)')
-  console.log('─'.repeat(102))
-  for (const [fid, tops] of [...byFaction].sort((a, b) => a[0].localeCompare(b[0]))) {
-    const past2 = (100 * tops.filter((t) => t >= 3).length) / tops.length
-    const past4 = (100 * tops.filter((t) => t >= 5).length) / tops.length
-    console.log(
-      `  ${fid.padEnd(10)} median T${med(tops)}  ·  reached T3+ ${past2.toFixed(0).padStart(3)}%  ·  reached T5+ ${past4.toFixed(0).padStart(3)}%  (n=${tops.length})`,
-    )
-  }
-  console.log('')
-}
-
 function main() {
   const args = parseArgs()
   if (args.cover === 'off') disableCover()
-  if (args.campaign) return campaignReport(args)
   if (args.tiers) return ladderReport(args)
   const t0 = Date.now()
 

@@ -17,17 +17,13 @@ import type { Difficulty } from '../engine/rivals'
 import { hashSeed, makeRng } from '../engine/rng'
 import {
   advanceRound,
-  canMarchOn,
   choosePlayerTalent,
   autoArrangePlayer,
-  marchOn as engineMarchOn,
   newRun,
   player,
   renownFor,
   resolveBattles,
-  type InterludeGrants,
   type RunState,
-  type Warlord,
 } from '../engine/run'
 import { markRunEnd } from '../net/sync'
 import { buildRunReport, emptyTally, submitRun, tallyBattle, type RunTally } from '../net/telemetry'
@@ -71,19 +67,11 @@ interface Store {
   outcome: Outcome | null
   speed: 1 | 2
   renownEarned: number
-  /** the grants a just-marched campaign received, until the screen is dismissed */
-  interlude: InterludeGrants | null
   /** §4 counters that are events rather than state, accumulated as the run goes. */
   tally: RunTally
 
   // lifecycle
-  start: (factionId: FactionId, heroId: string, difficulty: Difficulty) => void
-  /** DN10 §2: carry the warband into the next tier. */
-  marchOn: () => void
-  /** DN10 §2: end the campaign here, banked at the tier reached. */
-  claimVictory: () => void
-  /** shared by the fork and an ordinary lobby end; `claimed` stops the climb */
-  endLobby: (claimed: boolean) => void
+  start: (factionId: FactionId, heroId: string, difficulty: Difficulty, tier?: number) => void
   resume: () => void
   /** Adopt meta-progression pulled from the server (§2). Local-only fields —
    *  the active run and settings — are untouched. */
@@ -130,20 +118,18 @@ export const useGame = create<Store>((set, get) => ({
   outcome: null,
   speed: 1,
   renownEarned: 0,
-  interlude: null,
   tally: emptyTally(),
 
-  start: (factionId, heroId, difficulty) => {
+  start: (factionId, heroId, difficulty, tier) => {
     resetUid(0)
     const seed = (Math.random() * 0xffffffff) >>> 0
-    // DN10 §2: every campaign begins at Tier 1. Deliberately, and not as a
-    // limitation — Tier 1 is the draft arc, it is where a campaign's identity
-    // gets forged, and the veteran shortcut is explicitly deferred until
-    // telemetry shows replay fatigue actually exists.
-    const run = newRun({ seed, factionId, heroId, difficulty })
+    // You may run any tier you have unlocked, not only your highest — chasing
+    // a first win at altitude and taking a comfortable run are both valid (§4).
+    const want = clampTier(tier ?? get().save.tiers.highestUnlocked)
+    const run = newRun({ seed, factionId, heroId, difficulty, tier: Math.min(want, clampTier(get().save.tiers.highestUnlocked)) })
     const save = { ...get().save, settings: { ...get().save.settings, difficulty } }
     persist(save, run)
-    set({ run, save, screen: 'muster', selected: null, rankFlash: null, playerBattle: null, outcome: null, renownEarned: 0, interlude: null, speed: save.settings.speedDefault, tally: emptyTally() })
+    set({ run, save, screen: 'muster', selected: null, rankFlash: null, playerBattle: null, outcome: null, renownEarned: 0, speed: save.settings.speedDefault, tally: emptyTally() })
   },
 
   applyMeta: (meta) => {
@@ -361,113 +347,52 @@ export const useGame = create<Store>((set, get) => ({
     })
   },
 
-  /**
-   * A lobby has ended. Under DN10 that is not automatically the end of the
-   * campaign: a winner with rungs left is offered the fork instead, and the
-   * run stays live so "March On" can be answered tomorrow (§4).
-   *
-   * Renown is banked per lobby, at that lobby's multiplier — §2's "per tier
-   * climbed, win or lose". A campaign that reaches Tier 4 has therefore been
-   * paid four times at rising rates, which is what makes altitude worth the
-   * risk of losing the warband that got you there.
-   */
-  endLobby: (claimed: boolean) => {
-    const { run } = get()
-    if (!run) return
-    const p = player(run)
-    const placement = p.placement ?? 1
-    const won = placement === 1
-    const tier = clampTier(run.tier)
-    // The campaign continues only if the player won and chose not to claim.
-    const marching = won && canMarchOn(run) && !claimed
-    const earned = Math.floor(renownFor(placement) * renownMultiplier(tier))
-    const best = get().save.stats.bestPlacementByHero[p.heroId] ?? 99
-    const prev = get().save.tiers
-    const key = String(tier)
-    const rec = prev.records[key] ?? { reached: 0, fallen: 0 }
-    const save: SaveData = {
-      ...get().save,
-      renown: get().save.renown + earned,
-      stats: {
-        // A campaign is the unit now, so these only move when one ends.
-        runs: get().save.stats.runs + (marching ? 0 : 1),
-        wins: get().save.stats.wins + (!marching && won ? 1 : 0),
-        bestPlacementByHero: { ...get().save.stats.bestPlacementByHero, [p.heroId]: Math.min(best, placement) },
-      },
-      tiers: {
-        // Winning at a tier opens the next one. Losing never demotes (§4),
-        // so every field here only ever moves up.
-        highestUnlocked: won ? Math.max(prev.highestUnlocked, clampTier(tier + 1)) : prev.highestUnlocked,
-        highestWon: won ? Math.max(prev.highestWon, tier) : prev.highestWon,
-        // `reached` is booked on arrival, not here; this is where a campaign
-        // *ends*, so only the ending is recorded.
-        records: marching ? { ...prev.records } : { ...prev.records, [key]: { ...rec, fallen: rec.fallen + 1 } },
-        bestByHero: won
-          ? { ...prev.bestByHero, [p.heroId]: Math.max(prev.bestByHero[p.heroId] ?? 0, tier) }
-          : { ...prev.bestByHero },
-      },
-      // A campaign paused at the fork is still an active run: §4 wants the
-      // Interlude to be a place you can stop for the night.
-      activeRun: marching ? run : null,
-    }
-    if (!marching) {
-      // §2: mark this as a run-end write before persisting. It is the one kind
-      // of write allowed to lower stored renown, so the flag has to be set
-      // before writeSave fires the sync listener.
-      markRunEnd()
-    }
-    writeSave(save)
-    // §4: one report per finished lobby, fire-and-forget. Built before the run
-    // is cleared, since it reads the final board off it.
-    const report = buildRunReport(run, get().tally)
-    if (report) void submitRun(report)
-    set({ save, screen: 'runover', renownEarned: earned, playerBattle: null, outcome: null })
-  },
-
-  marchOn: () => {
-    const { run } = get()
-    if (!run || !canMarchOn(run)) return
-    const { run: next, grants } = engineMarchOn(run)
-    // Uids are minted from a counter shared with the carried board; keep it
-    // past anything that marched, or a new recruit collides with a veteran.
-    const highest = next.warlords
-      .flatMap((w: Warlord) => w.board)
-      .reduce((n: number, st) => Math.max(n, Number(st.uid.replace(/\D/g, '')) || 0), 0)
-    resetUid(highest)
-    const prev = get().save.tiers
-    const key = String(next.tier)
-    const rec = prev.records[key] ?? { reached: 0, fallen: 0 }
-    const save: SaveData = {
-      ...get().save,
-      tiers: { ...prev, records: { ...prev.records, [key]: { ...rec, reached: rec.reached + 1 } } },
-      // Kept in step with what is written to storage. `endLobby` parked the
-      // *finished* lobby here so the fork could survive a close; leaving it
-      // there would offer yesterday's fork on Home while a new lobby is live.
-      activeRun: next,
-    }
-    persist(save, next)
-    set({
-      save,
-      run: next,
-      screen: 'muster',
-      interlude: grants,
-      selected: null,
-      rankFlash: null,
-      playerBattle: null,
-      outcome: null,
-      tally: emptyTally(),
-    })
-  },
-
-  claimVictory: () => get().endLobby(true),
-
   nextRound: () => {
     const { run } = get()
     if (!run) return
 
     const p = player(run)
     if (run.finished || !p.alive) {
-      get().endLobby(false)
+      const placement = p.placement ?? 1
+      const won = placement === 1
+      const tier = clampTier(run.tier)
+      // Altitude pays even when it kills you (§4): the multiplier is applied
+      // win or lose, and rounded down so it can never mint a fraction.
+      const earned = Math.floor(renownFor(placement) * renownMultiplier(tier))
+      const best = get().save.stats.bestPlacementByHero[p.heroId] ?? 99
+      const prev = get().save.tiers
+      const key = String(tier)
+      const rec = prev.records[key] ?? { runs: 0, wins: 0 }
+      const save: SaveData = {
+        ...get().save,
+        renown: get().save.renown + earned,
+        stats: {
+          runs: get().save.stats.runs + 1,
+          wins: get().save.stats.wins + (won ? 1 : 0),
+          bestPlacementByHero: { ...get().save.stats.bestPlacementByHero, [p.heroId]: Math.min(best, placement) },
+        },
+        tiers: {
+          // Winning at a tier opens the next one. Losing never demotes (§4),
+          // so every field here only ever moves up.
+          highestUnlocked: won ? Math.max(prev.highestUnlocked, clampTier(tier + 1)) : prev.highestUnlocked,
+          highestWon: won ? Math.max(prev.highestWon, tier) : prev.highestWon,
+          records: { ...prev.records, [key]: { runs: rec.runs + 1, wins: rec.wins + (won ? 1 : 0) } },
+          bestByHero: won
+            ? { ...prev.bestByHero, [p.heroId]: Math.max(prev.bestByHero[p.heroId] ?? 0, tier) }
+            : { ...prev.bestByHero },
+        },
+        activeRun: null,
+      }
+      // §2: mark this as a run-end write before persisting. It is the one kind
+      // of write allowed to lower stored renown, so the flag has to be set
+      // before writeSave fires the sync listener.
+      markRunEnd()
+      writeSave(save)
+      // §4: one report per finished run, fire-and-forget. Built before the run
+      // is cleared, since it reads the final board off it.
+      const report = buildRunReport(run, get().tally)
+      if (report) void submitRun(report)
+      set({ save, screen: 'runover', renownEarned: earned, playerBattle: null, outcome: null })
       return
     }
 

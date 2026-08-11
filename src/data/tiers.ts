@@ -53,20 +53,16 @@ export interface WarTier {
 }
 
 /**
- * Two of these numbers are placeholders and say so, because DN09 was written
- * against DN08's economy and DN08 is not implemented yet. Thin Rations is
- * specified as 50 → 42 HP and Long Supply Lines as an 18 → 15 income ceiling;
- * today those baselines are 30 and 10. Both are set to a proportion of the
- * live numbers so the ladder's shape is right now and the absolute values land
- * when DN08 does. Long Supply Lines is -3 rather than the -2 the DN09 ratio
- * gives: at -2 it bit for barely a point and the designer re-pointed it at a
- * 15 → 13-equivalent.
+ * Thin Rations is now at its authored value. DN09 specified it as 50 → 42 HP;
+ * it shipped as -5 against a 30 HP banner because that was the live baseline,
+ * and the banner is 50 now, so it is -8 as written. The tripwire in
+ * `tests/tiers.test.ts` is what caught the change rather than a comment being
+ * re-read — raising START_HP turned the suite red and named this file.
  *
- * When DN08 §5 lands, Tiers 4, 6 and 7 must be re-pointed at the new baselines
- * in the same change. That obligation is tracked in TODO.md and pinned by
- * `tests/tiers.test.ts` — which fails the moment START_HP or BASE_INCOME_CAP
- * moves, so this comment cannot be the only thing standing between a new
- * economy and a stale ladder.
+ * Long Supply Lines is still a substitution. DN09 asks for an 18 → 15 income
+ * ceiling and the live ceiling is still 10, so it stays at -3 — the value the
+ * designer re-pointed it to after -2 bit for barely a point. Their War Chests
+ * likewise waits on War Chests existing. Both remain tracked in TODO.md.
  */
 export const WAR_TIERS: WarTier[] = [
   { tier: 1, name: null, text: null, mods: {} },
@@ -85,8 +81,8 @@ export const WAR_TIERS: WarTier[] = [
   {
     tier: 4,
     name: 'Thin Rations',
-    text: 'Your banner marches on less: 5 fewer starting HP.',
-    mods: { playerHp: -5 },
+    text: 'Your banner marches on less: 8 fewer starting HP.',
+    mods: { playerHp: -8 },
   },
   {
     tier: 5,

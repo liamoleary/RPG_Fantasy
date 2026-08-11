@@ -21,14 +21,8 @@ export interface SaveData {
     highestUnlocked: number
     /** the highest tier you have actually won at — separate on purpose (§4) */
     highestWon: number
-    /**
-     * Per-tier campaign history (DN10 §7.4). Re-keyed from DN09's
-     * attempts/wins: a tier is no longer something you *run*, it is something
-     * a campaign *reaches* — and where campaigns end is the interesting half.
-     * `reached` counts campaigns that arrived here, `fallen` counts those that
-     * ended here, so `reached - fallen` at tier N is how many climbed past it.
-     */
-    records: Record<string, { reached: number; fallen: number }>
+    /** attempts and wins per tier, for the picker's record column */
+    records: Record<string, { runs: number; wins: number }>
     /** the best tier each hero has won at, for the hero-select chip */
     bestByHero: Record<string, number>
   }
@@ -77,43 +71,39 @@ function dropPreWarCouncilRun(raw: SaveData): SaveData['activeRun'] {
 }
 
 /**
- * DN09's records counted attempts and wins per tier. DN10 counts campaigns
- * reached and fallen. An old record is not convertible without lying — a
- * "run at tier 4" and a "campaign that reached tier 4" are different events —
- * but the honest reading of an attempt is that a campaign got there and ended
- * there, so that is what it becomes. Crest and unlocks are unaffected; only
- * the history column changes shape.
+ * The Long March shipped briefly and re-keyed these records from attempts and
+ * wins to campaigns reached and fallen. Marching is gone again, but saves
+ * written while it was live are still out there, and the picker reads
+ * `runs`/`wins` directly — a record in the other shape renders as NaN rather
+ * than failing loudly. Read the campaign shape back as what it was closest to:
+ * a campaign that reached a tier is an attempt at it, and one that did not fall
+ * there is one that got past it.
  */
-function reKeyRecords(raw: SaveData): SaveData['tiers']['records'] {
+function unReKeyRecords(raw: SaveData): SaveData['tiers']['records'] {
   const out: SaveData['tiers']['records'] = {}
   for (const [tier, rec] of Object.entries(raw.tiers?.records ?? {})) {
-    const legacy = rec as Partial<{ runs: number; wins: number; reached: number; fallen: number }>
-    if (typeof legacy.reached === 'number') {
-      out[tier] = { reached: legacy.reached, fallen: legacy.fallen ?? 0 }
+    const r = rec as Partial<{ runs: number; wins: number; reached: number; fallen: number }>
+    if (typeof r.runs === 'number') {
+      out[tier] = { runs: r.runs, wins: r.wins ?? 0 }
       continue
     }
-    const runs = legacy.runs ?? 0
-    out[tier] = { reached: runs, fallen: Math.max(0, runs - (legacy.wins ?? 0)) }
+    const reached = r.reached ?? 0
+    out[tier] = { runs: reached, wins: Math.max(0, reached - (r.fallen ?? 0)) }
   }
   return out
 }
 
 /**
- * A run saved before The Long March has no campaign fields on it (DN10). It is
- * still a perfectly good lobby, so rather than discard it, adopt it as a
- * one-lobby campaign at its own tier: its seed becomes the campaign seed, no
- * rounds precede it, and it has been granted no Interlude points. A player who
- * closed the app mid-run keeps that run and can march from it.
+ * Likewise for the run itself: a run saved mid-campaign carries fields this
+ * build no longer knows about. They are harmless to keep — nothing reads them
+ * — but a run that had already marched is standing in a lobby at a tier the
+ * player never unlocked from Home, so it is dropped rather than resumed into a
+ * state that can no longer be reached.
  */
-function adoptRunIntoCampaign(run: SaveData['activeRun']): SaveData['activeRun'] {
+function dropMarchedRun(run: SaveData['activeRun']): SaveData['activeRun'] {
   if (!run) return null
-  const r = run as RunState & Partial<Pick<RunState, 'campaignSeed' | 'roundsBefore' | 'bonusTalentPoints'>>
-  return {
-    ...r,
-    campaignSeed: typeof r.campaignSeed === 'number' ? r.campaignSeed : r.seed,
-    roundsBefore: typeof r.roundsBefore === 'number' ? r.roundsBefore : 0,
-    bonusTalentPoints: typeof r.bonusTalentPoints === 'number' ? r.bonusTalentPoints : 0,
-  }
+  const marched = (run as { roundsBefore?: number }).roundsBefore
+  return typeof marched === 'number' && marched > 0 ? null : run
 }
 
 function migrate(raw: SaveData): SaveData {
@@ -124,8 +114,8 @@ function migrate(raw: SaveData): SaveData {
   return {
     ...DEFAULT_SAVE,
     ...raw,
-    tiers: { ...DEFAULT_SAVE.tiers, ...raw.tiers, records: reKeyRecords(raw), bestByHero: { ...raw.tiers?.bestByHero } },
-    activeRun: adoptRunIntoCampaign(dropPreWarCouncilRun(raw)),
+    tiers: { ...DEFAULT_SAVE.tiers, ...raw.tiers, records: unReKeyRecords(raw), bestByHero: { ...raw.tiers?.bestByHero } },
+    activeRun: dropMarchedRun(dropPreWarCouncilRun(raw)),
     version: SAVE_VERSION,
   }
 }

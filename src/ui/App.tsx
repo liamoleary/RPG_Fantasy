@@ -6,12 +6,11 @@ import { BattleScreen } from './BattleScreen'
 import { HomeScreen } from './HomeScreen'
 import { MusterScreen } from './MusterScreen'
 import { RunOverScreen } from './ResultScreen'
-import { Interlude } from './WarTier'
 import './styles.css'
 import { applyUpdate, onUpdateAvailable } from '../net/version'
 
 export function App() {
-  const { run, screen, save, playerBattle, interlude } = useGame()
+  const { run, screen, save, playerBattle } = useGame()
   const [updateReady, setUpdateReady] = useState(false)
 
   // §6: one toast, dismissible, never a modal. A tester mid-run should not be
@@ -95,12 +94,6 @@ export function App() {
       ) : (
         <RunOverScreen run={run} />
       )}
-
-      {/* The Interlude sits over the new lobby's Muster rather than being a
-          screen of its own: DN10 §3 calls it one screen, not a phase, and the
-          march is already saved by the time it appears. Dismissing it leaves
-          you standing in the camp you just arrived at. */}
-      {interlude && <Interlude grants={interlude} onClose={() => useGame.setState({ interlude: null })} />}
 
       {updateReady && (
         <button className="update-toast" onClick={() => void applyUpdate()}>

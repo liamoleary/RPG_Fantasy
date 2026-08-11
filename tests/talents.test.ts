@@ -8,6 +8,7 @@
  * boon it names.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { HARD_CAP_ROUND } from '../src/engine/run'
 import { BOONS, BOON_BY_ID, HEROES } from '../src/data/index'
 import {
   ALL_TALENTS,
@@ -22,7 +23,7 @@ import {
 } from '../src/data/talents/index'
 import { ZERO_MODS } from '../src/data/types'
 import { addMods } from '../src/data/types'
-import {
+import { LEVEL_UP_ROUNDS,
   MAX_TALENT_POINTS,
   canTake,
   lockedOptions,
@@ -214,25 +215,43 @@ describe('fork lock (§2.3)', () => {
   })
 })
 
-describe('six points, no respec (§2.1)', () => {
-  it('refuses a seventh point', () => {
+/**
+ * §2.1's rule is "one point per level-up, no respec". The *count* moved from
+ * six to eight when the banner went to 50 HP and runs got longer — five rounds
+ * of a lobby with nothing left to earn is exactly the stretch that change
+ * added. So these read the constant rather than the number six, and the one
+ * test that pinned the number now pins the relationship instead.
+ */
+describe('one point per level-up, no respec (§2.1)', () => {
+  it('refuses a point past the cap', () => {
     const tree = berrik()
-    const six = [...walk(tree, 'might', 5), offersFor(tree, walk(tree, 'might', 5)).find((o) => o.branch === 'magic')!.options[0].id]
-    expect(six).toHaveLength(MAX_TALENT_POINTS)
-    const next = offersFor(tree, six)[0].options[0]
-    expect(canTake(tree, six, next.id)).toBe(false)
+    let taken = walk(tree, 'might', 5)
+    // Spend the rest wherever the tree will still take them.
+    while (taken.length < MAX_TALENT_POINTS) {
+      const next = offersFor(tree, taken).flatMap((o) => o.options)[0]
+      if (!next) break
+      taken = [...taken, next.id]
+    }
+    expect(taken).toHaveLength(MAX_TALENT_POINTS)
+    const next = offersFor(tree, taken)[0]?.options[0]
+    if (next) expect(canTake(tree, taken, next.id)).toBe(false)
   })
 
-  it('matches the number of level-up rounds', () => {
-    expect(MAX_TALENT_POINTS).toBe(6)
+  it('matches the number of level-up rounds exactly', () => {
+    // The relationship is the rule; the number is free to move with run length.
+    expect(MAX_TALENT_POINTS).toBe(LEVEL_UP_ROUNDS.length)
+    // Every level-up has to land inside a run that can actually reach it.
+    expect(Math.max(...LEVEL_UP_ROUNDS)).toBeLessThan(HARD_CAP_ROUND)
   })
 
-  it('cannot reach two capstones with six points', () => {
+  it('cannot reach two capstones, however many points a run grants', () => {
     const tree = berrik()
     const taken = walk(tree, 'might', 5)
-    // Five points are gone; one left cannot climb a second ladder to tier 5.
+    // One ladder climbed to its capstone. A second capstone needs five more
+    // points in one branch, and the cap has to stay short of that or every
+    // build converges on the same two ends.
     expect(nextTier(tree, taken, 'magic')).toBe(1)
-    expect(MAX_TALENT_POINTS - taken.length).toBe(1)
+    expect(MAX_TALENT_POINTS - taken.length, 'a run can now buy a second capstone').toBeLessThan(5)
   })
 })
 

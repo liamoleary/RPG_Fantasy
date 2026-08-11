@@ -5,7 +5,7 @@ export const VANGUARD: FactionDef = {
   name: 'The Iron Vanguard',
   mechanic: 'Bulwark',
   mechanicText:
-    'Armor that soaks damage from each incoming attack, then wears down by 1. Every front-row stack that holds the line keeps +2 ATK / +4 HP for the rest of the run.',
+    'Armor that soaks damage from each incoming attack, then wears down by 1. Every stack that walks off the field keeps +2 ATK / +4 HP for the rest of the run.',
   blurb: 'Shield walls, cannons and oaths. Wins long battles by refusing to die.',
   unlockRenown: 0,
   /* `ink` is currently referenced nowhere outside these files — PLAN §4 asked

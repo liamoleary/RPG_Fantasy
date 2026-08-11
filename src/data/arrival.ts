@@ -16,6 +16,20 @@
  * `npm run sim -- --campaign` reports the delta between where real arriving
  * boards sit and where the budget says they should.
  *
+ * Re-pointed once already: these were first calibrated against a player curve
+ * measured while the heroes were badly out of balance (one hero won 82% of its
+ * lobbies). With the heroes levelled, a carried warband arrives about a
+ * quarter stronger at every tier above 2, so tiers 3-10 were scaled up to
+ * match. A second pass then lifted the middle of the ladder again: the curve
+ * had the right slope at the ends and sagged hardest around Tiers 5-6, where
+ * a carried warband was arriving 30-38% above what met it. Tier 2 was inside
+ * the band throughout and has never been touched.
+ *
+ * Confidence falls off sharply up the ladder. Tiers 2-4 are calibrated on
+ * 26-68 arrivals each and sit inside ±10%. Tiers 5-10 rest on 10-21, which is
+ * enough to correct a sign but not to chase a number — they are set to the
+ * best estimate and left there. Real players are the instrument from here.
+ *
  * KNOWN LIMITATION — arriving rivals are not faction-fair.
  *
  * Pre-development musters a board but fights no battles. Growth is a Muster
@@ -83,14 +97,14 @@ export interface ArrivalBudget {
 export const ARRIVAL_BUDGETS: ArrivalBudget[] = [
   { tier: 1, spend: 0, rounds: 0, campTier: 1, talents: 0, stipend: 0 },
   { tier: 2, spend: 420, rounds: 26, campTier: 2, talents: 2, stipend: 12 },
-  { tier: 3, spend: 636, rounds: 40, campTier: 3, talents: 3, stipend: 14 },
-  { tier: 4, spend: 1198, rounds: 75, campTier: 4, talents: 4, stipend: 16 },
-  { tier: 5, spend: 2159, rounds: 135, campTier: 5, talents: 4, stipend: 18 },
-  { tier: 6, spend: 3781, rounds: 236, campTier: 5, talents: 5, stipend: 20 },
-  { tier: 7, spend: 5853, rounds: 366, campTier: 5, talents: 5, stipend: 22 },
-  { tier: 8, spend: 8299, rounds: 519, campTier: 5, talents: 6, stipend: 24 },
-  { tier: 9, spend: 11132, rounds: 696, campTier: 5, talents: 6, stipend: 26 },
-  { tier: 10, spend: 14265, rounds: 892, campTier: 5, talents: 6, stipend: 28 },
+  { tier: 3, spend: 1151, rounds: 72, campTier: 3, talents: 3, stipend: 14 },
+  { tier: 4, spend: 2151, rounds: 135, campTier: 4, talents: 4, stipend: 16 },
+  { tier: 5, spend: 5664, rounds: 355, campTier: 5, talents: 4, stipend: 18 },
+  { tier: 6, spend: 5874, rounds: 366, campTier: 5, talents: 5, stipend: 20 },
+  { tier: 7, spend: 7372, rounds: 461, campTier: 5, talents: 5, stipend: 22 },
+  { tier: 8, spend: 9382, rounds: 586, campTier: 5, talents: 6, stipend: 24 },
+  { tier: 9, spend: 12437, rounds: 778, campTier: 5, talents: 6, stipend: 26 },
+  { tier: 10, spend: 15936, rounds: 996, campTier: 5, talents: 6, stipend: 28 },
 ]
 
 

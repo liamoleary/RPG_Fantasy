@@ -244,14 +244,15 @@ describe('one point per level-up, no respec (§2.1)', () => {
     expect(Math.max(...LEVEL_UP_ROUNDS)).toBeLessThan(HARD_CAP_ROUND)
   })
 
-  it('cannot reach two capstones, however many points a run grants', () => {
+  it('can finish two branches on a full run, but never three (DN10)', () => {
     const tree = berrik()
     const taken = walk(tree, 'might', 5)
-    // One ladder climbed to its capstone. A second capstone needs five more
-    // points in one branch, and the cap has to stay short of that or every
-    // build converges on the same two ends.
+    // A full 10-point campaign can climb a second ladder to its capstone —
+    // that is the "finish your build" promise of the longer run. Three would
+    // erase the choice entirely, and the cap stays short of that.
     expect(nextTier(tree, taken, 'magic')).toBe(1)
-    expect(MAX_TALENT_POINTS - taken.length, 'a run can now buy a second capstone').toBeLessThan(5)
+    expect(MAX_TALENT_POINTS - taken.length).toBeGreaterThanOrEqual(5)
+    expect(MAX_TALENT_POINTS).toBeLessThan(15)
   })
 })
 

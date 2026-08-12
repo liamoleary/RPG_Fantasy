@@ -5,7 +5,7 @@ export const VANGUARD: FactionDef = {
   name: 'The Iron Vanguard',
   mechanic: 'Bulwark',
   mechanicText:
-    'Armor that soaks damage from each incoming attack, then wears down by 1. Every stack that walks off the field keeps +2 ATK / +4 HP for the rest of the run.',
+    'Armor that soaks damage from each incoming attack, then wears down by 1. Every stack that walks off the field keeps +2 ATK / +3 HP for the rest of the run.',
   blurb: 'Shield walls, cannons and oaths. Wins long battles by refusing to die.',
   unlockRenown: 0,
   /* `ink` is currently referenced nowhere outside these files — PLAN §4 asked
@@ -120,7 +120,7 @@ export const VANGUARD_UNITS: UnitDef[] = [
     name: 'Sunlance Ballistier',
     pool: 'vanguard',
     tier: 4,
-    atk: 6,
+    atk: 5,
     hp: 4,
     init: 5,
     musterSize: 1,
@@ -137,12 +137,14 @@ export const VANGUARD_UNITS: UnitDef[] = [
     tags: ['ranged', 'elite'],
   },
   {
+    // T2 since DN10: with promoted forms out of the camp, every tier of the
+    // camp has to sell something of the faction's own. The wall comes early.
     id: 'vg_shieldmaiden',
     name: 'Shieldmaiden',
     pool: 'vanguard',
-    tier: 3,
+    tier: 2,
     atk: 2,
-    hp: 6,
+    hp: 5,
     init: 3,
     musterSize: 2,
     row: 'front',
@@ -170,8 +172,8 @@ export const VANGUARD_UNITS: UnitDef[] = [
     ability: {
       trigger: 'everyExchange',
       everyN: 2,
-      effect: { type: 'healLowest', x: 3 },
-      text: 'Every 2nd action: heal the most-wounded ally for 3 per unit in this stack',
+      effect: { type: 'healLowest', x: 2 },
+      text: 'Every 2nd action: heal the most-wounded ally for 2 per unit in this stack',
     },
     rank: {
       veteran: { hp: 1 },
@@ -188,7 +190,7 @@ export const VANGUARD_UNITS: UnitDef[] = [
     pool: 'vanguard',
     tier: 4,
     atk: 4,
-    hp: 6,
+    hp: 5,
     init: 5,
     musterSize: 1,
     row: 'front',

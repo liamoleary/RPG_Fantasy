@@ -31,3 +31,15 @@ export function faction(id: FactionId): FactionDef {
 export function unitsOfPool(pool: string): UnitDef[] {
   return ALL_UNITS.filter((u) => u.pool === pool)
 }
+
+/**
+ * Forms that are reached by promotion (DN10 §2). The camp sells only the base
+ * form of every line — one flat rule, no exceptions: a higher form is
+ * something you *make*, never something you buy. Units outside a line are
+ * unaffected and enter the offer at their own tier.
+ */
+export const PROMOTED_FORMS: ReadonlySet<string> = new Set(
+  ALL_UNITS.filter((u) => u.lineNext).map((u) => u.lineNext as string),
+)
+
+export const isPromotedForm = (id: string): boolean => PROMOTED_FORMS.has(id)

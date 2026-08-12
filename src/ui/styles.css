@@ -433,11 +433,6 @@ h3 {
 .screen-muster .hand-body {
   height: 100%;
 }
-.screen-muster .hand-card[data-empty='true'] {
-  flex: 0 0 44px;
-  aspect-ratio: auto;
-}
-
 /* Everything above the pinned bar; the only part allowed to give up space. */
 .screen-body {
   display: flex;
@@ -1465,15 +1460,6 @@ h3 {
 .hand-card[data-blocked] .hand-body {
   filter: grayscale(0.85);
   opacity: 0.5;
-}
-/* A sold-out slot is a gap in the hand, not a card in it: it keeps its place
-   in the row so the offers do not jump, at a fraction of the width. */
-.hand-card[data-empty='true'] {
-  flex: 0 0 44px;
-  align-self: stretch;
-  border: 1px dashed var(--line);
-  background: var(--tint-1);
-  opacity: 0.4;
 }
 .tier-pip {
   position: absolute;
@@ -3945,173 +3931,6 @@ h3 {
 .result-overlay > .screen {
   flex: 1;
   min-height: 0;
-}
-
-/* ── War Tiers (DN09 §5) ────────────────────────────────────────────────── */
-
-/* The crest: the climb, worn. Faction-agnostic gold on ink, because it belongs
-   to the account rather than to whichever banner you happen to be running. */
-.crest-row {
-  align-items: stretch;
-  gap: 10px;
-}
-.crest {
-  flex: none;
-  width: 84px;
-  display: grid;
-  justify-items: center;
-  align-content: center;
-  gap: 1px;
-  padding: 8px 6px;
-  border-radius: var(--radius);
-  border: 2px solid var(--gold);
-  background: linear-gradient(170deg, color-mix(in srgb, var(--gold) 16%, var(--panel)), var(--panel));
-  color: var(--ink);
-  box-shadow: var(--shadow);
-}
-.crest:active {
-  transform: scale(0.97);
-}
-.crest-laurel {
-  font-size: 13px;
-  line-height: 1;
-  color: var(--gold);
-}
-.crest-body {
-  display: grid;
-  justify-items: center;
-}
-.crest-eyebrow {
-  font-size: 8px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  font-weight: 800;
-  color: var(--ink-dim);
-}
-.crest-numeral {
-  font-size: 30px;
-  font-weight: 900;
-  line-height: 1.05;
-  color: var(--gold-ink);
-}
-.crest-foot {
-  font-size: 9px;
-  letter-spacing: 0.06em;
-  color: var(--ink-dim);
-}
-
-/* The rules list — one component, used at run start, in the pause sheet and in
-   the picker, so the three can never drift apart (§8.2). */
-.tier-rules {
-  list-style: none;
-  margin: 6px 0 0;
-  padding: 0;
-  display: grid;
-  gap: 5px;
-}
-.tier-rules[data-compact='true'] {
-  gap: 2px;
-}
-.tier-rules > li {
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
-  font-size: 12px;
-}
-.tier-rule-n {
-  flex: none;
-  min-width: 17px;
-  height: 17px;
-  border-radius: 9px;
-  display: grid;
-  place-items: center;
-  font-size: 10px;
-  font-weight: 800;
-  background: var(--tint-2);
-  color: var(--ink-dim);
-}
-.tier-rule-body {
-  min-width: 0;
-}
-.tier-rules-empty {
-  margin-top: 6px;
-}
-
-/* The picker. Locked rungs are shown, not hidden: the ladder is the point. */
-.tier-sheet {
-  max-height: 88vh;
-}
-.tier-list {
-  display: grid;
-  gap: 4px;
-  overflow-y: auto;
-  min-height: 0;
-  flex: 1;
-}
-.tier-row {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 100%;
-  padding: 7px 9px;
-  text-align: left;
-  border-radius: var(--fx-radius);
-  border: 1px solid var(--line);
-  background: var(--panel);
-  color: var(--ink);
-}
-.tier-row[data-on='true'] {
-  border-color: var(--gold);
-  box-shadow: 0 0 0 1px var(--gold);
-}
-.tier-row[data-locked='true'] {
-  opacity: 0.42;
-}
-.tier-row-n {
-  flex: none;
-  width: 26px;
-  height: 26px;
-  border-radius: 13px;
-  display: grid;
-  place-items: center;
-  font-weight: 900;
-  background: var(--tint-2);
-}
-.tier-row-body {
-  flex: 1;
-  min-width: 0;
-  display: grid;
-}
-.tier-row-body > strong {
-  font-size: 13px;
-}
-.tier-row-rec {
-  flex: none;
-  text-align: right;
-}
-
-/* The run-start interstitial, and the chip that reopens it mid-run. */
-.tier-banners {
-  gap: 10px;
-}
-.tier-chip {
-  flex: none;
-  color: var(--gold-ink);
-  border-color: color-mix(in srgb, var(--gold) 45%, var(--line));
-  font-weight: 800;
-}
-
-/* The fork: raising the banner is the headline, not a link (§5). */
-.raise-banner {
-  width: 100%;
-  min-height: 52px;
-  display: grid;
-  gap: 1px;
-  place-items: center;
-}
-.raise-banner > strong {
-  font-size: 16px;
-  letter-spacing: 0.02em;
 }
 
 /* ── desktop: the horizontal strips have to be reachable with a mouse ─────── */

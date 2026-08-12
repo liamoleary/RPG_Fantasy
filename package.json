@@ -15,8 +15,7 @@
     "typecheck": "tsc --noEmit",
     "balance": "tsx scripts/balance.ts",
     "sim": "tsx scripts/sim.ts",
-    "sweep": "tsx scripts/sweep.ts",
-    "tiers": "tsx scripts/sim.ts --tiers"
+    "sweep": "tsx scripts/sweep.ts"
   },
   "dependencies": {
     "express": "^4.21.2",

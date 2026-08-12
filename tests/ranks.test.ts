@@ -31,17 +31,17 @@ const attacksBy = (events: BattleEvent[], uid: string): AttackEvent[] =>
 describe('rank thresholds', () => {
   it('defaults off the line root muster size', () => {
     // Militia +4, Crossbow Levy +3, Shieldmaiden +2, Cannon Crew +1.
-    expect(thresholdsFor('vg_militia')).toEqual([12, 24])
-    expect(thresholdsFor('vg_crossbow')).toEqual([12, 24])
-    expect(thresholdsFor('vg_shieldmaiden')).toEqual([8, 16])
-    expect(thresholdsFor('vg_cannon')).toEqual([4, 8])
+    expect(thresholdsFor('vg_militia')).toEqual([14, 28])
+    expect(thresholdsFor('vg_crossbow')).toEqual([14, 28])
+    expect(thresholdsFor('vg_shieldmaiden')).toEqual([10, 20])
+    expect(thresholdsFor('vg_cannon')).toEqual([5, 10])
   })
 
   it('keys off the ROOT form, so promoting never moves the goalposts', () => {
     // Sunforged Champion musters 1 on its own, but it is the Militia line's end.
     expect(lineRootOf('vg_champion')).toBe('vg_militia')
-    expect(thresholdsFor('vg_champion')).toEqual([12, 24])
-    expect(thresholdsFor('vg_footman')).toEqual([12, 24])
+    expect(thresholdsFor('vg_champion')).toEqual([14, 28])
+    expect(thresholdsFor('vg_footman')).toEqual([14, 28])
   })
 
   it('honours a data override', () => {
@@ -85,8 +85,8 @@ describe('rank thresholds', () => {
 
 describe('rank progress', () => {
   it('never lowers an earned rank', () => {
-    // 24 Militia are Honored; a battle that cuts them to 2 keeps the banner.
-    expect(applyRankProgress({ unitId: 'vg_militia', count: 24, rank: 0 })).toBe(2)
+    // 28 Militia are Honored; a battle that cuts them to 2 keeps the banner.
+    expect(applyRankProgress({ unitId: 'vg_militia', count: 28, rank: 0 })).toBe(2)
     expect(applyRankProgress({ unitId: 'vg_militia', count: 2, rank: 2 })).toBe(2)
     expect(applyRankProgress({ unitId: 'vg_militia', count: 0, rank: 1 })).toBe(1)
   })
@@ -94,23 +94,23 @@ describe('rank progress', () => {
   it('recruit() ranks a stack up as it crosses a threshold', () => {
     let r = recruit([], 99, 'vg_militia', ZERO_MODS)
     expect(r.board[0].rank).toBe(0)
-    for (let i = 0; i < 2; i++) r = recruit(r.board, r.gold, 'vg_militia', ZERO_MODS)
-    expect(r.board[0].count).toBe(12)
+    for (let i = 0; i < 3; i++) r = recruit(r.board, r.gold, 'vg_militia', ZERO_MODS)
+    expect(r.board[0].count).toBe(16)
     expect(r.board[0].rank).toBe(1)
     for (let i = 0; i < 3; i++) r = recruit(r.board, r.gold, 'vg_militia', ZERO_MODS)
-    expect(r.board[0].count).toBe(24)
+    expect(r.board[0].count).toBe(28)
     expect(r.board[0].rank).toBe(2)
   })
 
   it('a rank survives promotion, count and all', () => {
     let r = recruit([], 99, 'vg_militia', ZERO_MODS)
-    for (let i = 0; i < 2; i++) r = recruit(r.board, r.gold, 'vg_militia', ZERO_MODS)
+    for (let i = 0; i < 3; i++) r = recruit(r.board, r.gold, 'vg_militia', ZERO_MODS)
     expect(r.board[0].rank).toBe(1)
     const promoted = promote(r.board, 20, r.board[0].uid, { ...newCamp(), tier: 2 }, ZERO_MODS)
     expect(promoted.ok).toBe(true)
     expect(promoted.board[0].unitId).toBe('vg_footman')
     expect(promoted.board[0].rank).toBe(1)
-    expect(promoted.board[0].count).toBe(12)
+    expect(promoted.board[0].count).toBe(16)
   })
 })
 
@@ -213,16 +213,16 @@ describe('Thornqueen Maravel — survivorGrowsCount', () => {
     const run = maravelRun(3)
     const p = player(run)
     // A wall the first-round rivals can bloody but not break, sitting one unit
-    // short of Veteran (Sapling Warden musters 4 -> thresholds 12/24).
-    p.board = [stack('vd_sapling', 11, 0, { uid: 's_wall' })]
+    // short of Veteran (Sapling Warden musters 4 -> thresholds 14/28).
+    p.board = [stack('vd_sapling', 13, 0, { uid: 's_wall' })]
     resolveBattles(run)
     const survivors = run.reports
       .flatMap((r) => [...r.result.survivorsA, ...r.result.survivorsB])
       .find((s) => s.uid === 's_wall')
     expect(survivors, 'the fixture must survive for this to test anything').toBeDefined()
-    expect(survivors!.count, 'and must take casualties, which is what the passive replaces').toBeLessThan(11)
+    expect(survivors!.count, 'and must take casualties, which is what the passive replaces').toBeLessThan(13)
     const after = player(run).board[0]
-    expect(after.count).toBe(12)
+    expect(after.count).toBe(14)
     expect(after.rank).toBe(1)
   })
 

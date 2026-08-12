@@ -16,12 +16,12 @@ import { BRANCHES, TIER_WEIGHT } from '../data/talents/index'
 import type { FactionId, HeroMods } from '../data/types'
 
 /**
- * A banner of 50 HP runs to about round 17, and progression used to stop dead
- * at 12 — five rounds of a lobby with nothing left to earn, which is exactly
- * the stretch a longer game adds. Two more level-ups carry the War Council to
- * the end of the run.
+ * A banner of 70 HP runs to about round 20 (DN10), and progression must not
+ * stop dead while banners still stand — a lobby with nothing left to earn is
+ * dead time. Ten level-ups carry the War Council to the end of the run: a
+ * full capstone line, a second branch walked deep, and still a dip to spare.
  */
-export const LEVEL_UP_ROUNDS = [2, 4, 6, 8, 10, 12, 14, 16]
+export const LEVEL_UP_ROUNDS = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
 /** §2.1: one point per level-up — capstone plus a dip is still the deepest build. */
 export const MAX_TALENT_POINTS = LEVEL_UP_ROUNDS.length
 export const MAX_TIER: Tier = 5

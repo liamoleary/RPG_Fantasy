@@ -46,7 +46,7 @@ export const BOONS: BoonDef[] = [
   { id: 'b_salvage', name: 'Salvage Rights', branch: 'command', minRound: 4, text: 'Selling refunds +1 gold. → pivot builds cheaply.', mods: { sellBonus: 1 } },
   { id: 'b_forwardcamp', name: 'Forward Camp', branch: 'command', minRound: 4, text: 'Raise your Camp Tier by 1 immediately.', mods: { campTierUp: 1 } },
   { id: 'b_logistics', name: 'Logistics Corps', branch: 'command', minRound: 6, text: '+1 gold every Muster and Camp Tier upgrades cost 1 less.', mods: { income: 1, tierUpDiscount: 1 } },
-  { id: 'b_spymaster', name: 'Spymaster', branch: 'command', minRound: 4, text: '2 free rerolls every Muster. → dig for exactly the unit you want.', mods: { freeRerollsPerRound: 2 } },
+  { id: 'b_spymaster', name: 'Spymaster', branch: 'command', minRound: 4, text: 'Your spies widen the camp: +2 offer slots. → see more, dig less.', mods: { extraOfferSlots: 2 } },
   { id: 'b_warchest', name: 'War Chest', branch: 'command', minRound: 10, capstone: true, text: '+3 gold every Muster and +1 offer slot.', mods: { income: 3, extraOfferSlots: 1 } },
   { id: 'b_grandmarshal', name: 'Grand Marshal', branch: 'command', minRound: 10, capstone: true, text: 'Rerolls free, promotions cost 2 less, +1 gold. → rebuild your board every round.', mods: { rerollDiscount: 1, promoteDiscount: 2, income: 1 } },
 

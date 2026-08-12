@@ -47,9 +47,8 @@ describe('meta slice (§2 split)', () => {
       settings: { speedDefault: 2, reducedMotion: true, difficulty: 'warlord' },
       activeRun: { seed: 1 } as never,
     }
-    // War Tiers joined the slice (DN09 §7.4): the climb is progression, so the
-    // server owns it. `activeRun` and `settings` stay local by design.
-    expect(Object.keys(metaOf(save)).sort()).toEqual(['feats', 'renown', 'stats', 'tiers', 'unlocks'])
+    // `activeRun` and `settings` stay local by design.
+    expect(Object.keys(metaOf(save)).sort()).toEqual(['feats', 'renown', 'stats', 'unlocks'])
   })
 
   it('never carries the run or the settings — the device owns those', () => {

@@ -10,7 +10,6 @@ import { Sigil } from './Sigil'
 import { describe as describeEvent, keyMoments } from './battleLog'
 import { StackCard } from './StackCard'
 import { FeedbackPrompt } from './Feedback'
-import { MAX_WAR_TIER, clampTier, tierDef } from '../data/tiers'
 
 /** How a spell's tally reads on the receipt (Design Notes 03 §2.6). */
 const OUTCOME_WORD: Record<SpellOutcome, string> = {
@@ -245,11 +244,6 @@ export function RunOverScreen({ run }: { run: RunState }) {
   const won = placement === 1
   const f = FACTION_BY_ID.get(p.factionId)!
   const hero = HERO_BY_ID.get(p.heroId)!
-  const tier = clampTier(run.tier)
-  const record = store.save.tiers.records[String(tier)] ?? { runs: 0, wins: 0 }
-  // Winning at the tier you are climbing is what opens the next rung, and the
-  // headline button offers it (§5). At the top of the ladder there is no next.
-  const raise = won && tier === clampTier(store.save.tiers.highestWon) && tier < MAX_WAR_TIER
 
   return (
     <div className="screen" data-scroll="true">
@@ -257,31 +251,10 @@ export function RunOverScreen({ run }: { run: RunState }) {
         <div className="hero-art hero-art-ceremony" style={{ ['--fc' as string]: f.colors.primary }} data-big="true">
           <Plate src={HERO_ART_2X[p.heroId]} eager fallback={<Sigil id={hero.sigil} size={56} />} />
         </div>
-        {/* Altitude first on a defeat above Tier 1 (§5): an expedition report,
-            not a failure screen. How high you got is the headline; where you
-            placed is detail. */}
-        {!won && tier > 1 ? (
-          <>
-            <div className="eyebrow">You fell at</div>
-            <h1 style={{ color: 'var(--ink)' }}>War Tier {tier}</h1>
-            <div className="small dim">
-              Few banners fly this high — {ordinal(placement)} of eight, {hero.name} of {f.name}.
-            </div>
-            <div className="small dim">
-              {record.wins > 0
-                ? `Tier ${tier}: ${record.runs} attempt${record.runs === 1 ? '' : 's'}, ${record.wins} taken.`
-                : `Tier ${tier}: ${record.runs} attempt${record.runs === 1 ? '' : 's'}, summit unclaimed.`}
-            </div>
-          </>
-        ) : (
-          <>
-            <h1 style={{ color: won ? 'var(--gold)' : 'var(--ink)' }}>{won ? 'Last Banner Standing' : ordinal(placement)}</h1>
-            <div className="small dim">
-              {hero.name} {hero.title} · {f.name}
-              {won && tier > 1 ? ` · War Tier ${tier}` : ''}
-            </div>
-          </>
-        )}
+        <h1 style={{ color: won ? 'var(--gold)' : 'var(--ink)' }}>{won ? 'Last Banner Standing' : ordinal(placement)}</h1>
+        <div className="small dim">
+          {hero.name} {hero.title} · {f.name}
+        </div>
       </div>
 
       <div className="panel row spread">
@@ -331,27 +304,15 @@ export function RunOverScreen({ run }: { run: RunState }) {
         ))}
       </div>
 
-      {/* The fork (§2/§5): raising the banner seeds the *next* run one tier
-          higher. The climb happens across runs, so every attempt still
-          contains a full draft arc — which is the part that is the game. */}
-      {raise && (
-        <button
-          className="btn btn-gold raise-banner"
-          onClick={() => store.start(p.factionId, p.heroId, store.save.settings.difficulty, tier + 1)}
-        >
-          <strong>Raise the Banner</strong>
-          <span className="tiny">War Tier {tier + 1} — {tierDef(tier + 1).name}</span>
-        </button>
-      )}
       <div className="row" style={{ gap: 8 }}>
         <button className="btn grow" onClick={store.abandon}>
           Home
         </button>
         <button
           className="btn btn-primary grow"
-          onClick={() => store.start(p.factionId, p.heroId, store.save.settings.difficulty, tier)}
+          onClick={() => store.start(p.factionId, p.heroId, store.save.settings.difficulty)}
         >
-          {raise ? 'Claim Victory' : `Run Tier ${tier} again`}
+          Run it back
         </button>
       </div>
     </div>

@@ -49,13 +49,17 @@ export const COMMAND_LADDER: TalentNode[] = [
     recycles: 'b_quartermaster',
   },
   {
+    // DN10: the old Spymaster ("2 free rerolls") was strictly dominated the
+    // moment Haggler had already made rerolls free — the harness measured it
+    // taken 3% of the time. The spy network now widens what you can see
+    // instead of re-shuffling it, which no other Command node offers.
     id: 't_cmd4a',
     name: 'Spymaster',
-    text: '2 free rerolls every Muster.',
+    text: 'Your spies widen the camp: +2 offer slots.',
     branch: 'command',
     tier: 4,
     fork: 'a',
-    mods: { freeRerollsPerRound: 2 },
+    mods: { extraOfferSlots: 2 },
     recycles: 'b_spymaster',
   },
   {

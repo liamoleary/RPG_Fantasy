@@ -15,17 +15,6 @@ export interface SaveData {
     wins: number
     bestPlacementByHero: Record<string, number>
   }
-  /** War Tiers (DN09 §7.4). The climb, and what it has cost so far. */
-  tiers: {
-    /** the highest tier you may choose from Home */
-    highestUnlocked: number
-    /** the highest tier you have actually won at — separate on purpose (§4) */
-    highestWon: number
-    /** attempts and wins per tier, for the picker's record column */
-    records: Record<string, { runs: number; wins: number }>
-    /** the best tier each hero has won at, for the hero-select chip */
-    bestByHero: Record<string, number>
-  }
   settings: {
     speedDefault: 1 | 2
     reducedMotion: boolean
@@ -40,7 +29,6 @@ export const DEFAULT_SAVE: SaveData = {
   unlocks: [],
   feats: {},
   stats: { runs: 0, wins: 0, bestPlacementByHero: {} },
-  tiers: { highestUnlocked: 1, highestWon: 1, records: {}, bestByHero: {} },
   settings: { speedDefault: 1, reducedMotion: false, difficulty: 'standard' },
   activeRun: null,
 }
@@ -71,34 +59,10 @@ function dropPreWarCouncilRun(raw: SaveData): SaveData['activeRun'] {
 }
 
 /**
- * The Long March shipped briefly and re-keyed these records from attempts and
- * wins to campaigns reached and fallen. Marching is gone again, but saves
- * written while it was live are still out there, and the picker reads
- * `runs`/`wins` directly — a record in the other shape renders as NaN rather
- * than failing loudly. Read the campaign shape back as what it was closest to:
- * a campaign that reached a tier is an attempt at it, and one that did not fall
- * there is one that got past it.
- */
-function unReKeyRecords(raw: SaveData): SaveData['tiers']['records'] {
-  const out: SaveData['tiers']['records'] = {}
-  for (const [tier, rec] of Object.entries(raw.tiers?.records ?? {})) {
-    const r = rec as Partial<{ runs: number; wins: number; reached: number; fallen: number }>
-    if (typeof r.runs === 'number') {
-      out[tier] = { runs: r.runs, wins: r.wins ?? 0 }
-      continue
-    }
-    const reached = r.reached ?? 0
-    out[tier] = { runs: reached, wins: Math.max(0, reached - (r.fallen ?? 0)) }
-  }
-  return out
-}
-
-/**
- * Likewise for the run itself: a run saved mid-campaign carries fields this
- * build no longer knows about. They are harmless to keep — nothing reads them
- * — but a run that had already marched is standing in a lobby at a tier the
- * player never unlocked from Home, so it is dropped rather than resumed into a
- * state that can no longer be reached.
+ * The Long March shipped briefly; a run saved mid-campaign carries fields this
+ * build no longer knows about. A run that had already marched is standing in a
+ * lobby state that can no longer be reached, so it is dropped rather than
+ * resumed.
  */
 function dropMarchedRun(run: SaveData['activeRun']): SaveData['activeRun'] {
   if (!run) return null
@@ -108,13 +72,12 @@ function dropMarchedRun(run: SaveData['activeRun']): SaveData['activeRun'] {
 
 function migrate(raw: SaveData): SaveData {
   // Future schema bumps land here, keyed off `version`.
-  // A save written before War Tiers has no `tiers` block; spreading DEFAULT
-  // first covers the missing key, but a *partial* one (an older client, a
-  // half-written record) would still leave holes, so it is filled explicitly.
+  // A save written while War Tiers were live carries a `tiers` block; the
+  // ladder is gone, so the block is dropped rather than spread back in.
+  const { tiers: _tiers, ...rest } = raw as SaveData & { tiers?: unknown }
   return {
     ...DEFAULT_SAVE,
-    ...raw,
-    tiers: { ...DEFAULT_SAVE.tiers, ...raw.tiers, records: unReKeyRecords(raw), bestByHero: { ...raw.tiers?.bestByHero } },
+    ...rest,
     activeRun: dropMarchedRun(dropPreWarCouncilRun(raw)),
     version: SAVE_VERSION,
   }

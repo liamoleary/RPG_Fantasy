@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { unit } from '../src/data/index'
+import { ALL_UNITS, isPromotedForm, unit } from '../src/data/index'
 import { ZERO_MODS } from '../src/data/types'
 import type { BoardStack } from '../src/engine/battle'
-import { newCamp, promote, recruit, recruitPlan, resetUid } from '../src/engine/camp'
+import { MAX_CAMP_TIER, newCamp, offerPool, promote, recruit, recruitPlan, resetUid } from '../src/engine/camp'
 
 /**
  * Line-aware recruiting (Design Notes 04 §1). The shop used to invert: a
@@ -16,6 +16,38 @@ function stack(unitId: string, count: number, slot: number, extra: Partial<Board
 }
 
 const plan = (board: BoardStack[], id: string) => recruitPlan(board, id, ZERO_MODS)
+
+/**
+ * DN10 §3: the camp sells only the base form of every promotion line. A
+ * higher form is something you make at the promote button, never something
+ * you buy — one flat rule, at every camp tier, for every pool.
+ */
+describe('the camp sells base forms only (DN10 §3)', () => {
+  it('never offers a promoted form, even at max camp tier', () => {
+    for (const factionId of ['vanguard', 'verdant', 'stormtide'] as const) {
+      const { faction, mercs } = offerPool(factionId, MAX_CAMP_TIER)
+      for (const u of [...faction, ...mercs]) {
+        expect(isPromotedForm(u.id), `${u.id} is a promoted form and must not be sold`).toBe(false)
+      }
+    }
+  })
+
+  it('still offers every non-line unit at its own tier', () => {
+    const { faction } = offerPool('vanguard', MAX_CAMP_TIER)
+    const ids = faction.map((u) => u.id)
+    for (const id of ['vg_militia', 'vg_crossbow', 'vg_mule', 'vg_shieldmaiden', 'vg_cleric', 'vg_cannon', 'vg_colossus']) {
+      expect(ids, `${id} should be sellable`).toContain(id)
+    }
+  })
+
+  it('leaves every promoted form reachable by promotion from a sellable root', () => {
+    for (const u of ALL_UNITS) {
+      if (!isPromotedForm(u.id)) continue
+      const seller = ALL_UNITS.find((s) => s.lineNext === u.id)
+      expect(seller, `${u.id} has no line predecessor`).toBeDefined()
+    }
+  })
+})
 
 describe('recruit conversion (§1.1)', () => {
   // Vanguard melee line: Militia +4 -> Footman +3 -> Sunforged Champion +1.

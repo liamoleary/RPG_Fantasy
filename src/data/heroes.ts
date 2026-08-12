@@ -30,15 +30,17 @@ export const HEROES: HeroDef[] = [
     sigil: 'hammer',
     passive: {
       id: 'lastStand',
-      x: 3,
-      text: 'The first three times each battle a friendly stack would be wiped, it survives with 1 unit.',
+      x: 2,
+      text: 'The first two times each battle a friendly stack would be wiped, it survives with 1 unit.',
     },
     spell: {
       id: 'rallyAtk',
       name: 'Rallying Horn',
       text: 'All friendly stacks gain +X ATK for the rest of the battle.',
+      // DN10 balance pass: at 2.8/level she won 30.7% of lobbies — an
+      // army-wide, battle-long buff has to scale gently or it owns the game.
       base: 2.3,
-      perLevel: 2.8,
+      perLevel: 1.4,
       atStart: true,
       everyN: 3,
     },
@@ -99,15 +101,17 @@ export const HEROES: HeroDef[] = [
     sigil: 'fang',
     passive: {
       id: 'frenzyPermanentAtk',
-      x: 3,
-      text: "Each stack's first Frenzy trigger each battle grants +3 extra ATK.",
+      x: 2,
+      text: "Each stack's first Frenzy trigger each battle grants +2 extra ATK.",
     },
     spell: {
       id: 'chainLightning',
       name: 'Chain Lightning',
       text: 'Deal X damage split across the 3 largest enemy stacks.',
+      // DN10 balance pass: 62/level deleted whole boards by round 12 and held
+      // Gorrath at 2.7 average placement across every archetype.
       base: 12,
-      perLevel: 62,
+      perLevel: 24,
       atStart: true,
       everyN: 3,
     },
@@ -125,8 +129,11 @@ export const HEROES: HeroDef[] = [
       id: 'extraAttack',
       name: 'Ancestral Fury',
       text: 'A random friendly stack immediately attacks X times.',
-      base: 1,
-      perLevel: 0.05,
+      // DN10 balance pass: at 0.05/level the spell never grew at all and Zhala
+      // sat dead last at 6.7 average placement. Fury is her whole kit — it has
+      // to become several extra actions a battle by the late campaign.
+      base: 4,
+      perLevel: 0.28,
       atStart: false,
       everyN: 3,
     },

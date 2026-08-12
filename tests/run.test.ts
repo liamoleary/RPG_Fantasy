@@ -92,8 +92,9 @@ describe('economy', () => {
     expect(income(1, ZERO_MODS)).toBe(3)
     expect(income(2, ZERO_MODS)).toBe(4)
     expect(income(8, ZERO_MODS)).toBe(10)
-    expect(income(15, ZERO_MODS)).toBe(10)
-    expect(income(15, { ...ZERO_MODS, income: 2 })).toBe(12)
+    // The ceiling is 12 since DN10 — one more round of curve, then flat.
+    expect(income(15, ZERO_MODS)).toBe(12)
+    expect(income(15, { ...ZERO_MODS, income: 2 })).toBe(14)
   })
 
   it('adds to an existing stack rather than taking a new slot', () => {

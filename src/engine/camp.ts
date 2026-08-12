@@ -1,5 +1,5 @@
 /** War Camp economy: offers, rerolls, tier-ups, recruiting, promoting, selling. */
-import { MERC_UNITS, unit, unitsOfPool } from '../data/index'
+import { MERC_UNITS, isPromotedForm, unit, unitsOfPool } from '../data/index'
 import type { FactionId, HeroMods, UnitDef } from '../data/types'
 import type { BoardStack } from './battle'
 import { FRONT_SLOTS, TOTAL_SLOTS } from './battle'
@@ -9,7 +9,12 @@ import type { RNG } from './rng'
 export const RECRUIT_COST = 3
 export const REROLL_COST = 1
 export const MAX_CAMP_TIER = 5
-export const BASE_INCOME_CAP = 10
+/**
+ * 12 since DN10: a longer campaign wants a late game where a round can hold a
+ * real decision — promote AND recruit, or two recruits and a reroll — instead
+ * of the same 10g spent the same way every round from round 8 on.
+ */
+export const BASE_INCOME_CAP = 12
 /** Camp Tier N -> gold. Falls by 1 per round you don't buy it (Battlegrounds discount). */
 export const TIER_UP_BASE: Record<number, number> = { 2: 5, 3: 6, 4: 7, 5: 8 }
 export const PROMOTE_COST: Record<number, number> = { 2: 3, 3: 5, 4: 7, 5: 7 }
@@ -32,9 +37,8 @@ export function offerSlots(camp: CampState, mods: HeroMods): number {
   return Math.min(8, camp.tier + 2 + mods.extraOfferSlots)
 }
 
-/** `cap` overrides BASE_INCOME_CAP — War Tier 7 trims the player's ceiling. */
-export function income(round: number, mods: HeroMods, cap = BASE_INCOME_CAP): number {
-  return Math.min(cap, 2 + round) + mods.income
+export function income(round: number, mods: HeroMods): number {
+  return Math.min(BASE_INCOME_CAP, 2 + round) + mods.income
 }
 
 export function tierUpCost(camp: CampState, mods: HeroMods): number | null {
@@ -56,11 +60,19 @@ export function sellValue(stack: BoardStack, mods: HeroMods): number {
   return Math.max(1, Math.floor(stack.spent / RECRUIT_COST)) + mods.sellBonus
 }
 
-/** Units eligible for a camp offer at this tier. */
+/**
+ * Units eligible for a camp offer at this tier.
+ *
+ * One flat rule (DN10 §2): the camp only ever sells the BASE form of a
+ * promotion line. Footmen, Arbalests, Champions and their cousins are made at
+ * the promote button, never bought — so what a card in the camp is never
+ * needs a second reading. Units that don't promote enter at their own tier.
+ */
 export function offerPool(factionId: FactionId, tier: number): { faction: UnitDef[]; mercs: UnitDef[] } {
+  const sellable = (u: UnitDef) => u.tier <= tier && !isPromotedForm(u.id)
   return {
-    faction: unitsOfPool(factionId).filter((u) => u.tier <= tier),
-    mercs: MERC_UNITS.filter((u) => u.tier <= tier),
+    faction: unitsOfPool(factionId).filter(sellable),
+    mercs: MERC_UNITS.filter(sellable),
   }
 }
 

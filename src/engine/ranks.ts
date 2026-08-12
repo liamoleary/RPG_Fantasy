@@ -44,10 +44,13 @@ export function rankDefOf(unitId: string): RankDef | null {
  */
 export function thresholdsOf(def: RankDef, root: UnitDef): [number, number] {
   if (def.thresholds) return def.thresholds
+  // Raised for the longer campaign (DN10): at the old values 81% of boards
+  // held an Honored stack by run end and the power-matched edge crept past
+  // the +8% flag. A 26-round war earns the same banners a little later.
   const m = root.musterSize
-  if (m >= 3) return [12, 24]
-  if (m === 2) return [8, 16]
-  return [4, 8]
+  if (m >= 3) return [14, 28]
+  if (m === 2) return [10, 20]
+  return [5, 10]
 }
 
 /** Thresholds for a unit id, or null if its line defines no ranks. */

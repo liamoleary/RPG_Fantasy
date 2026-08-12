@@ -28,7 +28,6 @@ import {
 import { markRunEnd } from '../net/sync'
 import { buildRunReport, emptyTally, submitRun, tallyBattle, type RunTally } from '../net/telemetry'
 import { withMeta, type MetaSave } from './meta'
-import { clampTier, renownMultiplier } from '../data/tiers'
 import { DEFAULT_SAVE, loadSave, writeSave, type SaveData } from './persist'
 
 export type Screen = 'home' | 'muster' | 'battle' | 'runover'
@@ -71,7 +70,7 @@ interface Store {
   tally: RunTally
 
   // lifecycle
-  start: (factionId: FactionId, heroId: string, difficulty: Difficulty, tier?: number) => void
+  start: (factionId: FactionId, heroId: string, difficulty: Difficulty) => void
   resume: () => void
   /** Adopt meta-progression pulled from the server (§2). Local-only fields —
    *  the active run and settings — are untouched. */
@@ -120,13 +119,10 @@ export const useGame = create<Store>((set, get) => ({
   renownEarned: 0,
   tally: emptyTally(),
 
-  start: (factionId, heroId, difficulty, tier) => {
+  start: (factionId, heroId, difficulty) => {
     resetUid(0)
     const seed = (Math.random() * 0xffffffff) >>> 0
-    // You may run any tier you have unlocked, not only your highest — chasing
-    // a first win at altitude and taking a comfortable run are both valid (§4).
-    const want = clampTier(tier ?? get().save.tiers.highestUnlocked)
-    const run = newRun({ seed, factionId, heroId, difficulty, tier: Math.min(want, clampTier(get().save.tiers.highestUnlocked)) })
+    const run = newRun({ seed, factionId, heroId, difficulty })
     const save = { ...get().save, settings: { ...get().save.settings, difficulty } }
     persist(save, run)
     set({ run, save, screen: 'muster', selected: null, rankFlash: null, playerBattle: null, outcome: null, renownEarned: 0, speed: save.settings.speedDefault, tally: emptyTally() })
@@ -355,14 +351,8 @@ export const useGame = create<Store>((set, get) => ({
     if (run.finished || !p.alive) {
       const placement = p.placement ?? 1
       const won = placement === 1
-      const tier = clampTier(run.tier)
-      // Altitude pays even when it kills you (§4): the multiplier is applied
-      // win or lose, and rounded down so it can never mint a fraction.
-      const earned = Math.floor(renownFor(placement) * renownMultiplier(tier))
+      const earned = renownFor(placement)
       const best = get().save.stats.bestPlacementByHero[p.heroId] ?? 99
-      const prev = get().save.tiers
-      const key = String(tier)
-      const rec = prev.records[key] ?? { runs: 0, wins: 0 }
       const save: SaveData = {
         ...get().save,
         renown: get().save.renown + earned,
@@ -370,16 +360,6 @@ export const useGame = create<Store>((set, get) => ({
           runs: get().save.stats.runs + 1,
           wins: get().save.stats.wins + (won ? 1 : 0),
           bestPlacementByHero: { ...get().save.stats.bestPlacementByHero, [p.heroId]: Math.min(best, placement) },
-        },
-        tiers: {
-          // Winning at a tier opens the next one. Losing never demotes (§4),
-          // so every field here only ever moves up.
-          highestUnlocked: won ? Math.max(prev.highestUnlocked, clampTier(tier + 1)) : prev.highestUnlocked,
-          highestWon: won ? Math.max(prev.highestWon, tier) : prev.highestWon,
-          records: { ...prev.records, [key]: { runs: rec.runs + 1, wins: rec.wins + (won ? 1 : 0) } },
-          bestByHero: won
-            ? { ...prev.bestByHero, [p.heroId]: Math.max(prev.bestByHero[p.heroId] ?? 0, tier) }
-            : { ...prev.bestByHero },
         },
         activeRun: null,
       }

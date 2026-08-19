@@ -40,6 +40,11 @@ export interface BoardStack {
   bonusHp: number
   /** number of Growth ticks this stack has received */
   growthTicks: number
+  /**
+   * Permanent Venom earned from Growth (DN11 §2.2). Optional so a save written
+   * before DN11 loads clean — absent reads as zero everywhere.
+   */
+  bonusVenom?: number
   /** gold sunk into this stack, for sell refunds */
   spent: number
   /** Banner Rank earned by stack size: 0 none, 1 Veteran, 2 Honored (§3) */
@@ -195,6 +200,13 @@ interface RStack {
   abilityEcho: boolean
   /** extra ATK on top of each Frenzy trigger */
   frenzyPlus: number
+  /** Growth ticks the stack carries in from the run — read by growth-scaled
+   *  battle effects (DN11 §2.2), never mutated here. */
+  growthTicks: number
+  /** DN11: Initiative granted during the battle, on top of the form's own */
+  initBonus: number
+  /** DN11: >1 means the next attack divides across that many targets, once */
+  splitNext: number
   /** Cover charges left this battle (front row only) */
   coverLeft: number
   /** the ultimate this stack charges toward, if its form has one (§3) */
@@ -375,7 +387,9 @@ function buildStack(bs: BoardStack, side: Side, hero: HeroState, heroDef: HeroDe
     cleave: has('cleave') || (m.cleaveFront && row === 'front'),
     lifesteal: has('lifesteal') || m.lifestealAll,
     guard: (kw(def, 'guard') ?? 0) + extraKw('guard'),
-    venom: (kw(def, 'venom') ?? 0) + extraKw('venom'),
+    // Growth-earned Venom rides in with the printed keyword (DN11 §2.2), so
+    // every venom read downstream sees one number and needs no new branch.
+    venom: (kw(def, 'venom') ?? 0) + extraKw('venom') + (bs.bonusVenom ?? 0),
     frenzy: (kw(def, 'frenzy') ?? 0) + extraKw('frenzy'),
     venomPending: 0,
     frenzied: false,
@@ -388,6 +402,9 @@ function buildStack(bs: BoardStack, side: Side, hero: HeroState, heroDef: HeroDe
     firstShotDouble: honored ? honored.type === 'firstShotDouble' : false,
     abilityEcho: honored ? honored.type === 'abilityEcho' : false,
     frenzyPlus: honored && honored.type === 'frenzyPlus' ? honored.x : 0,
+    growthTicks: bs.growthTicks,
+    initBonus: 0,
+    splitNext: 0,
     // Apex is the reward for finishing a line: only the top form carries one,
     // and it starts every battle at zero (§3).
     apex: def.apex ?? null,
@@ -582,6 +599,14 @@ function onCasualties(ctx: Ctx, s: RStack, killed: number) {
     s.atk += gain
     ctx.frenzyCount[s.side] += 1
     ctx.events.push({ t: 'frenzy', uid: s.uid, atk: gain, snap: snaps(s) })
+    // The Windspeaker (DN11 §2.3): a friendly Frenzy anywhere in the warband
+    // also quickens the stack that bled. Driven by the ability table, not by
+    // the unit id — any later unit declaring `allyFrenzy` behaves the same.
+    for (const a of aliveOn(ctx, s.side)) {
+      const ab = a.def.ability
+      if (!ab || ab.trigger !== 'allyFrenzy') continue
+      for (let i = 0; i < (a.abilityEcho ? 2 : 1); i++) applyAbilityEffect(ctx, s, ab.effect)
+    }
   }
   fireAbility(ctx, s, 'onCasualty')
 }
@@ -624,6 +649,48 @@ function applyAbilityEffect(ctx: Ctx, s: RStack, e: AbilityEffect) {
     case 'selfBulwark': {
       s.bulwark += e.x
       ctx.events.push({ t: 'buff', uids: [s.uid], text: `+${e.x} Bulwark`, snap: snaps(s) })
+      break
+    }
+    case 'allyBulwark': {
+      // One shield, not the whole board. `randomFront` draws from ctx.rng so it
+      // stays seeded like everything else; `lowestBulwark` is the smith looking
+      // for whoever needs it most, and ties break on slot rather than on array
+      // order so the same board always answers the same way.
+      const pool = e.pick === 'randomFront' ? allies.filter((a) => a.row === 'front') : allies
+      if (pool.length === 0) break
+      let pick: RStack
+      if (e.pick === 'randomFront') {
+        pick = pool[Math.floor(ctx.rng.next() * pool.length)]
+      } else {
+        pick = pool[0]
+        for (const a of pool) if (a.bulwark < pick.bulwark || (a.bulwark === pick.bulwark && a.slot < pick.slot)) pick = a
+      }
+      pick.bulwark += e.x
+      ctx.events.push({ t: 'buff', uids: [pick.uid], text: `+${e.x} Bulwark`, src: s.uid, snap: snaps(pick) })
+      break
+    }
+    case 'adjacentHpPerGrowth': {
+      // Every Muster this stack survived, paid forward to the stacks beside it.
+      const ticks = s.growthTicks
+      if (ticks <= 0) break
+      const gain = e.x * ticks
+      const near = allies.filter((a) => a.uid !== s.uid && a.row === s.row && Math.abs(a.slot - s.slot) === 1)
+      if (near.length === 0) break
+      for (const a of near) {
+        a.maxHp += gain
+        a.wound = Math.max(0, a.wound - gain)
+      }
+      ctx.events.push({ t: 'buff', uids: near.map((a) => a.uid), text: `+${gain} HP`, src: s.uid, snap: snaps(...near) })
+      break
+    }
+    case 'splitNextAttack': {
+      s.splitNext = e.x
+      ctx.events.push({ t: 'buff', uids: [s.uid], text: `Splits ×${e.x}`, snap: snaps(s) })
+      break
+    }
+    case 'grantInit': {
+      s.initBonus += e.x
+      ctx.events.push({ t: 'buff', uids: [s.uid], text: `+${e.x} Init`, snap: snaps(s) })
       break
     }
     case 'healLowest': {
@@ -834,6 +901,14 @@ function performAttack(ctx: Ctx, attacker: RStack, isExtra = false, cycle = 0) {
     attacker.firstShotDouble = false
     raw *= 2
   }
+  // Chain lightning (DN11 §2.2): a charged attack DIVIDES across several
+  // targets rather than repeating at full strength — the same total damage,
+  // spread. Consumed here so it costs exactly one attack.
+  const split = attacker.splitNext > 1 ? attacker.splitNext : 1
+  if (split > 1) {
+    attacker.splitNext = 0
+    raw = Math.max(1, Math.floor(raw / split))
+  }
   const res = applyDamage(ctx, target, raw, { siege: attacker.siege })
   ctx.events.push({
     t: 'attack',
@@ -860,6 +935,29 @@ function performAttack(ctx: Ctx, attacker: RStack, isExtra = false, cycle = 0) {
   const targetDied = res.died
   if (targetDied) onDeath(ctx, target)
   else onCasualties(ctx, target, res.killed)
+
+  // The other prongs of a split attack, each for the same divided share. Like
+  // Piercing Volley below they draw no retaliation and report as ordinary
+  // attacks, so the replay needs no new event type.
+  if (split > 1 && attacker.alive) {
+    const others = enemiesOf(ctx, attacker).filter((f) => f.uid !== target.uid)
+    for (const extra of others.slice(0, split - 1)) {
+      const r = applyDamage(ctx, extra, raw, { siege: attacker.siege })
+      ctx.events.push({
+        t: 'attack',
+        src: attacker.uid,
+        dst: extra.uid,
+        side: attacker.side,
+        dmg: r.dealt,
+        absorbed: r.absorbed,
+        killed: r.killed,
+        retaliation: false,
+        snap: snaps(attacker, extra),
+      })
+      if (r.died) onDeath(ctx, extra)
+      else onCasualties(ctx, extra, r.killed)
+    }
+  }
 
   // Piercing Volley (§3): the same volley carries into a second stack for a
   // fraction of its raw damage. Like every volley it draws no retaliation, and
@@ -1170,7 +1268,9 @@ export function simulateBattle(a: BattleSide, b: BattleSide, heroA: HeroDef, her
         const pc = p.charge && cycle === 1 ? 1 : 0
         const qc = q.charge && cycle === 1 ? 1 : 0
         if (pc !== qc) return qc - pc
-        if (p.def.init !== q.def.init) return q.def.init - p.def.init
+        const pi = p.def.init + p.initBonus
+        const qi = q.def.init + q.initBonus
+        if (pi !== qi) return qi - pi
         return p.jitter - q.jitter
       })
 

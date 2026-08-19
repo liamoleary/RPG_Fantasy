@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { HERO_BY_ID, unit } from '../src/data/index'
+import { ALL_UNITS, HERO_BY_ID, unit } from '../src/data/index'
 import { ZERO_MODS } from '../src/data/types'
 import { simulateBattle, type BattleEvent, type BattleSide, type BoardStack, type HeroState } from '../src/engine/battle'
 
@@ -37,11 +37,23 @@ const wall = () => ({
 
 const APEX_UNITS = ['vg_champion', 'vg_ballistier', 'vd_elderbark', 'vd_matriarch', 'st_warlord', 'st_stormspear']
 
+/**
+ * DN04 §3 gave an Apex to the six line-top forms that existed then. DN11 adds
+ * more line tops and grants them none: `ApexId` is a closed union, DN11 §2
+ * authors no ultimates, and inventing six more would be content the design note
+ * never asked for. So this list stays six — the DN04 tops — and the new forked
+ * apexes (Oakheart, Blackthorn Reaper, Runelord, Anvilborn, Tempest Wyvern,
+ * Deepmaw Alpha, and the three §2.3 twins) deliberately carry no meter.
+ */
 describe('who has an Apex (§3)', () => {
-  it('exactly the six line-top forms carry one', () => {
+  it('exactly the six DN04 line-top forms carry one', () => {
     for (const id of APEX_UNITS) expect(unit(id).apex, `${id} should have an Apex`).toBeDefined()
-    for (const id of ['vg_militia', 'vg_footman', 'vg_colossus', 'st_leviathan', 'mc_hedgeknight', 'vg_arbalest']) {
-      expect(unit(id).apex, `${id} should NOT have an Apex`).toBeUndefined()
+    // Everything else, checked exhaustively rather than by a sample list — that
+    // is what actually pins the DN11 tops as meterless, and what will fail
+    // loudly the day someone gives one an ultimate by accident.
+    for (const u of ALL_UNITS) {
+      if (APEX_UNITS.includes(u.id)) continue
+      expect(u.apex, `${u.id} should NOT have an Apex`).toBeUndefined()
     }
   })
 

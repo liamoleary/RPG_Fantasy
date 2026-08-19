@@ -225,7 +225,10 @@ export function beginRound(run: RunState) {
     w.gold = income(run.round, w.mods) + economyGold(w.board)
     w.camp.rerollsUsedThisRound = 0
     if (!w.camp.frozen || w.camp.offer.length === 0) {
-      w.camp.offer = rollOffer(w.factionId, w.camp, w.mods, rng.fork(hashSeed(w.id)))
+      w.camp.offer = rollOffer(
+        { factionId: w.factionId, camp: w.camp, mods: w.mods, board: w.board, defeatedCourts: [] },
+        rng.fork(hashSeed(w.id)),
+      )
     }
     w.camp.frozen = false
   }
@@ -288,6 +291,16 @@ function applyGrowth(w: Warlord) {
     s.growthTicks += 1
     s.bonusHp += amount + extraHp
     if (s.growthTicks % 2 === 0) s.bonusAtk += amount
+    // The Blackthorn Reaper (DN11 §2.2): the thorns sharpen as the tree grows.
+    // Muster-phase like the rest of Growth, capped on TOTAL Venom so the
+    // printed keyword and the earned points are one budget, and re-derived from
+    // the form each tick so promoting into or out of the Reaper cannot strand
+    // a stack above its cap.
+    const gv = unit(s.unitId).growthVenom
+    if (gv) {
+      const base = unit(s.unitId).keywords.find((k) => k.k === 'venom')?.x ?? 0
+      s.bonusVenom = Math.min(Math.max(0, gv.cap - base), (s.bonusVenom ?? 0) + gv.x)
+    }
   }
 }
 

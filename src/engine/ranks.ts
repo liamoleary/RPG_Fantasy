@@ -5,33 +5,19 @@
  * promotes into Footmen keeps the company's colours. Ranks live on the stack,
  * are permanent for the run, survive promotion and only ever go up.
  */
-import { ALL_UNITS, UNIT_BY_ID } from '../data/index'
+import { UNIT_BY_ID } from '../data/index'
 import type { RankDef, UnitDef } from '../data/types'
+import { LINES } from './lines'
 
 /**
- * unitId -> the first form of its promotion line. `lineNext` only points
- * forward, so the root is found by walking a predecessor map built once here.
+ * unitId -> the first form of its promotion line. Since DN11 a line is a tree
+ * rather than a list, and the walk backwards lives in `lines.ts` with the rest
+ * of the graph — but the rule this module cares about is unchanged, and is why
+ * the graph refuses to load a form with two parents: a stack's banner is its
+ * ROOT's banner, so every form must have exactly one.
  */
-const LINE_ROOT: Map<string, string> = (() => {
-  const prev = new Map<string, string>()
-  for (const u of ALL_UNITS) if (u.lineNext) prev.set(u.lineNext, u.id)
-  const root = new Map<string, string>()
-  for (const u of ALL_UNITS) {
-    let cur = u.id
-    const seen = new Set<string>([cur])
-    for (;;) {
-      const p = prev.get(cur)
-      if (!p || seen.has(p)) break
-      cur = p
-      seen.add(p)
-    }
-    root.set(u.id, cur)
-  }
-  return root
-})()
-
 export function lineRootOf(unitId: string): string {
-  return LINE_ROOT.get(unitId) ?? unitId
+  return LINES.rootOf(unitId)
 }
 
 export function rankDefOf(unitId: string): RankDef | null {

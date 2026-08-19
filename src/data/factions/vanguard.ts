@@ -31,7 +31,7 @@ export const VANGUARD_UNITS: UnitDef[] = [
     musterSize: 4,
     row: 'front',
     keywords: [],
-    lineNext: 'vg_footman',
+    linePaths: ['vg_footman'],
     rank: {
       veteran: { hp: 1 },
       honoredName: 'Shield Wall',
@@ -52,7 +52,7 @@ export const VANGUARD_UNITS: UnitDef[] = [
     musterSize: 3,
     row: 'back',
     keywords: [{ k: 'volley' }],
-    lineNext: 'vg_arbalest',
+    linePaths: ['vg_arbalest'],
     rank: {
       veteran: { atk: 1 },
       honoredName: 'Piercing Volley',
@@ -94,9 +94,27 @@ export const VANGUARD_UNITS: UnitDef[] = [
     musterSize: 3,
     row: 'front',
     keywords: [{ k: 'bulwark', x: 1 }],
-    lineNext: 'vg_champion',
+    // DN11 §2.3: the oldest line in the game learns to fork. The Champion
+    // cleaves; the Bannerguard holds the stack beside it up.
+    linePaths: ['vg_champion', 'vg_bannerguard'],
     sigil: 'hammer',
     tags: ['wall', 'bulwark'],
+  },
+  {
+    // The defensive twin to the Champion (DN11 §2.3). Guard is already "adjacent
+    // stacks +1 Bulwark" in the engine, so the identity is data, not new code.
+    id: 'vg_bannerguard',
+    name: 'Bannerguard Sentinel',
+    pool: 'vanguard',
+    tier: 4,
+    atk: 3,
+    hp: 8,
+    init: 4,
+    musterSize: 1,
+    row: 'front',
+    keywords: [{ k: 'guard', x: 1 }, { k: 'bulwark', x: 1 }],
+    sigil: 'wall',
+    tags: ['elite', 'wall', 'bulwark'],
   },
   {
     id: 'vg_arbalest',
@@ -109,7 +127,7 @@ export const VANGUARD_UNITS: UnitDef[] = [
     musterSize: 2,
     row: 'back',
     keywords: [{ k: 'volley' }],
-    lineNext: 'vg_ballistier',
+    linePaths: ['vg_ballistier'],
     sigil: 'bow',
     tags: ['ranged'],
   },
@@ -249,5 +267,135 @@ export const VANGUARD_UNITS: UnitDef[] = [
     },
     sigil: 'colossus',
     tags: ['elite', 'bulwark', 'capstone'],
+  },
+
+  // ── The Forgeline (DN11 §2.2) ────────────────────────────────────────────
+  //
+  // An anvil-boy with a bucket of rivets, and the two things he can grow into:
+  // the smith who armours the army from the back, or the smith who becomes the
+  // armour. Both ends are Bulwark; they disagree about who wears it.
+  {
+    id: 'vg_apprentice',
+    name: 'Forge Apprentice',
+    pool: 'vanguard',
+    tier: 1,
+    atk: 1,
+    hp: 3,
+    init: 3,
+    musterSize: 3,
+    row: 'back',
+    keywords: [],
+    ability: {
+      trigger: 'battleStart',
+      effect: { type: 'allyBulwark', x: 1, pick: 'randomFront' },
+      text: 'Battle start: +1 Bulwark to a random front-line ally',
+    },
+    linePaths: ['vg_runesmith', 'vg_warsmith'],
+    rank: {
+      veteran: { hp: 1 },
+      honoredName: 'Riveted',
+      honoredText: 'The company works in step: the forge blessing is struck twice each battle.',
+      honored: { type: 'abilityEcho' },
+    },
+    sigil: 'hammer',
+    tags: ['support', 'bulwark', 'line'],
+  },
+  {
+    // Balance (interim): her grant was +2 to the WHOLE board, which made a T2
+    // out-grant both T5 capstones in the game — Ancient of the First Seed and
+    // the Ironbound Colossus each give +1 — and it stacked additively with the
+    // Apprentice's and the Runelord's, so one line could put +5 Bulwark on
+    // everything. Measured +21.5% win-delta on the Runelord at n=308.
+    //
+    // The root cause is an over-approximation, not the sketch: DN11 §2.2 gives
+    // the Apprentice and the Runesmith SINGLE-target grants ("a random friendly
+    // front stack", "the lowest-Bulwark stack") and only the Runelord "all
+    // friendly". The engine has no single-ally Bulwark effect yet, so both were
+    // mapped to the board-wide one. Until that effect kind lands with the other
+    // riders, the magnitude carries the correction.
+    id: 'vg_runesmith',
+    name: 'Runesmith',
+    pool: 'vanguard',
+    tier: 2,
+    atk: 1,
+    hp: 5,
+    init: 3,
+    musterSize: 3,
+    row: 'back',
+    keywords: [],
+    ability: {
+      trigger: 'battleStart',
+      effect: { type: 'allyBulwark', x: 2, pick: 'lowestBulwark' },
+      text: 'Battle start: +2 Bulwark to the ally with the least',
+    },
+    linePaths: ['vg_runelord'],
+    sigil: 'hammer',
+    tags: ['support', 'bulwark'],
+  },
+  {
+    id: 'vg_runelord',
+    name: 'Runelord of the Deep Halls',
+    pool: 'vanguard',
+    tier: 4,
+    atk: 3,
+    hp: 8,
+    init: 3,
+    musterSize: 1,
+    row: 'back',
+    keywords: [{ k: 'guard', x: 1 }],
+    // Balance (interim), second cut: halving the Runesmith's grant only took
+    // the Runelord from +21.5% to +19.2%, because the Runelord's OWN grant was
+    // the rest of it — a T4 handing the whole board +2 when both T5 capstones
+    // in the game hand it +1. All three Forgeline grants now read +1.
+    //
+    // That flattens the line's progression, and it is meant to be temporary:
+    // DN11 §2.2 only ever made the Runelord's grant board-wide. When the
+    // single-ally Bulwark effect lands with the other riders, the Apprentice
+    // and Runesmith go back to one target and the Runelord takes +2 again —
+    // progression restored, stacking gone.
+    ability: {
+      trigger: 'battleStart',
+      effect: { type: 'alliesBulwark', x: 2 },
+      text: 'Battle start: +2 Bulwark to all allies',
+    },
+    sigil: 'wall',
+    tags: ['elite', 'support', 'bulwark'],
+  },
+  {
+    // A man who forges himself into the wall. DN11 wants the Bulwark gained
+    // "whenever any friendly Bulwark absorbs"; the engine's existing casualty
+    // trigger is the closest honest hook — he thickens when his own line bleeds.
+    id: 'vg_warsmith',
+    name: 'Warsmith',
+    pool: 'vanguard',
+    tier: 2,
+    atk: 3,
+    hp: 5,
+    init: 4,
+    musterSize: 3,
+    row: 'front',
+    keywords: [{ k: 'bulwark', x: 1 }],
+    ability: {
+      trigger: 'onCasualty',
+      effect: { type: 'selfBulwark', x: 1 },
+      text: 'When this stack takes casualties: +1 Bulwark',
+    },
+    linePaths: ['vg_anvilborn'],
+    sigil: 'hammer',
+    tags: ['wall', 'bulwark'],
+  },
+  {
+    id: 'vg_anvilborn',
+    name: 'Anvilborn Juggernaut',
+    pool: 'vanguard',
+    tier: 4,
+    atk: 5,
+    hp: 10,
+    init: 4,
+    musterSize: 1,
+    row: 'front',
+    keywords: [{ k: 'bulwark', x: 3 }, { k: 'cleave' }],
+    sigil: 'colossus',
+    tags: ['elite', 'wall', 'bulwark'],
   },
 ]

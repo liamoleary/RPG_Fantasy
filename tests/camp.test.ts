@@ -43,7 +43,7 @@ describe('the camp sells base forms only (DN10 §3)', () => {
   it('leaves every promoted form reachable by promotion from a sellable root', () => {
     for (const u of ALL_UNITS) {
       if (!isPromotedForm(u.id)) continue
-      const seller = ALL_UNITS.find((s) => s.lineNext === u.id)
+      const seller = ALL_UNITS.find((s) => s.linePaths?.includes(u.id))
       expect(seller, `${u.id} has no line predecessor`).toBeDefined()
     }
   })

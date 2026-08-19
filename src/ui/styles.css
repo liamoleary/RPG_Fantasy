@@ -1692,6 +1692,58 @@ h3 {
   animation: popUp 0.16s ease;
 }
 
+/* The Path sheet (DN11 §2.1). A fork is permanent and has no undo, so it gets
+   two full cards side by side rather than a one-line confirm. */
+.path-head {
+  text-align: center;
+}
+.path-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.path-card {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding: 10px 8px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-2);
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+.path-card:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.path-plate {
+  width: 62px;
+  height: 62px;
+  border-radius: 10px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--art-void);
+}
+.path-name {
+  line-height: 1.15;
+}
+.path-kw {
+  opacity: 0.75;
+  line-height: 1.2;
+}
+.path-cost {
+  font-weight: 700;
+  color: var(--gold);
+}
+.path-locked {
+  opacity: 0.8;
+  line-height: 1.2;
+}
+
 /* The promotion pinned at the top of the Inspect sheet (§8). */
 .promote-pin {
   width: 100%;

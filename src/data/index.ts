@@ -37,9 +37,11 @@ export function unitsOfPool(pool: string): UnitDef[] {
  * form of every line — one flat rule, no exceptions: a higher form is
  * something you *make*, never something you buy. Units outside a line are
  * unaffected and enter the offer at their own tier.
+ *
+ * DN11 §2.1 leans on this rather than loosening it: every branch of a forked
+ * line is a promotion target, so a fork adds two more things the camp will
+ * never sell. The Path sheet is the only door to either of them.
  */
-export const PROMOTED_FORMS: ReadonlySet<string> = new Set(
-  ALL_UNITS.filter((u) => u.lineNext).map((u) => u.lineNext as string),
-)
+export const PROMOTED_FORMS: ReadonlySet<string> = new Set(ALL_UNITS.flatMap((u) => u.linePaths ?? []))
 
 export const isPromotedForm = (id: string): boolean => PROMOTED_FORMS.has(id)

@@ -9,7 +9,7 @@ import {
   type BoardStack,
 } from '../engine/battle'
 import {
-  canPromote,
+  promoteOptions,
   firstOpenSlot,
   promoteCost,
   recruitPlan,
@@ -24,6 +24,7 @@ import { opponentOf, player, type RunState } from '../engine/run'
 import { useGame } from '../state/store'
 import { InspectSheet, RankProgress, promoteBlock } from './InspectSheet'
 import { GlossarySheet } from './Glossary'
+import { keywordName } from './keywords'
 import { HeroSheet, PathColumns, branchColor, branchPicks, pathTitle } from './HeroSheet'
 import { Plate } from './Plate'
 import { unitArtFor, usePreloadArt } from './preload'
@@ -122,9 +123,11 @@ export function MusterScreen({ run }: { run: RunState }) {
   const coverOf = (stack: BoardStack): number => coverWith(stack, p.mods)
 
   const promoteStateOf = (stack: BoardStack): PromoteState => {
-    const target = canPromote(stack, p.camp)
-    if (!target) return null
-    return p.gold >= promoteCost(target, p.mods) ? 'ready' : 'soon'
+    const options = promoteOptions(stack, p.camp)
+    if (options.length === 0) return null
+    // At a fork, one affordable path is enough to light the chevron — the
+    // player is being told a promotion is available, not which one they'll take.
+    return options.some((t) => p.gold >= promoteCost(t, p.mods)) ? 'ready' : 'soon'
   }
 
   /**
@@ -365,7 +368,14 @@ export function MusterScreen({ run }: { run: RunState }) {
           onPromote={
             promo?.target
               ? () => {
-                  store.promote(inspectedStack.uid)
+                  // At a fork the pin must not decide for the player: it hands
+                  // off to the Path sheet instead of promoting down path one.
+                  if (promo.targets.length > 1) {
+                    setStackUid(null)
+                    setPromoteUid(inspectedStack.uid)
+                    return
+                  }
+                  store.promote(inspectedStack.uid, promo.target!.id)
                   setStackUid(null)
                 }
               : undefined
@@ -399,37 +409,90 @@ export function MusterScreen({ run }: { run: RunState }) {
         <>
           <div className="scrim" onClick={() => setPromoteUid(null)} />
           <div className="promote-pop">
-            <div className="row">
-              <span className="promote-face">
-                <Plate
-                  src={UNIT_ART[promoteTarget.target.id]}
-                  eager
-                  fallback={<Sigil id={promoteTarget.target.sigil} size={16} />}
-                />
-              </span>
-              <div className="grow">
-                <strong>{promoteTarget.target.name}</strong>
-                <div className="tiny dim">
-                  {unit(promoteStack.unitId).name} · {promoteStack.count} strong
-                  {promoteTarget.reason ? ` — ${promoteTarget.reason}` : ''}
+            {promoteTarget.targets.length > 1 ? (
+              /* The Path sheet (DN11 §2.1). Two full cards, because the choice
+                 is permanent and there is no undo — a one-line confirm would be
+                 asking for a decision while showing almost none of it. */
+              <>
+                <div className="path-head">
+                  <strong>Choose this company’s path</strong>
+                  <div className="tiny dim">
+                    {unit(promoteStack.unitId).name} · {promoteStack.count} strong — this choice is permanent for
+                    this stack.
+                  </div>
                 </div>
-              </div>
-            </div>
-            <div className="row" style={{ gap: 8 }}>
-              <button className="btn btn-sm grow btn-quiet" onClick={() => setPromoteUid(null)}>
-                Not yet
-              </button>
-              <button
-                className="btn btn-sm btn-gold grow"
-                disabled={!promoteTarget.ok}
-                onClick={() => {
-                  store.promote(promoteStack.uid)
-                  setPromoteUid(null)
-                }}
-              >
-                Promote · {promoteTarget.cost}g
-              </button>
-            </div>
+                <div className="path-choices">
+                  {promoteTarget.targets.map((t) => {
+                    const block = promoteBlock(promoteStack.unitId, p.camp.tier, p.gold, p.mods, t.id)
+                    return (
+                      <button
+                        key={t.id}
+                        className="path-card"
+                        style={{ borderColor: unitColor(t) }}
+                        disabled={!block.ok}
+                        onClick={() => {
+                          store.promote(promoteStack.uid, t.id)
+                          setPromoteUid(null)
+                        }}
+                      >
+                        <span className="path-plate">
+                          <Plate src={UNIT_ART[t.id]} eager fallback={<Sigil id={t.sigil} size={26} />} />
+                        </span>
+                        <strong className="path-name">{t.name}</strong>
+                        <span className="tiny dim">
+                          T{t.tier} · {rowGlyph(t.row)} · {t.atk}/{t.hp}
+                        </span>
+                        <span className="tiny path-kw">
+                          {t.keywords.length > 0 ? t.keywords.map((k) => keywordName(k)).join(' · ') : 'No keywords'}
+                        </span>
+                        {/* A locked path is shown and priced, never hidden —
+                            hiding a branch would hide the decision itself. */}
+                        <span className={`tiny ${block.ok ? 'path-cost' : 'path-locked'}`}>
+                          {block.ok ? `Promote · ${block.cost}g` : (block.reason ?? 'Unavailable')}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+                <button className="btn btn-sm btn-quiet" onClick={() => setPromoteUid(null)}>
+                  Not yet
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="row">
+                  <span className="promote-face">
+                    <Plate
+                      src={UNIT_ART[promoteTarget.target.id]}
+                      eager
+                      fallback={<Sigil id={promoteTarget.target.sigil} size={16} />}
+                    />
+                  </span>
+                  <div className="grow">
+                    <strong>{promoteTarget.target.name}</strong>
+                    <div className="tiny dim">
+                      {unit(promoteStack.unitId).name} · {promoteStack.count} strong
+                      {promoteTarget.reason ? ` — ${promoteTarget.reason}` : ''}
+                    </div>
+                  </div>
+                </div>
+                <div className="row" style={{ gap: 8 }}>
+                  <button className="btn btn-sm grow btn-quiet" onClick={() => setPromoteUid(null)}>
+                    Not yet
+                  </button>
+                  <button
+                    className="btn btn-sm btn-gold grow"
+                    disabled={!promoteTarget.ok}
+                    onClick={() => {
+                      store.promote(promoteStack.uid, promoteTarget.target!.id)
+                      setPromoteUid(null)
+                    }}
+                  >
+                    Promote · {promoteTarget.cost}g
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </>
       )}

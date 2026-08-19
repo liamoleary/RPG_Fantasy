@@ -287,8 +287,8 @@ export const VANGUARD_UNITS: UnitDef[] = [
     keywords: [],
     ability: {
       trigger: 'battleStart',
-      effect: { type: 'alliesBulwark', x: 1 },
-      text: 'Battle start: +1 Bulwark to all allies',
+      effect: { type: 'allyBulwark', x: 1, pick: 'randomFront' },
+      text: 'Battle start: +1 Bulwark to a random front-line ally',
     },
     linePaths: ['vg_runesmith', 'vg_warsmith'],
     rank: {
@@ -325,8 +325,8 @@ export const VANGUARD_UNITS: UnitDef[] = [
     keywords: [],
     ability: {
       trigger: 'battleStart',
-      effect: { type: 'alliesBulwark', x: 1 },
-      text: 'Battle start: +1 Bulwark to all allies',
+      effect: { type: 'allyBulwark', x: 2, pick: 'lowestBulwark' },
+      text: 'Battle start: +2 Bulwark to the ally with the least',
     },
     linePaths: ['vg_runelord'],
     sigil: 'hammer',
@@ -355,8 +355,8 @@ export const VANGUARD_UNITS: UnitDef[] = [
     // progression restored, stacking gone.
     ability: {
       trigger: 'battleStart',
-      effect: { type: 'alliesBulwark', x: 1 },
-      text: 'Battle start: +1 Bulwark to all allies',
+      effect: { type: 'alliesBulwark', x: 2 },
+      text: 'Battle start: +2 Bulwark to all allies',
     },
     sigil: 'wall',
     tags: ['elite', 'support', 'bulwark'],

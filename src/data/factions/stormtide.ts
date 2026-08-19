@@ -264,6 +264,11 @@ export const STORMTIDE_UNITS: UnitDef[] = [
     musterSize: 1,
     row: 'back',
     keywords: [{ k: 'volley' }, { k: 'frenzy', x: 1 }],
+    ability: {
+      trigger: 'allyFrenzy',
+      effect: { type: 'grantInit', x: 1 },
+      text: 'Whenever any friendly stack triggers Frenzy, that stack gains +1 Initiative',
+    },
     projectile: 'harpoon',
     sigil: 'totem',
     tags: ['elite', 'ranged', 'support', 'frenzy'],
@@ -334,6 +339,11 @@ export const STORMTIDE_UNITS: UnitDef[] = [
     musterSize: 1,
     row: 'back',
     keywords: [{ k: 'volley' }, { k: 'frenzy', x: 1 }],
+    ability: {
+      trigger: 'onCasualty',
+      effect: { type: 'splitNextAttack', x: 2 },
+      text: 'When this stack takes casualties: its next attack splits across 2 targets',
+    },
     sigil: 'dragon',
     tags: ['elite', 'ranged', 'frenzy'],
   },

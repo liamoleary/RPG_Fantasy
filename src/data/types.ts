@@ -28,7 +28,15 @@ export interface Keyword {
   unit?: string
 }
 
-export type AbilityTrigger = 'battleStart' | 'onCasualty' | 'onDeath' | 'everyExchange' | 'onAttack'
+export type AbilityTrigger =
+  | 'battleStart'
+  | 'onCasualty'
+  | 'onDeath'
+  | 'everyExchange'
+  | 'onAttack'
+  /** any FRIENDLY stack triggered Frenzy — the effect lands on that stack, not
+   *  on the one carrying the ability (DN11 §2.3, the Windspeaker) */
+  | 'allyFrenzy'
 
 export type AbilityEffect =
   | { type: 'alliesBulwark'; x: number }
@@ -40,6 +48,17 @@ export type AbilityEffect =
   | { type: 'summon'; unit: string; count: number }
   | { type: 'goldNextMuster'; x: number }
   | { type: 'extraAttackAlly' }
+  // ── DN11 §2 ───────────────────────────────────────────────────────────────
+  /** Bulwark to ONE ally, chosen by rule. The board-wide `alliesBulwark` above
+   *  is a T5 capstone effect; this is what a smith does for one shield. */
+  | { type: 'allyBulwark'; x: number; pick: 'randomFront' | 'lowestBulwark' }
+  /** +x HP per Growth tick this stack has taken, to its row neighbours — the
+   *  wall that remembers every Muster it survived. */
+  | { type: 'adjacentHpPerGrowth'; x: number }
+  /** this stack's next attack divides across x targets instead of one */
+  | { type: 'splitNextAttack'; x: number }
+  /** +x Initiative for the battle, to whichever stack the trigger names */
+  | { type: 'grantInit'; x: number }
 
 export interface Ability {
   trigger: AbilityTrigger
@@ -168,6 +187,12 @@ export interface UnitDef {
   apex?: ApexDef
   /** overrides the faction's default spell flavour (DN04 §10) */
   castFx?: CastFx
+  /**
+   * Growth ticks also raise this form's Venom, to a total cap (DN11 §2.2).
+   * Read at Muster like every other Growth effect, never in battle — the
+   * earned points ride on the stack as `bonusVenom`.
+   */
+  growthVenom?: { x: number; cap: number }
   /** synergy tags used by rival scoring and by the player's own sorting */
   tags?: string[]
 }

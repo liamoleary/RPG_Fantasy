@@ -295,12 +295,14 @@ export const STORMTIDE_UNITS: UnitDef[] = [
     tags: ['aggro', 'frenzy', 'line'],
   },
   {
+    // Balance (interim): strictly dominated by the Squall Harpooner — same
+    // tier, same 3/3, same Volley, plus Venom 1. -15.0% at n=123.
     id: 'st_drake',
     name: 'Wind Drake',
     pool: 'stormtide',
     tier: 2,
     atk: 3,
-    hp: 3,
+    hp: 4,
     init: 7,
     musterSize: 2,
     row: 'back',
@@ -313,16 +315,25 @@ export const STORMTIDE_UNITS: UnitDef[] = [
     // Chain-lightning with wings. DN11's rider splits its post-Frenzy attack
     // across two targets, which needs a new attack shape; Frenzy 2 carries the
     // "it gets worse when you hurt it" identity until that lands.
+    // Balance (interim): 6/5 back Volley + Frenzy 2 strictly dominated the
+    // Stormspear Tidecaller — 5/5, same row, same keywords — which also carries
+    // an Apex meter. +8.9% at n=1767, the thickest sample on the branch. The
+    // Frenzy comes down rather than the body, because Frenzy 2 was standing in
+    // for the missing split-attack rider and would otherwise double-dip the day
+    // that rider lands.
+    // Second cut: Frenzy 1 alone left it at +8.2%, still over the flag, so the
+    // body comes down to the Thunder Roc's 6/4 — the other T4 Stormtide
+    // back-row glass cannon, and a fair peer.
     id: 'st_wyvern',
     name: 'Tempest Wyvern',
     pool: 'stormtide',
     tier: 4,
     atk: 6,
-    hp: 5,
+    hp: 4,
     init: 7,
     musterSize: 1,
     row: 'back',
-    keywords: [{ k: 'volley' }, { k: 'frenzy', x: 2 }],
+    keywords: [{ k: 'volley' }, { k: 'frenzy', x: 1 }],
     sigil: 'dragon',
     tags: ['elite', 'ranged', 'frenzy'],
   },

@@ -301,6 +301,18 @@ export const VANGUARD_UNITS: UnitDef[] = [
     tags: ['support', 'bulwark', 'line'],
   },
   {
+    // Balance (interim): her grant was +2 to the WHOLE board, which made a T2
+    // out-grant both T5 capstones in the game — Ancient of the First Seed and
+    // the Ironbound Colossus each give +1 — and it stacked additively with the
+    // Apprentice's and the Runelord's, so one line could put +5 Bulwark on
+    // everything. Measured +21.5% win-delta on the Runelord at n=308.
+    //
+    // The root cause is an over-approximation, not the sketch: DN11 §2.2 gives
+    // the Apprentice and the Runesmith SINGLE-target grants ("a random friendly
+    // front stack", "the lowest-Bulwark stack") and only the Runelord "all
+    // friendly". The engine has no single-ally Bulwark effect yet, so both were
+    // mapped to the board-wide one. Until that effect kind lands with the other
+    // riders, the magnitude carries the correction.
     id: 'vg_runesmith',
     name: 'Runesmith',
     pool: 'vanguard',
@@ -313,8 +325,8 @@ export const VANGUARD_UNITS: UnitDef[] = [
     keywords: [],
     ability: {
       trigger: 'battleStart',
-      effect: { type: 'alliesBulwark', x: 2 },
-      text: 'Battle start: +2 Bulwark to all allies',
+      effect: { type: 'alliesBulwark', x: 1 },
+      text: 'Battle start: +1 Bulwark to all allies',
     },
     linePaths: ['vg_runelord'],
     sigil: 'hammer',
@@ -331,10 +343,20 @@ export const VANGUARD_UNITS: UnitDef[] = [
     musterSize: 1,
     row: 'back',
     keywords: [{ k: 'guard', x: 1 }],
+    // Balance (interim), second cut: halving the Runesmith's grant only took
+    // the Runelord from +21.5% to +19.2%, because the Runelord's OWN grant was
+    // the rest of it — a T4 handing the whole board +2 when both T5 capstones
+    // in the game hand it +1. All three Forgeline grants now read +1.
+    //
+    // That flattens the line's progression, and it is meant to be temporary:
+    // DN11 §2.2 only ever made the Runelord's grant board-wide. When the
+    // single-ally Bulwark effect lands with the other riders, the Apprentice
+    // and Runesmith go back to one target and the Runelord takes +2 again —
+    // progression restored, stacking gone.
     ability: {
       trigger: 'battleStart',
-      effect: { type: 'alliesBulwark', x: 2 },
-      text: 'Battle start: +2 Bulwark to all allies',
+      effect: { type: 'alliesBulwark', x: 1 },
+      text: 'Battle start: +1 Bulwark to all allies',
     },
     sigil: 'wall',
     tags: ['elite', 'support', 'bulwark'],

@@ -294,12 +294,15 @@ export const VERDANT_UNITS: UnitDef[] = [
     tags: ['wall', 'growth', 'line'],
   },
   {
+    // Balance (interim): at 1/6 it was strictly dominated by the Thornbark
+    // Sentinel — same tier, same Growth, 3/6 AND Bulwark 1 — so the tank tree
+    // was a worse tank than the line Verdant already had. -26.4% at n=100.
     id: 'vd_oakfather',
     name: 'Oakfather Sapling',
     pool: 'verdant',
     tier: 2,
-    atk: 1,
-    hp: 6,
+    atk: 2,
+    hp: 7,
     init: 2,
     musterSize: 3,
     row: 'front',
@@ -327,12 +330,15 @@ export const VERDANT_UNITS: UnitDef[] = [
     tags: ['elite', 'wall', 'growth'],
   },
   {
+    // Balance (interim): 2 HP meant the killer tree died before a single Growth
+    // tick paid out, which is the one thing a Verdant stack must survive to do.
+    // -17.8% at n=163.
     id: 'vd_blackthorn',
     name: 'Blackthorn Sapling',
     pool: 'verdant',
     tier: 2,
     atk: 3,
-    hp: 2,
+    hp: 4,
     init: 5,
     musterSize: 3,
     row: 'front',

@@ -153,7 +153,7 @@ describe('economy', () => {
   it('only offers units at or below the Camp Tier', () => {
     const rng = makeRng(5)
     const camp = { ...newCamp(), tier: 2 }
-    const offer = rollOffer('vanguard', camp, ZERO_MODS, rng)
+    const offer = rollOffer({ factionId: 'vanguard', camp, mods: ZERO_MODS, board: [], defeatedCourts: [] }, rng)
     expect(offer.length).toBe(4)
   })
 })

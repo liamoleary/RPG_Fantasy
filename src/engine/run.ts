@@ -225,7 +225,10 @@ export function beginRound(run: RunState) {
     w.gold = income(run.round, w.mods) + economyGold(w.board)
     w.camp.rerollsUsedThisRound = 0
     if (!w.camp.frozen || w.camp.offer.length === 0) {
-      w.camp.offer = rollOffer(w.factionId, w.camp, w.mods, rng.fork(hashSeed(w.id)))
+      w.camp.offer = rollOffer(
+        { factionId: w.factionId, camp: w.camp, mods: w.mods, board: w.board, defeatedCourts: [] },
+        rng.fork(hashSeed(w.id)),
+      )
     }
     w.camp.frozen = false
   }

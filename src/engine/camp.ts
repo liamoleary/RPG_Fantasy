@@ -77,8 +77,32 @@ export function offerPool(factionId: FactionId, tier: number): { faction: UnitDe
   }
 }
 
-export function rollOffer(factionId: FactionId, camp: CampState, mods: HeroMods, rng: RNG): string[] {
-  const { faction, mercs } = offerPool(factionId, camp.tier)
+/**
+ * Everything an offer roll is allowed to look at (DN11 §3).
+ *
+ * Kinship makes the camp answer to the board — "recruit a kin, and its kin come
+ * looking for you" — and the Boss Tavern makes it answer to Trials won. Both
+ * are facts about ONE warlord, and the player and every rival have to roll
+ * through the same door or the lobby stops being fair.
+ *
+ * So the roll takes a context rather than growing parameters: every input is
+ * named here, `rollOffer` reads nothing else, and adding an input later means
+ * adding a field rather than finding four call sites. Pure and seeded like the
+ * rest of the engine — same context and same RNG, same offer, always.
+ */
+export interface OfferContext {
+  factionId: FactionId
+  camp: CampState
+  mods: HeroMods
+  /** the warlord's board: what they already field is what draws its kin */
+  board: BoardStack[]
+  /** Boss Courts this warlord has beaten, whose cards drift into the camp */
+  defeatedCourts: string[]
+}
+
+export function rollOffer(ctx: OfferContext, rng: RNG): string[] {
+  const { camp, mods } = ctx
+  const { faction, mercs } = offerPool(ctx.factionId, camp.tier)
   const slots = offerSlots(camp, mods)
   const out: string[] = []
   for (let i = 0; i < slots; i++) {

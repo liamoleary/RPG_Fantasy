@@ -19,6 +19,7 @@ import {
   rerollCost,
   rollOffer,
   sell,
+  type OfferContext,
   tierUpCost,
   type CampState,
 } from './camp'
@@ -49,6 +50,15 @@ export interface RivalTurnInput {
   archetype: Archetype
   factionId: FactionId
   noise: number
+}
+
+/**
+ * A rival's offer context. Same door the player goes through — a rival that
+ * rolled from a different pool, or that could not see its own board, would be
+ * playing a different game (§9: real boards, fake brains).
+ */
+function offerCtxOf(input: RivalTurnInput, camp: CampState, board: BoardStack[]): OfferContext {
+  return { factionId: input.factionId, camp, mods: input.mods, board, defeatedCourts: [] }
 }
 
 export interface RivalTurnOutput {
@@ -147,7 +157,7 @@ export function rivalMuster(input: RivalTurnInput, rng: RNG): RivalTurnOutput {
   const bought: RivalTurnOutput['bought'] = []
 
   if (!camp.frozen || camp.offer.length === 0) {
-    camp = { ...camp, offer: rollOffer(input.factionId as never, camp, mods, rng) }
+    camp = { ...camp, offer: rollOffer(offerCtxOf(input, camp, board), rng) }
   }
   camp = { ...camp, frozen: false, rerollsUsedThisRound: 0 }
 
@@ -194,7 +204,7 @@ export function rivalMuster(input: RivalTurnInput, rng: RNG): RivalTurnOutput {
     const weakOffer = !best || best.v < 4 + round * 0.4
     if (weakOffer && gold - rCost >= RECRUIT_COST && camp.rerollsUsedThisRound < 4) {
       gold -= rCost
-      camp = { ...camp, offer: rollOffer(input.factionId as never, camp, mods, rng), rerollsUsedThisRound: camp.rerollsUsedThisRound + 1 }
+      camp = { ...camp, offer: rollOffer(offerCtxOf(input, camp, board), rng), rerollsUsedThisRound: camp.rerollsUsedThisRound + 1 }
       continue
     }
     if (!best) break

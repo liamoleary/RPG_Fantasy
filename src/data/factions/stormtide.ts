@@ -109,7 +109,8 @@ export const STORMTIDE_UNITS: UnitDef[] = [
     musterSize: 2,
     row: 'back',
     keywords: [{ k: 'volley' }, { k: 'venom', x: 1 }],
-    linePaths: ['st_stormspear'],
+    // DN11 §2.3: the Tidecaller is the nuke, the Windspeaker is the tempo twin.
+    linePaths: ['st_stormspear', 'st_windspeaker'],
     projectile: 'harpoon',
     sigil: 'lightning',
     tags: ['ranged'],
@@ -247,5 +248,112 @@ export const STORMTIDE_UNITS: UnitDef[] = [
     },
     sigil: 'dragon',
     tags: ['elite', 'frenzy', 'capstone'],
+  },
+  {
+    // The tempo support twin to the Tidecaller (DN11 §2.3). Its rider — Frenzy
+    // triggers anywhere in the warband also grant that stack +1 Init — needs a
+    // cross-stack Frenzy hook the engine does not have yet, so what ships here
+    // is the body and the barrage (see the branch notes).
+    id: 'st_windspeaker',
+    name: 'Squallcaller Windspeaker',
+    pool: 'stormtide',
+    tier: 4,
+    atk: 4,
+    hp: 6,
+    init: 8,
+    musterSize: 1,
+    row: 'back',
+    keywords: [{ k: 'volley' }, { k: 'frenzy', x: 1 }],
+    projectile: 'harpoon',
+    sigil: 'totem',
+    tags: ['elite', 'ranged', 'support', 'frenzy'],
+  },
+
+  // ── The Whelpline (DN11 §2.2) ────────────────────────────────────────────
+  //
+  // A storm-egg hatchling: what you feed it decides whether it takes to the sky
+  // or to the water. The two ends barely share a row, let alone a plan.
+  {
+    id: 'st_whelp',
+    name: 'Storm Whelp',
+    pool: 'stormtide',
+    tier: 1,
+    atk: 1,
+    hp: 2,
+    init: 5,
+    musterSize: 3,
+    row: 'any',
+    keywords: [{ k: 'frenzy', x: 1 }],
+    linePaths: ['st_drake', 'st_deepmaw'],
+    rank: {
+      veteran: { atk: 1 },
+      honoredName: 'Stormbrood',
+      honoredText: 'The brood answers the thunder: each Frenzy trigger grants +2 ATK on top of the usual.',
+      honored: { type: 'frenzyPlus', x: 2 },
+    },
+    sigil: 'lightning',
+    tags: ['aggro', 'frenzy', 'line'],
+  },
+  {
+    id: 'st_drake',
+    name: 'Wind Drake',
+    pool: 'stormtide',
+    tier: 2,
+    atk: 3,
+    hp: 3,
+    init: 7,
+    musterSize: 2,
+    row: 'back',
+    keywords: [{ k: 'volley' }],
+    linePaths: ['st_wyvern'],
+    sigil: 'lightning',
+    tags: ['ranged', 'tempo'],
+  },
+  {
+    // Chain-lightning with wings. DN11's rider splits its post-Frenzy attack
+    // across two targets, which needs a new attack shape; Frenzy 2 carries the
+    // "it gets worse when you hurt it" identity until that lands.
+    id: 'st_wyvern',
+    name: 'Tempest Wyvern',
+    pool: 'stormtide',
+    tier: 4,
+    atk: 6,
+    hp: 5,
+    init: 7,
+    musterSize: 1,
+    row: 'back',
+    keywords: [{ k: 'volley' }, { k: 'frenzy', x: 2 }],
+    sigil: 'dragon',
+    tags: ['elite', 'ranged', 'frenzy'],
+  },
+  {
+    id: 'st_deepmaw',
+    name: 'Deepmaw Pup',
+    pool: 'stormtide',
+    tier: 2,
+    atk: 2,
+    hp: 5,
+    init: 4,
+    musterSize: 3,
+    row: 'front',
+    keywords: [{ k: 'frenzy', x: 1 }],
+    linePaths: ['st_alpha'],
+    sigil: 'fang',
+    tags: ['wall', 'frenzy'],
+  },
+  {
+    // It eats what bites it.
+    id: 'st_alpha',
+    name: 'Deepmaw Alpha',
+    pool: 'stormtide',
+    tier: 4,
+    atk: 5,
+    hp: 9,
+    init: 4,
+    musterSize: 1,
+    row: 'front',
+    keywords: [{ k: 'frenzy', x: 2 }, { k: 'lifesteal' }],
+    sigil: 'fang',
+    tags: ['elite', 'aggro', 'frenzy'],
   },
 ]

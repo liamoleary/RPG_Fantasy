@@ -94,9 +94,27 @@ export const VANGUARD_UNITS: UnitDef[] = [
     musterSize: 3,
     row: 'front',
     keywords: [{ k: 'bulwark', x: 1 }],
-    linePaths: ['vg_champion'],
+    // DN11 §2.3: the oldest line in the game learns to fork. The Champion
+    // cleaves; the Bannerguard holds the stack beside it up.
+    linePaths: ['vg_champion', 'vg_bannerguard'],
     sigil: 'hammer',
     tags: ['wall', 'bulwark'],
+  },
+  {
+    // The defensive twin to the Champion (DN11 §2.3). Guard is already "adjacent
+    // stacks +1 Bulwark" in the engine, so the identity is data, not new code.
+    id: 'vg_bannerguard',
+    name: 'Bannerguard Sentinel',
+    pool: 'vanguard',
+    tier: 4,
+    atk: 3,
+    hp: 8,
+    init: 4,
+    musterSize: 1,
+    row: 'front',
+    keywords: [{ k: 'guard', x: 1 }, { k: 'bulwark', x: 1 }],
+    sigil: 'wall',
+    tags: ['elite', 'wall', 'bulwark'],
   },
   {
     id: 'vg_arbalest',
@@ -249,5 +267,113 @@ export const VANGUARD_UNITS: UnitDef[] = [
     },
     sigil: 'colossus',
     tags: ['elite', 'bulwark', 'capstone'],
+  },
+
+  // ── The Forgeline (DN11 §2.2) ────────────────────────────────────────────
+  //
+  // An anvil-boy with a bucket of rivets, and the two things he can grow into:
+  // the smith who armours the army from the back, or the smith who becomes the
+  // armour. Both ends are Bulwark; they disagree about who wears it.
+  {
+    id: 'vg_apprentice',
+    name: 'Forge Apprentice',
+    pool: 'vanguard',
+    tier: 1,
+    atk: 1,
+    hp: 3,
+    init: 3,
+    musterSize: 3,
+    row: 'back',
+    keywords: [],
+    ability: {
+      trigger: 'battleStart',
+      effect: { type: 'alliesBulwark', x: 1 },
+      text: 'Battle start: +1 Bulwark to all allies',
+    },
+    linePaths: ['vg_runesmith', 'vg_warsmith'],
+    rank: {
+      veteran: { hp: 1 },
+      honoredName: 'Riveted',
+      honoredText: 'The company works in step: the forge blessing is struck twice each battle.',
+      honored: { type: 'abilityEcho' },
+    },
+    sigil: 'hammer',
+    tags: ['support', 'bulwark', 'line'],
+  },
+  {
+    id: 'vg_runesmith',
+    name: 'Runesmith',
+    pool: 'vanguard',
+    tier: 2,
+    atk: 1,
+    hp: 5,
+    init: 3,
+    musterSize: 3,
+    row: 'back',
+    keywords: [],
+    ability: {
+      trigger: 'battleStart',
+      effect: { type: 'alliesBulwark', x: 2 },
+      text: 'Battle start: +2 Bulwark to all allies',
+    },
+    linePaths: ['vg_runelord'],
+    sigil: 'hammer',
+    tags: ['support', 'bulwark'],
+  },
+  {
+    id: 'vg_runelord',
+    name: 'Runelord of the Deep Halls',
+    pool: 'vanguard',
+    tier: 4,
+    atk: 3,
+    hp: 8,
+    init: 3,
+    musterSize: 1,
+    row: 'back',
+    keywords: [{ k: 'guard', x: 1 }],
+    ability: {
+      trigger: 'battleStart',
+      effect: { type: 'alliesBulwark', x: 2 },
+      text: 'Battle start: +2 Bulwark to all allies',
+    },
+    sigil: 'wall',
+    tags: ['elite', 'support', 'bulwark'],
+  },
+  {
+    // A man who forges himself into the wall. DN11 wants the Bulwark gained
+    // "whenever any friendly Bulwark absorbs"; the engine's existing casualty
+    // trigger is the closest honest hook — he thickens when his own line bleeds.
+    id: 'vg_warsmith',
+    name: 'Warsmith',
+    pool: 'vanguard',
+    tier: 2,
+    atk: 3,
+    hp: 5,
+    init: 4,
+    musterSize: 3,
+    row: 'front',
+    keywords: [{ k: 'bulwark', x: 1 }],
+    ability: {
+      trigger: 'onCasualty',
+      effect: { type: 'selfBulwark', x: 1 },
+      text: 'When this stack takes casualties: +1 Bulwark',
+    },
+    linePaths: ['vg_anvilborn'],
+    sigil: 'hammer',
+    tags: ['wall', 'bulwark'],
+  },
+  {
+    id: 'vg_anvilborn',
+    name: 'Anvilborn Juggernaut',
+    pool: 'vanguard',
+    tier: 4,
+    atk: 5,
+    hp: 10,
+    init: 4,
+    musterSize: 1,
+    row: 'front',
+    keywords: [{ k: 'bulwark', x: 3 }, { k: 'cleave' }],
+    sigil: 'colossus',
+    tags: ['elite', 'wall', 'bulwark'],
   },
 ]

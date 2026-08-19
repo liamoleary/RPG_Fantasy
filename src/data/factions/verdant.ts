@@ -104,9 +104,28 @@ export const VERDANT_UNITS: UnitDef[] = [
     musterSize: 2,
     row: 'back',
     keywords: [{ k: 'volley' }, { k: 'growth', x: 1 }],
-    linePaths: ['vd_matriarch'],
+    // DN11 §2.3: the archer line forks at its top. The Matriarch stays in the
+    // treeline and shoots; the Nightblade walks out of it.
+    linePaths: ['vd_matriarch', 'vd_nightblade'],
     sigil: 'moon',
     tags: ['ranged', 'growth'],
+  },
+  {
+    // The archer who stopped shooting (DN11 §2.3). A back-row line that ends in
+    // the front row is the reason `promote` re-slots on a row change — this is
+    // the first form in the game that actually needs it.
+    id: 'vd_nightblade',
+    name: 'Moonshade Nightblade',
+    pool: 'verdant',
+    tier: 4,
+    atk: 5,
+    hp: 5,
+    init: 7,
+    musterSize: 1,
+    row: 'front',
+    keywords: [{ k: 'charge' }, { k: 'venom', x: 2 }],
+    sigil: 'dagger',
+    tags: ['elite', 'aggro', 'tempo'],
   },
   {
     // Top of the dryad line (§5.2). Growth 2 matches the other Verdant T4s;
@@ -245,5 +264,98 @@ export const VERDANT_UNITS: UnitDef[] = [
     },
     sigil: 'tree',
     tags: ['elite', 'growth', 'capstone'],
+  },
+
+  // ── The Seedline (DN11 §2.2) ─────────────────────────────────────────────
+  //
+  // The ask, made literal: a seed that becomes what you feed it. The root is
+  // deliberately feeble — 0 ATK, a body and a promise — because a card whose
+  // whole pitch is "this will become something" has to earn the something.
+  // Two stacks of Whisperseed can walk different ways down, which is the toy.
+  {
+    id: 'vd_whisperseed',
+    name: 'Whisperseed',
+    pool: 'verdant',
+    tier: 1,
+    atk: 0,
+    hp: 3,
+    init: 2,
+    musterSize: 3,
+    row: 'any',
+    keywords: [{ k: 'growth', x: 1 }],
+    linePaths: ['vd_oakfather', 'vd_blackthorn'],
+    rank: {
+      veteran: { hp: 1 },
+      honoredName: 'Deeproot Waking',
+      honoredText: 'What slept in the seed stirs: every Growth tick this stack takes grants +1 more.',
+      honored: { type: 'growthPlus', x: 1 },
+    },
+    sigil: 'leaf',
+    tags: ['wall', 'growth', 'line'],
+  },
+  {
+    id: 'vd_oakfather',
+    name: 'Oakfather Sapling',
+    pool: 'verdant',
+    tier: 2,
+    atk: 1,
+    hp: 6,
+    init: 2,
+    musterSize: 3,
+    row: 'front',
+    keywords: [{ k: 'growth', x: 1 }],
+    linePaths: ['vd_oakheart'],
+    sigil: 'tree',
+    tags: ['wall', 'growth'],
+  },
+  {
+    // The wall that remembers every Muster it survived. DN11 sketches a rider
+    // — adjacent stacks +1 HP per Growth tick this run — which needs an effect
+    // kind the engine does not have yet; Guard carries the identity until it
+    // lands (see the branch notes).
+    id: 'vd_oakheart',
+    name: 'Oakheart Ancient',
+    pool: 'verdant',
+    tier: 4,
+    atk: 4,
+    hp: 12,
+    init: 2,
+    musterSize: 1,
+    row: 'front',
+    keywords: [{ k: 'growth', x: 2 }, { k: 'guard', x: 1 }],
+    sigil: 'tree',
+    tags: ['elite', 'wall', 'growth'],
+  },
+  {
+    id: 'vd_blackthorn',
+    name: 'Blackthorn Sapling',
+    pool: 'verdant',
+    tier: 2,
+    atk: 3,
+    hp: 2,
+    init: 5,
+    musterSize: 3,
+    row: 'front',
+    keywords: [{ k: 'venom', x: 1 }, { k: 'growth', x: 1 }],
+    linePaths: ['vd_reaper'],
+    sigil: 'thorn',
+    tags: ['aggro', 'growth'],
+  },
+  {
+    // The killer tree. DN11's rider — Growth ticks also add +1 Venom, cap 5 —
+    // needs permanent per-stack Venom, which is a new board field; the Reaper
+    // ships with fixed Venom 2 until that lands.
+    id: 'vd_reaper',
+    name: 'Blackthorn Reaper',
+    pool: 'verdant',
+    tier: 4,
+    atk: 6,
+    hp: 6,
+    init: 5,
+    musterSize: 1,
+    row: 'front',
+    keywords: [{ k: 'venom', x: 2 }, { k: 'cleave' }, { k: 'growth', x: 1 }],
+    sigil: 'thorn',
+    tags: ['elite', 'aggro', 'growth'],
   },
 ]

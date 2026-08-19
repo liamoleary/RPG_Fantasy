@@ -2,9 +2,20 @@ import { describe, expect, it } from 'vitest'
 import { ALL_UNITS, PROMOTED_FORMS, isPromotedForm, unit } from '../src/data/index'
 import { ZERO_MODS } from '../src/data/types'
 import type { BoardStack } from '../src/engine/battle'
-import { lineChainTo, lineDepthOf, lineOf, newCamp, promote, promoteOptions } from '../src/engine/camp'
+import {
+  MAX_CAMP_TIER,
+  inSameLine,
+  lineChainTo,
+  lineDepthOf,
+  lineOf,
+  newCamp,
+  offerPool,
+  promote,
+  promoteOptions,
+  recruitPlan,
+} from '../src/engine/camp'
 import { LINES, buildLineGraph } from '../src/engine/lines'
-import { lineRootOf } from '../src/engine/ranks'
+import { lineRootOf, rankDefOf } from '../src/engine/ranks'
 
 /**
  * Forked lines (Design Notes 11 §2). A promotion line stopped being a list and
@@ -12,12 +23,11 @@ import { lineRootOf } from '../src/engine/ranks'
  * that shipped in DN10 behaves identically, and the new shape only shows up
  * where a unit actually authors two paths.
  *
- * The tree logic is exercised here against SYNTHETIC forks, because the graph
- * is built over an injected unit list rather than the registry — which means
- * the invariants can be proved before a real forked line exists, without
- * shipping a fake unit into anyone's camp. The end-to-end fork tests that §7.2
- * asks for (Path sheet, two stacks of one root down different paths, training
- * arithmetic across a fork) land with the Seedline data in the next commit.
+ * The tree logic is exercised against SYNTHETIC forks, because the graph is
+ * built over an injected unit list rather than the registry — which means the
+ * invariants were provable before a real forked line existed, without shipping
+ * a fake unit into anyone's camp. The shipped lines are then asked the same
+ * questions end to end, through the `promote`/`recruitPlan` the camp calls.
  */
 
 const node = (id: string, ...linePaths: string[]) => (linePaths.length > 0 ? { id, linePaths } : { id })
@@ -148,13 +158,26 @@ describe('every DN10 line still reads exactly as it did (§7.1)', () => {
     ['st_slinger', ['st_slinger', 'st_harpooner', 'st_stormspear']],
   ]
 
+  /**
+   * What §7.1 promises is that the DN10 lines still BEHAVE identically, not
+   * that nothing was ever added beside them — DN11 §2.3 deliberately forks
+   * three of the six, so `lineOf(root)` legitimately returns four forms for
+   * those. The invariant is the walk: root to top is the same sequence, at the
+   * same depths, off the same root. New branches may hang off it; they may not
+   * disturb it.
+   */
   it.each(SHIPPED)('%s runs root → mid → top, unchanged', (root, forms) => {
-    expect(lineOf(root)).toEqual(forms)
     expect(lineChainTo(forms[forms.length - 1])).toEqual(forms)
+    expect(lineOf(root).filter((f) => forms.includes(f))).toEqual(forms)
     forms.forEach((f, i) => {
       expect(lineRootOf(f)).toBe(root)
       expect(lineDepthOf(f)).toBe(i)
     })
+  })
+
+  it('adds a second path to exactly the three lines DN11 §2.3 names', () => {
+    const forked = SHIPPED.filter(([root]) => lineOf(root).length > 3).map(([root]) => root)
+    expect(forked.sort()).toEqual(['st_slinger', 'vd_dryad', 'vg_militia'])
   })
 
   it('keeps the data layer and the engine layer agreeing on what is promoted', () => {
@@ -240,5 +263,121 @@ describe('promote takes a path (§2.1)', () => {
     expect(res.board[0].count).toBe(12)
     expect(res.board[0].rank).toBe(1)
     expect(unit(res.board[0].unitId).tier).toBe(2)
+  })
+})
+
+/**
+ * The forks, end to end (§7.2). Commit 1 proved the tree logic against
+ * synthetic graphs; these are the same questions asked of the shipped
+ * Seedline, Forgeline, Whelpline and the three §2.3 twins, through the same
+ * `promote`/`recruitPlan` the camp button calls.
+ */
+describe('a forked line, end to end (§7.2)', () => {
+  const tier4 = { ...newCamp(), tier: 4 }
+  const tier2 = { ...newCamp(), tier: 2 }
+
+  const FORKS: [string, string, string][] = [
+    ['vd_whisperseed', 'vd_oakfather', 'vd_blackthorn'],
+    ['vg_apprentice', 'vg_runesmith', 'vg_warsmith'],
+    ['st_whelp', 'st_drake', 'st_deepmaw'],
+    ['vg_footman', 'vg_champion', 'vg_bannerguard'],
+    ['vd_moonshade', 'vd_matriarch', 'vd_nightblade'],
+    ['st_harpooner', 'st_stormspear', 'st_windspeaker'],
+  ]
+
+  it.each(FORKS)('%s offers both paths and refuses to guess between them', (root, a, b) => {
+    const s = stack(root, 6, 0)
+    expect(promoteOptions(s, tier4).map((t) => t.id)).toEqual([a, b])
+    // The sheet exists because the engine will not choose for you.
+    const blind = promote([s], 30, s.uid, tier4, ZERO_MODS)
+    expect(blind.ok).toBe(false)
+    expect(blind.reason).toBe('Choose a path')
+  })
+
+  it.each(FORKS)('%s reaches either path, count intact, from one purchase', (root, a, b) => {
+    for (const target of [a, b]) {
+      const s = stack(root, 9, 0)
+      const res = promote([s], 30, s.uid, tier4, ZERO_MODS, target)
+      expect(res.ok, `${root} -> ${target}`).toBe(true)
+      expect(res.board).toHaveLength(1)
+      expect(res.board[0].unitId).toBe(target)
+      // Promotion re-dresses a company; it never costs it bodies (DN04 §1.1).
+      expect(res.board[0].count).toBe(9)
+    }
+  })
+
+  /** The new toy: one root, two stacks, two different futures in one run. */
+  it('walks two stacks of one root down different paths, and never merges them', () => {
+    const board = [
+      { ...stack('vd_whisperseed', 8, 0), uid: 'oak' },
+      { ...stack('vd_whisperseed', 6, 1), uid: 'thorn' },
+    ]
+    const first = promote(board, 30, 'oak', tier2, ZERO_MODS, 'vd_oakfather')
+    expect(first.ok).toBe(true)
+    const second = promote(first.board, 30, 'thorn', tier2, ZERO_MODS, 'vd_blackthorn')
+    expect(second.ok).toBe(true)
+
+    expect(second.board).toHaveLength(2)
+    expect(second.board.find((s) => s.uid === 'oak')!.unitId).toBe('vd_oakfather')
+    expect(second.board.find((s) => s.uid === 'thorn')!.unitId).toBe('vd_blackthorn')
+    expect(second.board.find((s) => s.uid === 'oak')!.count).toBe(8)
+    expect(second.board.find((s) => s.uid === 'thorn')!.count).toBe(6)
+    // Siblings share a root and a banner, but they are no longer one company.
+    expect(lineRootOf('vd_oakfather')).toBe(lineRootOf('vd_blackthorn'))
+    expect(inSameLine('vd_oakfather', 'vd_blackthorn')).toBe(false)
+  })
+
+  it('trains a root recruit into whichever branch stack sits nearer the front', () => {
+    // Both saplings are one promotion from the seed, so both are one step
+    // ahead — the tie breaks on slot, and the recruits join the front-most.
+    const board = [
+      { ...stack('vd_blackthorn', 4, 2), uid: 'thorn' },
+      { ...stack('vd_oakfather', 4, 0), uid: 'oak' },
+    ]
+    const plan = recruitPlan(board, 'vd_whisperseed', ZERO_MODS)
+    expect(plan.target?.uid).toBe('oak')
+    expect(plan.stepsBehind).toBe(1)
+    // muster 3, one form behind -> halved to 1
+    expect(plan.added).toBe(1)
+  })
+
+  it('re-slots a back-row line that ends in the front row', () => {
+    // vd_moonshade is a back-row archer; the Nightblade fights in the front.
+    const board = [{ ...stack('vd_moonshade', 4, 4), uid: 'archer' }]
+    const res = promote(board, 30, 'archer', tier4, ZERO_MODS, 'vd_nightblade')
+    expect(res.ok).toBe(true)
+    expect(unit(res.board[0].unitId).row).toBe('front')
+    expect(res.board[0].slot).toBeLessThan(4)
+  })
+
+  it('keeps the Banner Rank when a stack forks — the banner is the root’s', () => {
+    const honored = { ...stack('st_whelp', 30, 0), rank: 2 }
+    for (const target of ['st_drake', 'st_deepmaw']) {
+      const res = promote([honored], 30, honored.uid, tier2, ZERO_MODS, target)
+      expect(res.board[0].rank).toBe(2)
+      expect(rankDefOf(target)?.honoredName).toBe('Stormbrood')
+    }
+  })
+})
+
+/**
+ * AC3, extended to every line DN11 adds: 15 of the 18 new units are promotion
+ * targets, so the camp must never sell one at any tier.
+ */
+describe('the camp still sells roots only, across the new lines (§7.3)', () => {
+  it('offers the three new roots and none of the fifteen new forms', () => {
+    const NEW_ROOTS = ['vd_whisperseed', 'vg_apprentice', 'st_whelp']
+    const NEW_FORMS = [
+      'vd_oakfather', 'vd_oakheart', 'vd_blackthorn', 'vd_reaper', 'vd_nightblade',
+      'vg_runesmith', 'vg_runelord', 'vg_warsmith', 'vg_anvilborn', 'vg_bannerguard',
+      'st_drake', 'st_wyvern', 'st_deepmaw', 'st_alpha', 'st_windspeaker',
+    ]
+    for (const factionId of ['vanguard', 'verdant', 'stormtide'] as const) {
+      const ids = offerPool(factionId, MAX_CAMP_TIER).faction.map((u) => u.id)
+      for (const id of NEW_FORMS) expect(ids, `${id} must never be sold`).not.toContain(id)
+    }
+    expect(offerPool('verdant', 1).faction.map((u) => u.id)).toContain(NEW_ROOTS[0])
+    expect(offerPool('vanguard', 1).faction.map((u) => u.id)).toContain(NEW_ROOTS[1])
+    expect(offerPool('stormtide', 1).faction.map((u) => u.id)).toContain(NEW_ROOTS[2])
   })
 })

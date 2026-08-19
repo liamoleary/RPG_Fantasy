@@ -9,7 +9,7 @@ import {
   type BoardStack,
 } from '../engine/battle'
 import {
-  canPromote,
+  promoteOptions,
   firstOpenSlot,
   promoteCost,
   recruitPlan,
@@ -122,9 +122,11 @@ export function MusterScreen({ run }: { run: RunState }) {
   const coverOf = (stack: BoardStack): number => coverWith(stack, p.mods)
 
   const promoteStateOf = (stack: BoardStack): PromoteState => {
-    const target = canPromote(stack, p.camp)
-    if (!target) return null
-    return p.gold >= promoteCost(target, p.mods) ? 'ready' : 'soon'
+    const options = promoteOptions(stack, p.camp)
+    if (options.length === 0) return null
+    // At a fork, one affordable path is enough to light the chevron — the
+    // player is being told a promotion is available, not which one they'll take.
+    return options.some((t) => p.gold >= promoteCost(t, p.mods)) ? 'ready' : 'soon'
   }
 
   /**
@@ -365,7 +367,7 @@ export function MusterScreen({ run }: { run: RunState }) {
           onPromote={
             promo?.target
               ? () => {
-                  store.promote(inspectedStack.uid)
+                  store.promote(inspectedStack.uid, promo.target!.id)
                   setStackUid(null)
                 }
               : undefined
@@ -423,7 +425,7 @@ export function MusterScreen({ run }: { run: RunState }) {
                 className="btn btn-sm btn-gold grow"
                 disabled={!promoteTarget.ok}
                 onClick={() => {
-                  store.promote(promoteStack.uid)
+                  store.promote(promoteStack.uid, promoteTarget.target!.id)
                   setPromoteUid(null)
                 }}
               >

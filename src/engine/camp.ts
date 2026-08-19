@@ -3,6 +3,7 @@ import { MERC_UNITS, isPromotedForm, unit, unitsOfPool } from '../data/index'
 import type { FactionId, HeroMods, UnitDef } from '../data/types'
 import type { BoardStack } from './battle'
 import { FRONT_SLOTS, TOTAL_SLOTS } from './battle'
+import { LINES } from './lines'
 import { applyRankProgress, lineRootOf } from './ranks'
 import type { RNG } from './rng'
 
@@ -109,17 +110,16 @@ export function stackOfUnit(board: BoardStack[], unitId: string): BoardStack | u
 }
 
 /**
- * Where a form sits in its promotion line — 0 is the form you start with.
- * Memoised: this runs inside the rival AI's purchase loop, and rebuilding the
- * line array per call showed up against the harness's 50ms budget.
+ * How many promotions a form sits from its root — 0 is the form you buy.
+ *
+ * This was `lineIndexOf`, an index into a flat line. A forked line has no
+ * single order to index into, but depth is still exactly one number per form,
+ * and it is the number the training arithmetic below actually wants: two
+ * siblings of a fork are the same distance from the root, so a recruit trains
+ * into either at the same cost.
  */
-const LINE_INDEX = new Map<string, number>()
-export function lineIndexOf(unitId: string): number {
-  const hit = LINE_INDEX.get(unitId)
-  if (hit !== undefined) return hit
-  const idx = Math.max(0, lineOf(lineRootOf(unitId)).indexOf(unitId))
-  LINE_INDEX.set(unitId, idx)
-  return idx
+export function lineDepthOf(unitId: string): number {
+  return LINES.depthOf(unitId)
 }
 
 export interface RecruitPlan {
@@ -149,14 +149,18 @@ export function recruitPlan(board: BoardStack[], unitId: string, mods: HeroMods)
   const def = unit(unitId)
   const full = musterCount(def, mods)
   const root = lineRootOf(unitId)
-  const idx = lineIndexOf(unitId)
+  const depth = lineDepthOf(unitId)
   let best: { stack: BoardStack; steps: number } | null = null
   for (const s of board) {
     if (lineRootOf(s.unitId) !== root) continue
-    const steps = lineIndexOf(s.unitId) - idx
+    const steps = lineDepthOf(s.unitId) - depth
     if (steps < 0) continue
     // The least-advanced eligible stack loses the fewest recruits in training.
-    if (!best || steps < best.steps) best = { stack: s, steps }
+    // A fork makes ties reachable for the first time — buy a Whisperseed while
+    // fielding an Oakfather and a Blackthorn and both are one step away — so the
+    // tie breaks on slot, which is the thing the player can see and arrange,
+    // rather than on board order, which they cannot.
+    if (!best || steps < best.steps || (steps === best.steps && s.slot < best.stack.slot)) best = { stack: s, steps }
   }
   if (!best) return { target: null, added: full, stepsBehind: 0, formId: unitId }
   return {
@@ -191,19 +195,23 @@ export function mergeSameForm(board: BoardStack[], uid: string): BoardStack[] {
   return board.filter((s) => !dupes.some((d) => d.uid === s.uid)).map((s) => (s.uid === uid ? merged : s))
 }
 
+/**
+ * Can one of these forms reach the other by promoting? Two siblings of a fork
+ * share a root but answer `false` — an Oakheart stack and a Blackthorn stack
+ * came from the same seed and are no longer the same company.
+ */
 export function inSameLine(a: string, b: string): boolean {
-  if (a === b) return true
-  return lineOf(a).includes(b) || lineOf(b).includes(a)
+  return LINES.onSamePath(a, b)
 }
 
+/** Every form this one can still become, itself first. A fork returns both. */
 export function lineOf(unitId: string): string[] {
-  const out: string[] = [unitId]
-  let cur = unit(unitId)
-  while (cur.lineNext) {
-    out.push(cur.lineNext)
-    cur = unit(cur.lineNext)
-  }
-  return out
+  return LINES.subtreeOf(unitId)
+}
+
+/** The promotions actually walked to reach this form: root first, `unitId` last. */
+export function lineChainTo(unitId: string): string[] {
+  return LINES.chainTo(unitId)
 }
 
 export function musterCount(def: UnitDef, mods: HeroMods): number {
@@ -248,19 +256,48 @@ export function recruit(board: BoardStack[], gold: number, unitId: string, mods:
   return { ok: true, board: [...board, fresh], gold: gold - RECRUIT_COST }
 }
 
-export function canPromote(stack: BoardStack, camp: CampState): UnitDef | null {
-  const def = unit(stack.unitId)
-  if (!def.lineNext) return null
-  const target = unit(def.lineNext)
-  if (target.tier > camp.tier) return null
-  return target
+/**
+ * What this stack can promote into right now (DN11 §2.1) — every authored path
+ * the camp tier has opened, in authored order. Empty means the stack is at the
+ * end of its line or the camp is too low; one is an ordinary promotion; two is
+ * a fork, and the caller has to ask which.
+ *
+ * Camp tier gates each path independently, so a fork whose branches sit at
+ * different tiers offers only the one the camp has opened. This is what the
+ * button will *accept*, not what the sheet should *draw*: a Path sheet that
+ * hid the branch you cannot afford yet would be hiding the decision, so it
+ * draws both and prices the locked one (see `promoteBlock`).
+ */
+export function promoteOptions(stack: BoardStack, camp: CampState): UnitDef[] {
+  return (unit(stack.unitId).linePaths ?? []).map(unit).filter((t) => t.tier <= camp.tier)
 }
 
-export function promote(board: BoardStack[], gold: number, uid: string, camp: CampState, mods: HeroMods): RecruitResult {
+/**
+ * Promote a stack, optionally naming which path it takes.
+ *
+ * `targetId` is omitted for a straight line — one option, no question, exactly
+ * the call every caller made before DN11. At a fork it is required: promoting
+ * without saying what the stack becomes is not a thing the engine will guess,
+ * because the choice is permanent and there is no undo.
+ */
+export function promote(
+  board: BoardStack[],
+  gold: number,
+  uid: string,
+  camp: CampState,
+  mods: HeroMods,
+  targetId?: string,
+): RecruitResult {
   const stack = board.find((s) => s.uid === uid)
   if (!stack) return { ok: false, reason: 'No such stack', board, gold }
-  const target = canPromote(stack, camp)
-  if (!target) return { ok: false, reason: 'Cannot promote', board, gold }
+  const options = promoteOptions(stack, camp)
+  if (options.length === 0) return { ok: false, reason: 'Cannot promote', board, gold }
+  const target = targetId ? options.find((t) => t.id === targetId) : options.length === 1 ? options[0] : null
+  if (!target) {
+    return targetId
+      ? { ok: false, reason: 'Not a path this stack can take', board, gold }
+      : { ok: false, reason: 'Choose a path', board, gold }
+  }
   const cost = promoteCost(target, mods)
   if (gold < cost) return { ok: false, reason: 'Not enough gold', board, gold }
   let slot = stack.slot

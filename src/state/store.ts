@@ -83,7 +83,8 @@ interface Store {
   reroll: () => void
   toggleFreeze: () => void
   tierUp: () => void
-  promote: (uid: string) => void
+  /** `pathId` names the branch at a forked line (DN11 §2.1); omit on a straight one */
+  promote: (uid: string, pathId?: string) => void
   sell: (uid: string) => void
   select: (uid: string | null) => void
   place: (slot: number) => void
@@ -234,11 +235,11 @@ export const useGame = create<Store>((set, get) => ({
     set({ run: { ...run }, rankFlash: null, tally: { ...get().tally, tierCurve: [...get().tally.tierCurve, tier] } })
   },
 
-  promote: (uid) => {
+  promote: (uid, pathId) => {
     const { run } = get()
     if (!run) return
     const p = player(run)
-    const res = campPromote(p.board, p.gold, uid, p.camp, p.mods)
+    const res = campPromote(p.board, p.gold, uid, p.camp, p.mods, pathId)
     if (!res.ok) return
     p.board = res.board
     p.gold = res.gold

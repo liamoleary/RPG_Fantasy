@@ -351,9 +351,11 @@ function main() {
    * ranged ones actually get walked to the top now that they have a top, or
    * whether the line is entered and abandoned at Tier 2.
    */
-  const LINES = ALL_UNITS.filter((u) => u.lineNext && lineRootOf(u.id) === u.id).map((root) => {
+  const LINES = ALL_UNITS.filter((u) => u.linePaths?.length && lineRootOf(u.id) === u.id).map((root) => {
     const forms = lineOf(root.id)
-    return { root: root.id, forms: new Set(forms), top: forms[forms.length - 1] }
+    // A forked line has more than one end (DN11 §2), so "reached the top" is
+    // "wears any leaf form" rather than "wears the last one in the list".
+    return { root: root.id, forms: new Set(forms), tops: forms.filter((f) => (UNIT_BY_ID.get(f)?.linePaths ?? []).length === 0) }
   })
   const lineSeat = new Map<string, { held: number; top: number; topPlacementSum: number }>()
 
@@ -407,7 +409,7 @@ function main() {
           if (!held) continue
           const rec = lineSeat.get(ln.root) ?? { held: 0, top: 0, topPlacementSum: 0 }
           rec.held++
-          if (w.board.some((s) => s.unitId === ln.top)) {
+          if (w.board.some((s) => ln.tops.includes(s.unitId))) {
             rec.top++
             rec.topPlacementSum += placement
           }
@@ -678,7 +680,7 @@ function main() {
     'PROMOTION LINES        boards holding   reached the top   avg place at the top',
     LINES.map((ln) => {
       const rec = lineSeat.get(ln.root) ?? { held: 0, top: 0, topPlacementSum: 0 }
-      const topName = UNIT_BY_ID.get(ln.top)?.name ?? ln.top
+      const topName = ln.tops.map((t) => UNIT_BY_ID.get(t)?.name ?? t).join(' / ')
       const ranged = UNIT_BY_ID.get(ln.root)?.row === 'back'
       return [
         [`${ranged ? 'ranged' : 'melee '} ${topName}`.padEnd(30), ''],

@@ -9,11 +9,11 @@ import type { BoardStack } from './battle'
 import { FRONT_SLOTS } from './battle'
 import {
   RECRUIT_COST,
-  canPromote,
   firstOpenSlot,
   moveStack,
   promote,
   promoteCost,
+  promoteOptions,
   recruit,
   recruitPlan,
   rerollCost,
@@ -101,6 +101,35 @@ function rankPull(existing: BoardStack, add: number, archetype: Archetype): numb
   return 0
 }
 
+/**
+ * Which way a rival takes a fork (DN11 §2.1).
+ *
+ * A rival that always walked path A would make the harness's path-share column
+ * (§6.1) meaningless and hand the player a lobby they could memorise, so the
+ * choice runs on the same currency every other rival decision does: the unit's
+ * own tags read through the archetype's taste, plus the difficulty's scoring
+ * noise. Aggro banners grow the killer tree, walls grow the wall.
+ *
+ * The RNG is drawn from ONLY when there is an actual fork. A straight line must
+ * not consume a number, or every rival in the lobby would desync from the same
+ * seed the day the first forked line shipped — the migration has to be
+ * invisible in the harness, not just in the rules.
+ */
+function pickPath(options: UnitDef[], archetype: Archetype, noise: number, rng: RNG): UnitDef {
+  if (options.length === 1) return options[0]
+  let best = options[0]
+  let bestScore = -Infinity
+  for (const o of options) {
+    let score = o.atk * 1.1 + o.hp * 0.7 + o.tier * 1.5 + (rng.next() - 0.5) * noise
+    for (const t of o.tags ?? []) score += TAG_BONUS[archetype][t] ?? 0
+    if (score > bestScore) {
+      bestScore = score
+      best = o
+    }
+  }
+  return best
+}
+
 function boardPower(board: BoardStack[]): number {
   let p = 0
   for (const s of board) {
@@ -138,12 +167,13 @@ export function rivalMuster(input: RivalTurnInput, rng: RNG): RivalTurnOutput {
 
   // 2) Promote anything worth promoting (cheap board-wide upgrade).
   for (const stack of board.slice()) {
-    const target = canPromote(stack, camp)
-    if (!target) continue
+    const options = promoteOptions(stack, camp)
+    if (options.length === 0) continue
+    const target = pickPath(options, archetype, noise, rng)
     const cost = promoteCost(target, mods)
     if (gold < cost + (archetype === 'aggro' ? 0 : 3)) continue
     if (stack.count < 2 && target.tier < 4) continue
-    const res = promote(board, gold, stack.uid, camp, mods)
+    const res = promote(board, gold, stack.uid, camp, mods, target.id)
     if (res.ok) {
       board = res.board
       gold = res.gold

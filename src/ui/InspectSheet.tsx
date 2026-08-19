@@ -9,20 +9,30 @@ import { UNIT_ART } from '../data/art'
 import { unit } from '../data/index'
 import { ZERO_MODS, type HeroMods, type UnitDef } from '../data/types'
 import type { StatBreakdown } from '../engine/battle'
-import { lineOf, promoteCost } from '../engine/camp'
+import { lineChainTo, lineOf, promoteCost } from '../engine/camp'
 import { RANK_NAMES, lineRootOf, rankDefOf, rankForCount, thresholdsOf, veteranText } from '../engine/ranks'
 import { Plate } from './Plate'
 import { Sigil } from './Sigil'
 import { keywordName, keywordText } from './keywords'
 import { ApexMeter, RankPips, rowGlyph, rowWord, unitColor } from './StackCard'
 
+/**
+ * The forms to draw on this unit's line ladder: the promotions actually walked
+ * to reach it, then everything still ahead of it. On a straight line that is
+ * the whole line, exactly as before. At a fork it is the branch you took plus
+ * both ways down from where you stand — never a sibling branch you already
+ * turned away from, because that form is no longer something this stack can be.
+ */
 export function lineFormsOf(unitId: string): UnitDef[] {
-  return lineOf(lineRootOf(unitId)).map(unit)
+  const walked = lineChainTo(unitId).slice(0, -1)
+  return [...walked, ...lineOf(unitId)].map(unit)
 }
 
 export interface PromoteBlock {
-  /** the next form, if this unit has one at all */
+  /** the form this promotion produces — at a fork, the one being asked about */
   target: UnitDef | null
+  /** every path authored on this form, tier-gated or not (DN11 §2.1) */
+  targets: UnitDef[]
   ok: boolean
   cost: number | null
   reason?: string
@@ -32,17 +42,27 @@ export interface PromoteBlock {
  * Why you can or cannot promote, in one place. Returning a reason rather than
  * `null` is the point: a promotion that silently vanishes from the sheet reads
  * as a bug, not a requirement.
+ *
+ * `pathId` names which branch of a fork is being priced. Left off, the block
+ * describes the first authored path — which for a straight line is the only
+ * one, so every existing caller reads exactly what it read before.
  */
-export function promoteBlock(unitId: string, campTier: number, gold: number, mods: HeroMods): PromoteBlock {
-  const def = unit(unitId)
-  if (!def.lineNext) return { target: null, ok: false, cost: null }
-  const target = unit(def.lineNext)
+export function promoteBlock(
+  unitId: string,
+  campTier: number,
+  gold: number,
+  mods: HeroMods,
+  pathId?: string,
+): PromoteBlock {
+  const targets = (unit(unitId).linePaths ?? []).map(unit)
+  const target = (pathId ? targets.find((t) => t.id === pathId) : targets[0]) ?? null
+  if (!target) return { target: null, targets, ok: false, cost: null }
   const cost = promoteCost(target, mods)
   if (target.tier > campTier) {
-    return { target, ok: false, cost, reason: `Needs Camp Tier ${target.tier} — you are on Tier ${campTier}.` }
+    return { target, targets, ok: false, cost, reason: `Needs Camp Tier ${target.tier} — you are on Tier ${campTier}.` }
   }
-  if (gold < cost) return { target, ok: false, cost, reason: `Costs ${cost}g — you have ${gold}.` }
-  return { target, ok: true, cost }
+  if (gold < cost) return { target, targets, ok: false, cost, reason: `Costs ${cost}g — you have ${gold}.` }
+  return { target, targets, ok: true, cost }
 }
 
 export interface StackContext {

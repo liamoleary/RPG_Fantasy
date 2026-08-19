@@ -149,7 +149,15 @@ export interface UnitDef {
   row: RowPref
   keywords: Keyword[]
   ability?: Ability
-  lineNext?: string
+  /**
+   * What this form can promote into (DN11 §2). One entry is a straight line and
+   * behaves exactly as the old `lineNext` did; two open the Path choice sheet,
+   * and the stack becomes whichever the player picked — permanently, for that
+   * stack. The promotion graph is a TREE: every form has at most one parent, so
+   * no two paths may name the same target and no path may loop back. Both are
+   * enforced at load in `engine/lines.ts` rather than trusted.
+   */
+  linePaths?: string[]
   /** Banner Rank rewards, defined on the LINE ROOT only — every later form
    *  inherits them, so a promoted Footman still fights as Militia veterans. */
   rank?: RankDef

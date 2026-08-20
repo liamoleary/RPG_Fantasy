@@ -8,50 +8,14 @@ when the trigger fires — an entry with no failing test is a note, not a TODO.
 economy — was discharged by removal: DN10 deleted the War Tier ladder
 entirely, along with `tests/tiers.test.ts` that guarded it.)*
 
-## DN12 commit 1 never landed: ten stale plates and two stale names
-
-**Status:** open. The DN12 branch shipped commits 2–9 and skipped commit 1,
-which was the art pass. Everything below is still true on `main`.
-
-**The ten swaps.** `Bannerfell_Art/_drop_r3/units/` holds approved replacement
-plates for ten units that already had one, and none of them were copied:
-
-`vg_militia` · `vg_crossbow` · `vg_footman` · `vg_arbalest` · `vg_cleric` ·
-`vg_champion` · `vg_bannerguard` · `vg_ballistier` · `vg_shieldmaiden` ·
-`vg_colossus`
-
-The six NEW units' plates did land, with their units, so the manifest is whole
-and `tests/art.test.ts` is green — it checks that every unit has a plate and
-every plate exists, which is true. It cannot tell an old plate from a new one.
-That is why this entry exists rather than a red test.
-
-DN12 §3.1 is the one that stings: the new Champion plate is what fixes the
-Cleric/Champion twin problem ("the Champion is now a closed helm and a
-longsword, the Cleric a kneeling medic"). On `main` today they still read as
-each other.
-
-**The two renames.** §7.1 also carried two display-name changes that were never
-made. The ids are correct and must not move; only the `name` strings are wrong:
-
-  `vg_shieldmaiden`  "Shieldmaiden"      → "Shield Bearer"
-  `vg_colossus`      "Mountain Colossus" → "Quarry Titan"
-
-Every DN12 comment, test and commit message already calls it the Quarry Titan,
-so the code and the game currently disagree out loud.
-
-**The check that fails** (there is no vitest for it, and adding one would need
-the art drop on CI, which it does not have):
-
-    for f in vg_militia vg_crossbow vg_footman vg_arbalest vg_cleric              vg_champion vg_bannerguard vg_ballistier vg_shieldmaiden vg_colossus; do
-      a=$(sha256sum < "$DROP/$f.webp"); b=$(sha256sum < public/art/units/$f.webp)
-      [ "$a" = "$b" ] || echo "STALE $f"
-    done
-
-All ten report STALE today. Plus: `unit('vg_colossus').name === 'Quarry Titan'`
-is false, and so is the Shield Bearer equivalent.
-
-**Do not** re-encode or regenerate anything to fix this — the plates are final
-and shipping-size, and the work is a byte-for-byte copy plus two string edits.
+*(The former entry here — DN12 commit 1's ten stale plates and two stale display
+names — was discharged by doing it: all ten plates are now byte-identical to
+`_drop_r3/units/`, and `vg_shieldmaiden` / `vg_colossus` read "Shield Bearer"
+and "Quarry Titan". The ids did not move. The gap it described is real for any
+future art round, though, and worth remembering: `tests/art.test.ts` proves a
+plate EXISTS, never that it is the current one, and CI has no art drop to
+compare against — so a stale plate is caught by nothing but a person looking at
+it.)*
 
 ## DN12 commit 10 never landed: the balance pass
 
@@ -422,9 +386,9 @@ re-tiering something already sellable, and that is a data decision rather than
 a dial.
 
 **The number that fails:** `npm run sim` → `UNIT WIN-DELTA … Runelord of the
-Deep Halls`, `… Sunlance Ballistier` and `… Mountain Colossus` above +8%.
+Deep Halls`, `… Sunlance Ballistier` and `… Quarry Titan` above +8%.
 
-The Colossus joined that list in commit 3, +8.0% → +8.9% (n 6776), when The
+The Quarry Titan joined that list in commit 3, +8.0% → +8.9% (n 6776), when The
 Bulwark gained its Deflect charge — a stronger mid-form hands the capstone more
 boards in better shape. Vanguard drifted 4.34 → 4.29 in the same commit, still
 inside 4.2–4.8. Both are the camp hole showing through a second time: the line

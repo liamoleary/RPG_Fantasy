@@ -66,10 +66,16 @@ const titanLine = () => ({
   ],
   hero: hero('h_sylvaen'),
 })
-/** The same board with the Titan swapped for a body that does not taunt. */
+/**
+ * The same board with the Titan swapped for a body that does not taunt.
+ * Deliberately a plain Footman rather than another T4: the Anvilborn used to
+ * stand here and stopped being inert the moment DN12 §3.6 gave it a leap into
+ * the back row, which quietly ended the battle before the control could show
+ * anything. A control has to do nothing except stand there.
+ */
 const controlLine = () => ({
   board: [
-    stack('vg_anvilborn', 3, 0, 'd'),
+    stack('vg_footman', 30, 0, 'd'),
     stack('vg_shieldmaiden', 6, 1, 'd'),
     stack('vg_crossbow', 6, 4, 'd'),
     stack('vg_mule', 4, 5, 'd'),

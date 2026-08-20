@@ -40,6 +40,16 @@ export type KeywordId =
    * `chooseTarget`, which is the single place it is applied.
    */
   | 'taunt'
+  /**
+   * DN12 §3.6. While this stack lives, its whole front rank intercepts:
+   * anything aimed past the front row is taken by a front-row stack instead,
+   * so the back row cannot be reached at all. A keyword granted BY one unit TO
+   * a rank, the way `guard` is a keyword on one unit that arms its neighbour.
+   *
+   * Unlike Cover this costs no charges and is not limited to the two slots
+   * above the target — and unlike Cover, Siege does not ignore it.
+   */
+  | 'intercept'
   | 'charge'
   | 'volley'
   | 'siege'
@@ -121,6 +131,13 @@ export type AbilityEffect =
    * arc is fixed the moment the first target is chosen.
    */
   | { type: 'bounceAttack'; frac: number; passes: number }
+  /**
+   * DN12 §3.6, the Anvilborn. Leaps the front line and strikes EVERY enemy
+   * back-row stack for `frac` of this stack's swing. Under `onAttack`, so the
+   * ordinary blow still lands on the front rank first — a second targeting
+   * override fighting Taunt and the rune-wall was not worth the reach.
+   */
+  | { type: 'strikeEnemyBackRow'; frac: number }
 
 export interface Ability {
   trigger: AbilityTrigger

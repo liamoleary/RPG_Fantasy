@@ -136,6 +136,8 @@ export type BattleEvent =
   | { t: 'deflect'; uid: string; left: number; snap: StackSnap[] }
   /** Raise (DN12 §4.2): `by` hauls the wiped `uid` back up at 1 unit. */
   | { t: 'raise'; uid: string; by: string; left: number; snap: StackSnap[] }
+  /** Intercept (DN12 §3.6): the rune-wall put `by` in front of `saved`. */
+  | { t: 'intercept'; src: string; saved: string; by: string; snap: StackSnap[] }
   /** Reflect (DN12 §4.3): `uid`'s full shield sent the blow back at `dst`. */
   | { t: 'reflect'; uid: string; dst: string; dmg: number; absorbed: number; killed: number; snap: StackSnap[] }
   /** Bounce (DN12 §4.4): one ricochet of a thrown shield. `hop` counts from 1
@@ -253,6 +255,9 @@ interface RStack {
   reflectMax: number
   /** Taunt (DN12 §4.5): every enemy attack must be aimed at this stack. */
   taunt: boolean
+  /** Intercept (DN12 §3.6): while this stack lives, its front rank takes
+   *  anything aimed past it. Granted to the rank, not carried by it. */
+  grantsIntercept: boolean
   /** the ultimate this stack charges toward, if its form has one (§3) */
   apex: ApexDef | null
   apexCharge: number
@@ -488,6 +493,7 @@ function buildStack(bs: BoardStack, side: Side, hero: HeroState, heroDef: HeroDe
     reflectCharge: 0,
     reflectMax: (kw(def, 'reflect') ?? 0) + extraKw('reflect'),
     taunt: has('taunt'),
+    grantsIntercept: has('intercept'),
   }
 }
 
@@ -649,12 +655,23 @@ function taunterAgainst(ctx: Ctx, attacker: RStack): RStack | undefined {
  * pulled onto the taunter instead never happened, so no charge may be spent
  * for it.
  *
- * Precedence: Taunt > Siege > Cover > mirrored column > random front.
+ * Precedence: Taunt > the rune-wall (§3.6) > Siege > Cover > mirrored column
+ * > random front. The wall sits above Cover on purpose: both pull a blow off
+ * the back row, and the free one answering first means a Runelord's line never
+ * spends a Cover charge — banked, exactly as a Taunt line banks them.
  */
 function chooseTarget(ctx: Ctx, attacker: RStack): RStack | undefined {
   const foes = enemiesOf(ctx, attacker)
   if (foes.length === 0) return undefined
   const taunt = taunterAgainst(ctx, attacker)
+
+  /** The rune-wall steps in, and says so, or the blow goes where it was aimed. */
+  const past = (aimed: RStack): RStack => {
+    const wall = frontRankFor(ctx, aimed)
+    if (!wall || wall.uid === aimed.uid) return aimed
+    ctx.events.push({ t: 'intercept', src: attacker.uid, saved: aimed.uid, by: wall.uid, snap: snaps(aimed, wall) })
+    return wall
+  }
 
   if (attacker.siege) {
     let best = foes[0]
@@ -662,11 +679,17 @@ function chooseTarget(ctx: Ctx, attacker: RStack): RStack | undefined {
     // Taunt beats Siege. Siege ignores ARMOUR, which is a different thing from
     // ignoring the stack bellowing at it — and in practice the taunter is
     // usually the best-armoured target anyway, so this rarely changes a blow.
-    if (best.bulwark > 0) return taunt ?? best
+    // The wall beats it too: Siege ignores Cover, but §3.6's promise that the
+    // back row cannot be reached is unqualified, and a gunner walking through
+    // it would leave the Runelord paying for something he does not have.
+    if (best.bulwark > 0) return taunt ?? past(best)
   }
   if (attacker.volley) {
     const picked = ctx.rng.pick(foes)
     if (taunt) return taunt
+    // Before Cover, so a blow the wall already turned never spends a charge.
+    const walled = past(picked)
+    if (walled.uid !== picked.uid) return walled
     // Cover (§2.1): a volley into a covered back-row stack is taken by the
     // front-row unit standing over it. Siege ignores Cover unconditionally —
     // a Siege unit reaches this branch whenever no Bulwark target exists, so
@@ -726,6 +749,43 @@ function interceptorFor(ctx: Ctx, target: RStack): RStack | undefined {
     return best
   }
   return undefined
+}
+
+/**
+ * The rune-wall (DN12 §3.6). While a stack carrying `intercept` lives, its
+ * whole front rank stands in front of the back row: anything aimed past the
+ * front row is taken by a front-row stack instead.
+ *
+ * Returns the stack that steps in, or undefined when the target is not behind
+ * a wall. Preference is the front-row stack standing OVER the target — the
+ * same slot geometry Cover uses, so the blow lands where a player would expect
+ * it to — and failing that the lowest-slot front stack, because §3.6's promise
+ * ("the back row cannot be reached while a front rank stands") is absolute and
+ * must not fall through a gap in the line. No randomness either way.
+ *
+ * Three deliberate differences from Cover, all of them in the Glossary copy:
+ * it costs no charges, it is not limited to the two slots above the target,
+ * and Siege does not ignore it. Siege ignores ARMOUR and it ignores a shield
+ * raised on a charge; a wall of runes is neither.
+ */
+function frontRankFor(ctx: Ctx, target: RStack): RStack | undefined {
+  if (target.row === 'front' || target.slot < FRONT_SLOTS) return undefined
+  const side = target.side
+  let granted = false
+  for (const s of ctx.stacks) {
+    if (s.side === side && s.alive && s.grantsIntercept) { granted = true; break }
+  }
+  if (!granted) return undefined
+
+  const [a, b] = coveringSlotsFor(target.slot)
+  let over: RStack | undefined
+  let lowest: RStack | undefined
+  for (const s of ctx.stacks) {
+    if (s.side !== side || !s.alive || s.row !== 'front') continue
+    if (!lowest || s.slot < lowest.slot) lowest = s
+    if ((s.slot === a || s.slot === b) && (!over || s.slot < over.slot)) over = s
+  }
+  return over ?? lowest
 }
 
 function adjacentAlly(ctx: Ctx, s: RStack): RStack | undefined {
@@ -945,6 +1005,44 @@ function applyAbilityEffect(ctx: Ctx, s: RStack, e: AbilityEffect, against?: RSt
         // latched on and silently disable every counter for the rest of the
         // battle — a failure that would look like a balance change.
         ctx.counterDepth -= 1
+      }
+      break
+    }
+    case 'strikeEnemyBackRow': {
+      /**
+       * The Anvilborn leaps the line (DN12 §3.6). Every enemy back-row stack
+       * takes `frac` of this stack's swing, in ascending slot order, with no
+       * roll of any kind.
+       *
+       * Note what this does NOT go through: `chooseTarget`. So the leap is not
+       * pulled onto a Taunt, and — deliberately — it is not stopped by the
+       * Runelord's rune-wall either. The two ends of the Forgeline answer each
+       * other: one makes the back row unreachable, the other goes over the top
+       * of it. That is the fork having an argument, and it is the reason the
+       * effect enumerates the row itself rather than aiming at it.
+       */
+      if (!s.alive) break
+      const raw = Math.floor(s.atk * s.count * e.frac)
+      if (raw <= 0) break
+      const back = enemiesOf(ctx, s)
+        .filter((f) => f.row !== 'front' && f.slot >= FRONT_SLOTS)
+        .sort((p, q) => p.slot - q.slot)
+      for (const t of back) {
+        if (!t.alive) continue
+        const r = applyDamage(ctx, t, raw)
+        ctx.events.push({
+          t: 'attack',
+          src: s.uid,
+          dst: t.uid,
+          side: s.side,
+          dmg: r.dealt,
+          absorbed: r.absorbed,
+          killed: r.killed,
+          retaliation: false,
+          snap: snaps(s, t),
+        })
+        if (r.died) onDeath(ctx, t)
+        else onCasualties(ctx, t, r.killed)
       }
       break
     }

@@ -27,6 +27,12 @@ const ENTRIES: Record<KeywordId, Entry> = {
     generic:
       'X times each battle, a friendly stack that has been wiped out is brought back onto the field at 1 unit. This is not Marshal Yseult’s Last Stand: hers keeps a stack from ever falling, this one answers after it already has. A warband can carry both, and they do not overlap.',
   },
+  intercept: {
+    name: 'Intercept',
+    detail: () => 'while this stack lives, your whole front rank takes anything aimed past it',
+    generic:
+      'While this stack lives, your whole front rank stands in front of the back row: any attack aimed past the front row is taken by a front-row stack instead, so the back row cannot be reached at all. Unlike Cover it costs no charges, it is not limited to the two slots above the target, and Siege does NOT ignore it. A stack that leaps the line rather than aiming past it still gets through.',
+  },
   taunt: {
     name: 'Taunt',
     detail: () => 'while this stack stands, every enemy attack must be aimed at it',

@@ -55,12 +55,32 @@ entry below has been circling since DN11 — "two rounds of cuts barely moved it
 — stated as a mechanism rather than a suspicion, and now with a controlled case
 where the only change was one stat on one unit.
 
-**What it means for §7.10.** The balance pass is asked to bring the Champion and
-the Runelord "back under the ±8% flag". On this evidence that is not reachable
-by tuning: every cut shrinks n and pushes the delta up. Either the pass changes
-what the metric measures (weight by board, or report the delta against boards
-that were *offered* the unit rather than boards that took it), or the acceptance
-criterion changes. Cutting harder is the one thing that is now known not to work.
+**Refined by commit 8: the artefact bites at FORKS, not at straight lines.**
+
+Commit 8 cut the Runelord hard — it took away a board-wide +2 Bulwark to all
+allies AND his own Guard, replacing both with a conditional wall. The delta
+went **DOWN**, +31.4% → +28.4% and +31.2% → +24.3%, and crucially **n barely
+moved**: 378 → 374 and 361 → 356.
+
+That is the opposite of what happened to the Champion, and the difference is
+structural rather than lucky. The Champion is one branch of the Footman FORK,
+so nerfing it moved boards onto the Bannerguard and the sample collapsed. The
+Runelord is the top of a STRAIGHT line — `vg_runesmith` has exactly one path —
+so a warlord who took the Runesmith branch gets the Runelord whatever it costs.
+There is no choice for the nerf to leak into, the population stays put, and the
+metric measures power again.
+
+So the rule is sharper than "the metric is broken":
+
+  - **Fork branches** (Champion, and the Ballistier's line since commit 2)
+    report selection. Cutting them raises the number.
+  - **Straight-line tops** (Runelord) report power. Cutting them works.
+
+**What it means for §7.10.** The Runelord CAN be tuned to target and commit 8
+already moved it seven points on one seed. The Champion cannot, and no amount
+of cutting will fix its number while it sits on a fork — that one needs the
+metric changed (weight by board, or measure against boards that were *offered*
+the unit rather than boards that took it) or the acceptance criterion relaxed.
 
 **The number that fails:** `npm run sim` → `UNIT WIN-DELTA … Sunforged Champion`
 and `… Runelord of the Deep Halls`, both far above +8% and both rising as their
@@ -127,6 +147,29 @@ Titan soaks blows its line would have taken, and it was already the thing most
 attacks reached. Worth knowing before §7.10 tries to pay for Taunt with a stat
 cut it does not need.
 
+## The Anvilborn's leap is newly flagged (DN12 commit 8)
+
+**Status:** open. Second real power reading on the branch, after the Aegis
+Warden — and like that one it has the sample to be trusted.
+
+The back-row leap (§3.6) reads **+9.9% (n 3512)** and **+9.0% (n 3486)**, seeds
+12345 / 999, having been comfortably inside the flag before commit 8. n ~3500
+is the largest sample of any flagged unit here, so this is power, not selection
+— and the Anvilborn is a fork branch, where the artefact would if anything push
+the number the other way.
+
+**Why it is strong.** It rides on `onAttack`, so the ordinary blow lands on the
+front rank and the leap comes on top: against a full back row that is one
+attack doing four stacks' worth of damage. The lever is `frac`, currently 0.5,
+and it is linear.
+
+**Not cut in commit 8** — §7.10 owns balance, and it landed at 9% rather than
+19%, so it is a tuning job rather than an emergency. `frac: 0.4` is the obvious
+first try.
+
+**The number that fails:** `npm run sim` → `UNIT WIN-DELTA … Anvilborn
+Juggernaut` above +8%.
+
 ## Runelord win-delta: read before acting (DN11)
 
 **Status:** open, deliberately not acted on. The Runelord of the Deep Halls
@@ -161,6 +204,7 @@ was checked before being cut into a third time.
 > | 5 bloodlust + cut | +30.5% n170 | +27.5% n386 | +13.3% n908 | +7.9% | 4.32 |
 > | 6 aegis fork | +29.4% n167 | +28.7% n378 | +13.3% n905 | +8.0% | 4.32 |
 > | 7 taunt | +30.0% n169 | +31.4% n378 | +14.5% n902 | +8.3% | 4.32 |
+> | 8 forgeline | +31.3% n168 | **+28.4% n374** | +14.8% n902 | +8.9% | 4.29 |
 >
 > Commit 4 gave the Champion's fork twin a heal and a Raise and the Champion
 > went UP, +17.8% → +20.0%, while its sample fell 729 → 672. A third instance

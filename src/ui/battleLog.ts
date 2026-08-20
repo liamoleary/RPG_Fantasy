@@ -75,6 +75,12 @@ export function describe(e: BattleEvent, playerIsA: boolean): string {
       const name = (uid: string, fallback: string) => nameOf(e.snap.find((x) => x.uid === uid), fallback)
       return `${name(e.by, 'The front line')} covers ${name(e.saved, 'the back line')} — volley intercepted.`
     }
+    case 'intercept': {
+      const name = (uid: string, fallback: string) => nameOf(e.snap.find((x) => x.uid === uid), fallback)
+      // "steps in front of" — a wall standing there, not a charge being spent,
+      // which is the whole difference from the Cover line above.
+      return `${name(e.by, 'The front rank')} steps in front of ${name(e.saved, 'the back line')} — the runes hold.`
+    }
     case 'reflect': {
       const name = (uid: string, fallback: string) => nameOf(e.snap.find((x) => x.uid === uid), fallback)
       // "turned back on" — the blow travelled, which is the whole difference

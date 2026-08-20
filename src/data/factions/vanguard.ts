@@ -519,22 +519,21 @@ export const VANGUARD_UNITS: UnitDef[] = [
     init: 3,
     musterSize: 1,
     row: 'back',
-    keywords: [{ k: 'guard', x: 1 }],
-    // Balance (interim), second cut: halving the Runesmith's grant only took
-    // the Runelord from +21.5% to +19.2%, because the Runelord's OWN grant was
-    // the rest of it — a T4 handing the whole board +2 when both T5 capstones
-    // in the game hand it +1. All three Forgeline grants now read +1.
+    // DN12 §3.6. The whole front rank intercepts while he lives, so the back
+    // row cannot be reached at all.
     //
-    // That flattens the line's progression, and it is meant to be temporary:
-    // DN11 §2.2 only ever made the Runelord's grant board-wide. When the
-    // single-ally Bulwark effect lands with the other riders, the Apprentice
-    // and Runesmith go back to one target and the Runelord takes +2 again —
-    // progression restored, stacking gone.
-    ability: {
-      trigger: 'battleStart',
-      effect: { type: 'alliesBulwark', x: 2 },
-      text: 'Battle start: +2 Bulwark to all allies',
-    },
+    // §6 decides this REPLACES the battle-start +2 Bulwark to all allies
+    // rather than stacking with it, and §3.6 has him "grant the front row
+    // Guard rather than carrying Guard himself" — so his own Guard 1 comes off
+    // too. Both the ability and the keyword are gone; the wall is what he is
+    // now. That is meant to be roughly cost-neutral on a unit TODO.md has
+    // flagged at the top of the game, not a quiet buff.
+    //
+    // The two interim balance comments this replaces are discharged with it:
+    // the Apprentice and the Runesmith keep their single-target grants, and
+    // the board-wide one the Runelord used to add on top no longer exists, so
+    // nothing in the line stacks Bulwark on everything any more.
+    keywords: [{ k: 'intercept' }],
     sigil: 'wall',
     tags: ['elite', 'support', 'bulwark'],
   },
@@ -562,6 +561,17 @@ export const VANGUARD_UNITS: UnitDef[] = [
     tags: ['wall', 'bulwark'],
   },
   {
+    // DN12 §3.6: a hammer in each hand, over the line and into the back row.
+    //
+    // The note says to reuse `strikeEnemyBackRow` from DN11 — it does not
+    // exist, and never did, so it is written here. It rides on `onAttack`, so
+    // his ordinary blow still lands on the front rank and the leap comes on
+    // top: a second targeting override would have had to fight both Taunt and
+    // his own line's rune-wall, and the reach is not worth that.
+    //
+    // The leap is deliberately not stopped by the Runelord's wall. One end of
+    // this fork makes the back row unreachable and the other goes over it,
+    // which is the two branches arguing rather than an oversight.
     id: 'vg_anvilborn',
     name: 'Anvilborn Juggernaut',
     pool: 'vanguard',
@@ -572,6 +582,11 @@ export const VANGUARD_UNITS: UnitDef[] = [
     musterSize: 1,
     row: 'front',
     keywords: [{ k: 'bulwark', x: 3 }, { k: 'cleave' }],
+    ability: {
+      trigger: 'onAttack',
+      effect: { type: 'strikeEnemyBackRow', frac: 0.5 },
+      text: 'Leaps the line: every enemy back-row stack takes half this stack’s power',
+    },
     sigil: 'colossus',
     tags: ['elite', 'wall', 'bulwark'],
   },

@@ -7,6 +7,14 @@ export type RowPref = Row | 'any'
 
 export type KeywordId =
   | 'bulwark'
+  /**
+   * DN12 §4.6. Negates the first x incoming blows of the battle OUTRIGHT, then
+   * is spent. Deliberately a separate keyword from `bulwark` rather than a
+   * magnitude on it: Bulwark is a slice off every hit that wears down by 1,
+   * this is one whole hit that never lands. Sharing a name would make the two
+   * unreadable on the same card.
+   */
+  | 'deflect'
   | 'charge'
   | 'volley'
   | 'siege'

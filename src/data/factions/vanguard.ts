@@ -310,10 +310,12 @@ export const VANGUARD_UNITS: UnitDef[] = [
     tags: ['wall', 'bulwark', 'line'],
   },
   {
-    // DN12 §3.5's deflect — "the first attack against it each battle is negated
-    // outright" — is a primitive the engine does not have yet, and it lands in
-    // its own commit. This form ships with its body only, the way the DN11
-    // riders did: the stats are the whole unit until the keyword exists.
+    // The unit the Deflect keyword was written for (DN12 §3.5/§4.6). It carries
+    // both halves of the distinction at once — Bulwark 2 shaving every blow all
+    // battle, and one Deflect that cancels a single blow whole — which is
+    // exactly why the Glossary sets the two side by side. Naming the unit "The
+    // Bulwark" while its signature trick is the OTHER thing is the trap; the
+    // copy does the work, since the name is fixed by the note.
     id: 'vg_bulwark',
     name: 'The Bulwark',
     pool: 'vanguard',
@@ -323,7 +325,7 @@ export const VANGUARD_UNITS: UnitDef[] = [
     init: 2,
     musterSize: 2,
     row: 'front',
-    keywords: [{ k: 'bulwark', x: 2 }, { k: 'cover', x: 1 }],
+    keywords: [{ k: 'bulwark', x: 2 }, { k: 'deflect', x: 1 }, { k: 'cover', x: 1 }],
     linePaths: ['vg_colossus'],
     sigil: 'colossus',
     tags: ['wall', 'bulwark'],

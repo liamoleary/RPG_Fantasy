@@ -112,7 +112,13 @@ re-tiering something already sellable, and that is a data decision rather than
 a dial.
 
 **The number that fails:** `npm run sim` → `UNIT WIN-DELTA … Runelord of the
-Deep Halls` and `… Sunlance Ballistier` above +8%.
+Deep Halls`, `… Sunlance Ballistier` and `… Mountain Colossus` above +8%.
+
+The Colossus joined that list in commit 3, +8.0% → +8.9% (n 6776), when The
+Bulwark gained its Deflect charge — a stronger mid-form hands the capstone more
+boards in better shape. Vanguard drifted 4.34 → 4.29 in the same commit, still
+inside 4.2–4.8. Both are the camp hole showing through a second time: the line
+is the only door to the Colossus now, so everyone who has one walked it.
 
 ## Honored edge rides slightly hot
 

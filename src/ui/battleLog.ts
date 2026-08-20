@@ -75,6 +75,12 @@ export function describe(e: BattleEvent, playerIsA: boolean): string {
       const name = (uid: string, fallback: string) => nameOf(e.snap.find((x) => x.uid === uid), fallback)
       return `${name(e.by, 'The front line')} covers ${name(e.saved, 'the back line')} — volley intercepted.`
     }
+    case 'deflect': {
+      const who = nameOf(e.snap.find((x) => x.uid === e.uid), 'The stack')
+      // Says "turned aside", never "absorbed" or "soaked" — those words belong
+      // to Bulwark, and the whole point of the keyword is that it is not that.
+      return `${who} turns the blow aside completely${e.left > 0 ? ` — ${e.left} left.` : ' — its last.'}`
+    }
     case 'heal':
       return 'Healed.'
     case 'cleave':

@@ -25,7 +25,7 @@ export const SYMBOL_GLOSSARY: SymbolGroup[] = [
       { mark: '12', cls: 'g-count', name: 'Count badge', text: 'How many individuals are in the stack. A stack swings for its ATK times this number, so count is damage.' },
       { mark: '2', cls: 'g-atk', name: 'ATK', text: "One unit's attack. The orange number. Total damage a swing is ATK x count." },
       { mark: '5', cls: 'g-hp', name: 'HP', text: "One unit's health. The green number. The stack's pooled health is HP x count." },
-      { mark: '◈4', cls: 'g-bul', name: 'Bulwark chip', text: 'Armour currently on the stack. Shows only when the stack has some. See Bulwark below.' },
+      { mark: '◈4', cls: 'g-bul', name: 'Bulwark chip', text: 'Armour currently on the stack. Shows only when the stack has some. It shaves every incoming hit and wears down slowly — it is not Deflect, which cancels one hit outright. See both below.' },
       { mark: 'T3', cls: 'g-dim', name: 'Tier pip', text: 'Which Camp Tier unlocks this unit. Raise your Camp Tier to see higher tiers in the offer.' },
       { mark: '+4 · 3g', cls: 'g-gold', name: 'Recruit button', text: 'Every purchase costs 3 gold and adds this many units to the stack. Tap the card itself to read it first — that never spends gold.' },
     ],
@@ -45,6 +45,19 @@ export const SYMBOL_GLOSSARY: SymbolGroup[] = [
       { mark: '▲', cls: 'g-promote-soon', name: 'Promotion waiting', text: 'This stack is eligible to promote but you are short on gold, or your Camp Tier is too low for the next form. Tap it to see which.' },
       { mark: '›', cls: 'g-vet', name: 'Veteran', text: 'Banner Rank 1. The stack grew past its first size threshold and earned a permanent stat bonus.' },
       { mark: '››', cls: 'g-hon', name: 'Honored', text: 'Banner Rank 2. The stack earned its milestone skill — the big one. Ranks are permanent and survive promotion.' },
+    ],
+  },
+  {
+    /**
+     * DN12 §3.5 asks for this by name: The Bulwark eats one whole attack, and
+     * without somewhere to say so out loud players read that as the Bulwark
+     * keyword and expect it to keep working. The two are set side by side here
+     * rather than explained apart, because the confusion is between them.
+     */
+    group: 'Armour and shields',
+    entries: [
+      { mark: '◈', cls: 'g-bul', name: 'Bulwark (armour)', text: 'Takes a slice off EVERY incoming attack — X per surviving unit — and wears down by 1 each time. It lasts the whole battle and protects against many hits, a little each.' },
+      { mark: '✦', cls: 'g-bul', name: 'Deflect (a raised shield)', text: 'Cancels ONE whole attack — no damage, no Venom, no armour spent — and is then gone for the battle. It protects against one hit, completely. A Siege unit ignores Bulwark but is still deflected.' },
     ],
   },
   {

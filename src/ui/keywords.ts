@@ -17,7 +17,15 @@ const ENTRIES: Record<KeywordId, Entry> = {
   bulwark: {
     name: 'Bulwark',
     detail: (x) => `absorbs ${x} damage per unit from each attack, then weakens by 1`,
-    generic: 'Armour. Absorbs X damage per surviving unit from every incoming attack, then weakens by 1.',
+    generic:
+      'Armour. Absorbs X damage per surviving unit from every incoming attack, then weakens by 1. It takes a slice off every blow and lasts all battle — where Deflect stops one blow completely and is then spent.',
+  },
+  deflect: {
+    name: 'Deflect',
+    detail: (x) =>
+      `the first ${x === 1 ? 'attack' : `${x} attacks`} against this stack each battle ${x === 1 ? 'is' : 'are'} stopped completely`,
+    generic:
+      'The first X attacks against this stack each battle are stopped completely — no damage, no Venom, no armour spent. This is not Bulwark: Bulwark shaves every hit for the whole battle, Deflect cancels one hit outright and is then gone. Siege ignores Bulwark but not Deflect. Venom already coursing through the stack is a condition, not an attack, and is not deflected.',
   },
   charge: {
     name: 'Charge',

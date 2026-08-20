@@ -110,6 +110,8 @@ export type BattleEvent =
   | { t: 'cleave'; src: string; dst: string; dmg: number; killed: number; snap: StackSnap[] }
   | { t: 'venom'; uid: string; units: number; snap: StackSnap[] }
   | { t: 'cover'; src: string; saved: string; by: string; left: number; snap: StackSnap[] }
+  /** Deflect (DN12 §4.6): a blow negated whole. `left` is what remains after. */
+  | { t: 'deflect'; uid: string; left: number; snap: StackSnap[] }
   /** `src` is the stack that cast it, when a stack cast it (Design Notes 04 §10) */
   | { t: 'buff'; uids: string[]; text: string; src?: string; snap: StackSnap[] }
   | { t: 'heal'; uid: string; amount: number; revived: number; src?: string; snap: StackSnap[] }
@@ -209,6 +211,8 @@ interface RStack {
   splitNext: number
   /** Cover charges left this battle (front row only) */
   coverLeft: number
+  /** Deflect charges left this battle (DN12 §4.6) — any row, unlike Cover */
+  deflectLeft: number
   /** the ultimate this stack charges toward, if its form has one (§3) */
   apex: ApexDef | null
   apexCharge: number
@@ -411,6 +415,9 @@ function buildStack(bs: BoardStack, side: Side, hero: HeroState, heroDef: HeroDe
     apexCharge: 0,
     // Cover is a front-line job: a back-row stack cannot shield anything.
     coverLeft: row === 'front' ? (kw(def, 'cover') ?? 0) + extraKw('cover') + m.frontCover : 0,
+    // Deflect is not: it is this stack's own shield, and a back-row stack
+    // raising it against the volley that found it is exactly the point.
+    deflectLeft: (kw(def, 'deflect') ?? 0) + extraKw('deflect'),
   }
 }
 
@@ -422,11 +429,38 @@ interface DamageOut {
   killed: number
   overkill: number
   died: boolean
+  /** the blow never landed — a Deflect charge ate it whole (DN12 §4.6) */
+  deflected: boolean
 }
 
-function applyDamage(ctx: Ctx, target: RStack, raw: number, opts: { siege?: boolean } = {}): DamageOut {
-  const out: DamageOut = { dealt: 0, absorbed: 0, killed: 0, overkill: 0, died: false }
+/**
+ * `status` marks damage that is NOT an incoming blow — Venom resolving on the
+ * poisoned stack's own action is the only such source today. It exists so
+ * Deflect can be opt-OUT rather than opt-in: every present and future way of
+ * hitting a stack spends a charge by default, and the one thing that is a
+ * lingering condition rather than a hit says so. The other way round, a damage
+ * source added later would silently slip past a shield that promises to eat
+ * "the first attack", which is the failure nobody would notice.
+ */
+function applyDamage(ctx: Ctx, target: RStack, raw: number, opts: { siege?: boolean; status?: boolean } = {}): DamageOut {
+  const out: DamageOut = { dealt: 0, absorbed: 0, killed: 0, overkill: 0, died: false, deflected: false }
   if (!target.alive || raw <= 0) return out
+
+  // Deflect (DN12 §4.6) resolves FIRST, and it is not Bulwark. Bulwark takes a
+  // slice off every blow and wears down by one; this takes one blow entirely
+  // and is then gone. Because the attack never lands, it costs no armour
+  // either — there is nothing for the Bulwark to have soaked — so the check
+  // sits above the block below rather than inside it.
+  //
+  // Siege does not bypass it. Siege ignores *armour*, and a shield thrown up
+  // to eat one hit is not armour; keeping them independent is also what lets
+  // the pair be explained in one sentence each.
+  if (!opts.status && target.deflectLeft > 0) {
+    target.deflectLeft -= 1
+    out.deflected = true
+    ctx.events.push({ t: 'deflect', uid: target.uid, left: target.deflectLeft, snap: snaps(target) })
+    return out
+  }
 
   let dmg = raw
   if (!opts.siege && target.bulwark > 0) {
@@ -922,7 +956,9 @@ function performAttack(ctx: Ctx, attacker: RStack, isExtra = false, cycle = 0) {
     snap: snaps(attacker, target),
   })
 
-  if (attacker.venom > 0 && target.alive) {
+  // A deflected blow never connected, so it carries no Venom in with it —
+  // otherwise the shield stops the sword and the poison on it lands anyway.
+  if (attacker.venom > 0 && target.alive && !res.deflected) {
     target.venomPending += attacker.venom
     ctx.events.push({ t: 'venom', uid: target.uid, units: attacker.venom, snap: snaps(target) })
   }
@@ -1292,7 +1328,9 @@ export function simulateBattle(a: BattleSide, b: BattleSide, heroA: HeroDef, her
         const lost = Math.min(s.count - 1, s.venomPending)
         s.venomPending = 0
         if (lost > 0) {
-          const res = applyDamage(ctx, s, lost * s.maxHp - s.wound, { siege: true })
+          // `status`: Venom is a condition the stack carries, resolving on its
+          // own action — not a blow arriving, so no Deflect charge answers it.
+          const res = applyDamage(ctx, s, lost * s.maxHp - s.wound, { siege: true, status: true })
           ctx.events.push({ t: 'venom', uid: s.uid, units: res.killed, snap: snaps(s) })
           onCasualties(ctx, s, res.killed)
         }

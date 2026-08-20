@@ -30,11 +30,28 @@ const attacksBy = (events: BattleEvent[], uid: string): AttackEvent[] =>
 
 describe('rank thresholds', () => {
   it('defaults off the line root muster size', () => {
-    // Militia +4, Crossbow Levy +3, Shieldmaiden +2, Cannon Crew +1.
+    // Militia +4, Crossbow Levy +3, Shield Girl +3, Cannon Crew +1.
     expect(thresholdsFor('vg_militia')).toEqual([14, 28])
     expect(thresholdsFor('vg_crossbow')).toEqual([14, 28])
-    expect(thresholdsFor('vg_shieldmaiden')).toEqual([10, 20])
+    expect(thresholdsFor('vg_shieldgirl')).toEqual([14, 28])
     expect(thresholdsFor('vg_cannon')).toEqual([5, 10])
+  })
+
+  it('moved the Shieldmaiden’s banner when her line grew a root beneath her', () => {
+    // She mustered 2 and was her own root, so Sister-Shield came at [10, 20].
+    // DN12 §3.4 put vg_shieldgirl under her; thresholds key off the ROOT, and
+    // the root musters 3 — so the banner now arrives on the same schedule as
+    // every other line in the game rather than on her own.
+    expect(lineRootOf('vg_shieldmaiden')).toBe('vg_shieldgirl')
+    expect(thresholdsFor('vg_shieldmaiden')).toEqual([14, 28])
+    expect(rankDefOf('vg_shieldmaiden')).toBe(unit('vg_shieldgirl').rank)
+  })
+
+  it('carries the Colossus line’s banner on its new root', () => {
+    expect(lineRootOf('vg_colossus')).toBe('vg_cairn')
+    expect(lineRootOf('vg_bulwark')).toBe('vg_cairn')
+    expect(rankDefOf('vg_colossus')).toBe(unit('vg_cairn').rank)
+    expect(rankDefOf('vg_colossus')?.honoredName).toBe('Avalanche Step')
   })
 
   it('keys off the ROOT form, so promoting never moves the goalposts', () => {

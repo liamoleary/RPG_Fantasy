@@ -154,9 +154,48 @@ export const VANGUARD_UNITS: UnitDef[] = [
     sigil: 'bow',
     tags: ['ranged', 'elite'],
   },
+  // ── The Shieldmaiden line (DN12 §3.4) ────────────────────────────────────
+  //
+  // A girl who picked up a shield too big for her, and what she becomes by
+  // refusing to put it down. DN10 sold the Shieldmaiden as a standalone T2;
+  // she is now the middle rung, so the line gets a root the camp can sell and
+  // the T2 becomes something you make.
+  {
+    id: 'vg_shieldgirl',
+    name: 'Shield Girl',
+    pool: 'vanguard',
+    tier: 1,
+    atk: 1,
+    hp: 3,
+    init: 3,
+    musterSize: 3,
+    row: 'front',
+    // The line's whole identity in miniature: a little armour, and one chance
+    // to step in front of the stack behind her.
+    keywords: [{ k: 'bulwark', x: 1 }, { k: 'cover', x: 1 }],
+    linePaths: ['vg_shieldmaiden'],
+    // Sister-Shield moves here from vg_shieldmaiden, which is no longer this
+    // line's root — a rank block anywhere but the root is never read
+    // (`rankDefOf` resolves through `lineRootOf`). The reward is unchanged; the
+    // copy is reworded because it now has to read true on the root form too,
+    // and a Shield Girl carries no Guard of her own to double.
+    rank: {
+      veteran: { hp: 1 },
+      honoredName: 'Sister-Shield',
+      honoredText: 'The sisters lock tighter: the neighbouring stack gains another point of Bulwark all battle.',
+      honored: { type: 'keyword', k: 'guard', x: 1 },
+    },
+    sigil: 'shield',
+    tags: ['wall', 'bulwark', 'line'],
+  },
   {
     // T2 since DN10: with promoted forms out of the camp, every tier of the
     // camp has to sell something of the faction's own. The wall comes early.
+    //
+    // DN12 §3.4 hangs her off vg_shieldgirl, so the camp stops selling her and
+    // the Path sheet is the only door. The id stays whatever she is called —
+    // renaming it would churn art.ts, save data and the sim harness for
+    // nothing. Her fork into the two Aegis forms lands with those units.
     id: 'vg_shieldmaiden',
     name: 'Shieldmaiden',
     pool: 'vanguard',
@@ -167,12 +206,6 @@ export const VANGUARD_UNITS: UnitDef[] = [
     musterSize: 2,
     row: 'front',
     keywords: [{ k: 'bulwark', x: 2 }, { k: 'guard', x: 1 }, { k: 'cover', x: 2 }],
-    rank: {
-      veteran: { hp: 1 },
-      honoredName: 'Sister-Shield',
-      honoredText: 'Their Guard doubles — the neighbouring stack gains a second point of Bulwark all battle.',
-      honored: { type: 'keyword', k: 'guard', x: 1 },
-    },
     sigil: 'shield',
     tags: ['wall', 'bulwark'],
   },
@@ -243,7 +276,62 @@ export const VANGUARD_UNITS: UnitDef[] = [
     sigil: 'cannon',
     tags: ['ranged', 'elite'],
   },
+  // ── The Colossus line (DN12 §3.5) ────────────────────────────────────────
+  //
+  // Three rungs of the same stone. The Colossus shipped in DN10 as a T5 the
+  // camp sold outright, which made the largest thing in the game a purchase
+  // rather than an ascent; it now has two forms beneath it and is reached the
+  // way every other capstone is.
   {
+    id: 'vg_cairn',
+    name: 'Cairn Whelp',
+    pool: 'vanguard',
+    tier: 1,
+    atk: 1,
+    hp: 4,
+    init: 2,
+    musterSize: 3,
+    row: 'front',
+    // Slow and stony from the first rung: the line trades Initiative for a
+    // health pool nothing its tier can chew through.
+    keywords: [{ k: 'bulwark', x: 1 }],
+    linePaths: ['vg_bulwark'],
+    // Avalanche Step moves here from vg_colossus for the same reason
+    // Sister-Shield moved to vg_shieldgirl: the Colossus is no longer the root
+    // of its line, and a rank block off the root is dead data. Unchanged
+    // otherwise — the copy already reads true on any form of the line.
+    rank: {
+      veteran: { hp: 1 },
+      honoredName: 'Avalanche Step',
+      honoredText: 'Damage left over after crushing a stack rolls on into the stack beside it (Cleave).',
+      honored: { type: 'keyword', k: 'cleave' },
+    },
+    sigil: 'colossus',
+    tags: ['wall', 'bulwark', 'line'],
+  },
+  {
+    // DN12 §3.5's deflect — "the first attack against it each battle is negated
+    // outright" — is a primitive the engine does not have yet, and it lands in
+    // its own commit. This form ships with its body only, the way the DN11
+    // riders did: the stats are the whole unit until the keyword exists.
+    id: 'vg_bulwark',
+    name: 'The Bulwark',
+    pool: 'vanguard',
+    tier: 3,
+    atk: 3,
+    hp: 7,
+    init: 2,
+    musterSize: 2,
+    row: 'front',
+    keywords: [{ k: 'bulwark', x: 2 }, { k: 'cover', x: 1 }],
+    linePaths: ['vg_colossus'],
+    sigil: 'colossus',
+    tags: ['wall', 'bulwark'],
+  },
+  {
+    // DN12 §3.5 renames it Quarry Titan and gives it Taunt, both in later
+    // commits. Here it only stops being a root: the id is untouched, and so is
+    // everything it does on a board.
     id: 'vg_colossus',
     name: 'Mountain Colossus',
     pool: 'vanguard',
@@ -258,12 +346,6 @@ export const VANGUARD_UNITS: UnitDef[] = [
       trigger: 'battleStart',
       effect: { type: 'alliesBulwark', x: 1 },
       text: 'Battle start: +1 Bulwark to all allies',
-    },
-    rank: {
-      veteran: { hp: 1 },
-      honoredName: 'Avalanche Step',
-      honoredText: 'Damage left over after crushing a stack rolls on into the stack beside it (Cleave).',
-      honored: { type: 'keyword', k: 'cleave' },
     },
     sigil: 'colossus',
     tags: ['elite', 'bulwark', 'capstone'],

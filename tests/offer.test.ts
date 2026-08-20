@@ -20,23 +20,36 @@ import { makeRng } from '../src/engine/rng'
  *
  * When kinship lands, these stay green — an empty kin set is the identity case,
  * and that is the whole point of pinning it here first.
+ *
+ * The VERDANT and STORMTIDE rows are still the original pre-refactor capture
+ * and still carry that guarantee untouched.
+ *
+ * The VANGUARD rows were re-captured for DN12 §3.4/§3.5, which gave the
+ * Shieldmaiden and Colossus lines roots they never had. That moved two units
+ * OUT of the camp — `vg_shieldmaiden` and `vg_colossus` are promotion targets
+ * now, and DN10 §3 says the camp sells only roots — and brought two new ones
+ * in. The pool changed, so the rolls changed. What did NOT change is the roll
+ * itself: the thirty Verdant and Stormtide rows stayed green through that
+ * commit without being touched, which is what proves this was pool membership
+ * and not a reshaped distribution. Re-capture the Vanguard rows again only for
+ * a change that is deliberately about the Vanguard offer pool, and say which.
  */
 const GOLDEN: [string, number, number, string[]][] = [
   ['vanguard', 1, 1, ["vg_militia","vg_apprentice","mc_roadwarden"]],
-  ['vanguard', 1, 12345, ["mc_roadwarden","vg_apprentice","vg_crossbow"]],
-  ['vanguard', 1, 99991, ["vg_crossbow","vg_mule","vg_mule"]],
-  ['vanguard', 2, 1, ["vg_militia","vg_apprentice","mc_factor","vg_shieldmaiden"]],
-  ['vanguard', 2, 12345, ["mc_factor","vg_apprentice","vg_crossbow","vg_shieldmaiden"]],
-  ['vanguard', 2, 99991, ["vg_mule","vg_shieldmaiden","vg_shieldmaiden","vg_militia"]],
+  ['vanguard', 1, 12345, ["mc_roadwarden","vg_cairn","vg_mule"]],
+  ['vanguard', 1, 99991, ["vg_mule","vg_cairn","vg_shieldgirl"]],
+  ['vanguard', 2, 1, ["vg_militia","vg_apprentice","mc_factor","vg_cairn"]],
+  ['vanguard', 2, 12345, ["mc_factor","vg_cairn","vg_mule","vg_cairn"]],
+  ['vanguard', 2, 99991, ["vg_mule","vg_cairn","vg_shieldgirl","vg_militia"]],
   ['vanguard', 3, 1, ["vg_militia","vg_apprentice","mc_hedgeknight","vg_cleric","vg_apprentice"]],
-  ['vanguard', 3, 12345, ["mc_hedgeknight","vg_cleric","vg_mule","vg_cleric","mc_pikewall"]],
-  ['vanguard', 3, 99991, ["vg_shieldmaiden","vg_cleric","vg_shieldmaiden","vg_militia","vg_mule"]],
+  ['vanguard', 3, 12345, ["mc_hedgeknight","vg_cairn","vg_mule","vg_cairn","mc_pikewall"]],
+  ['vanguard', 3, 99991, ["vg_shieldgirl","vg_cleric","vg_cleric","vg_militia","vg_mule"]],
   ['vanguard', 4, 1, ["vg_militia","vg_apprentice","mc_hedgeknight","vg_cannon","vg_apprentice","vg_cleric"]],
-  ['vanguard', 4, 12345, ["mc_hedgeknight","vg_cannon","vg_shieldmaiden","vg_cannon","mc_engineer","vg_apprentice"]],
-  ['vanguard', 4, 99991, ["vg_cleric","vg_cannon","vg_cleric","vg_militia","vg_shieldmaiden","vg_cleric"]],
-  ['vanguard', 5, 1, ["vg_militia","vg_apprentice","mc_bowman","vg_colossus","vg_apprentice","vg_cleric","vg_cleric"]],
-  ['vanguard', 5, 12345, ["mc_bowman","vg_colossus","vg_shieldmaiden","vg_colossus","mc_wyrm","vg_apprentice","mc_wyrm"]],
-  ['vanguard', 5, 99991, ["vg_cleric","vg_cannon","vg_cannon","vg_militia","vg_shieldmaiden","vg_cannon","vg_cannon"]],
+  ['vanguard', 4, 12345, ["mc_hedgeknight","vg_cairn","vg_shieldgirl","vg_cannon","mc_engineer","vg_apprentice"]],
+  ['vanguard', 4, 99991, ["vg_cleric","vg_cannon","vg_cannon","vg_militia","vg_shieldgirl","vg_cleric"]],
+  ['vanguard', 5, 1, ["vg_militia","vg_apprentice","mc_bowman","vg_cannon","vg_apprentice","vg_cleric","vg_shieldgirl"]],
+  ['vanguard', 5, 12345, ["mc_bowman","vg_cairn","vg_shieldgirl","vg_cannon","mc_wyrm","vg_apprentice","mc_wyrm"]],
+  ['vanguard', 5, 99991, ["vg_cleric","vg_cannon","vg_cannon","vg_militia","vg_shieldgirl","vg_cleric","vg_cannon"]],
   ['verdant', 1, 1, ["vd_sapling","vd_whisperseed","mc_roadwarden"]],
   ['verdant', 1, 12345, ["mc_roadwarden","vd_whisperseed","vd_dryad"]],
   ['verdant', 1, 99991, ["vd_dryad","vd_grovetender","vd_grovetender"]],
@@ -67,8 +80,8 @@ const GOLDEN: [string, number, number, string[]][] = [
   ['stormtide', 5, 1, ["st_raider","st_whelp","mc_bowman","st_leviathan","st_whelp","st_shaman","st_wolfrider"]],
   ['stormtide', 5, 12345, ["mc_bowman","st_leviathan","st_wolfrider","st_leviathan","mc_wyrm","st_whelp","mc_wyrm"]],
   ['stormtide', 5, 99991, ["st_shaman","st_roc","st_roc","st_raider","st_wolfrider","st_roc","st_roc"]],
-  ['vanguard+slots2', 4, 777, ["vg_militia","vg_crossbow","vg_shieldmaiden","vg_cannon","vg_cannon","mc_engineer","vg_cannon","vg_apprentice"]],
-  ['vanguard+slots4', 4, 777, ["vg_militia","vg_crossbow","vg_shieldmaiden","vg_cannon","vg_cannon","mc_engineer","vg_cannon","vg_apprentice"]],
+  ['vanguard+slots2', 4, 777, ["vg_militia","vg_crossbow","vg_shieldgirl","vg_cannon","vg_cannon","mc_engineer","vg_cannon","vg_apprentice"]],
+  ['vanguard+slots4', 4, 777, ["vg_militia","vg_crossbow","vg_shieldgirl","vg_cannon","vg_cannon","mc_engineer","vg_cannon","vg_apprentice"]],
 ]
 
 const ctx = (label: string, tier: number): OfferContext => {

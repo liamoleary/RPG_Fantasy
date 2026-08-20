@@ -35,7 +35,10 @@ describe('the camp sells base forms only (DN10 §3)', () => {
   it('still offers every non-line unit at its own tier', () => {
     const { faction } = offerPool('vanguard', MAX_CAMP_TIER)
     const ids = faction.map((u) => u.id)
-    for (const id of ['vg_militia', 'vg_crossbow', 'vg_mule', 'vg_shieldmaiden', 'vg_cleric', 'vg_cannon', 'vg_colossus']) {
+    // vg_shieldmaiden and vg_colossus were here until DN12 §3.4/§3.5 gave their
+    // lines roots; both are promotion targets now, and the roots that replaced
+    // them at the counter are vg_shieldgirl and vg_cairn.
+    for (const id of ['vg_militia', 'vg_crossbow', 'vg_mule', 'vg_shieldgirl', 'vg_cairn', 'vg_cleric', 'vg_cannon']) {
       expect(ids, `${id} should be sellable`).toContain(id)
     }
   })

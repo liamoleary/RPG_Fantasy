@@ -71,6 +71,12 @@ export const UNIT_ART: Record<string, string> = {
   st_deepmaw: '/art/units/st_deepmaw.webp',
   st_alpha: '/art/units/st_alpha.webp',
   st_windspeaker: '/art/units/st_windspeaker.webp',
+
+  // ── DN12 ────────────────────────────────────────────────────────────────
+  // the roots the Shieldmaiden and Colossus lines never had (§3.4, §3.5)
+  vg_shieldgirl: '/art/units/vg_shieldgirl.webp',
+  vg_cairn: '/art/units/vg_cairn.webp',
+  vg_bulwark: '/art/units/vg_bulwark.webp',
 }
 
 export const HERO_ART: Record<string, string> = {

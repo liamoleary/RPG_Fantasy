@@ -175,6 +175,47 @@ describe('every DN10 line still reads exactly as it did (§7.1)', () => {
     })
   })
 
+  /**
+   * DN12 §3.4/§3.5. Both of these were standalone units the camp sold outright
+   * — the Shieldmaiden at T2, the Colossus at T5 — and both are now rungs of a
+   * line with a root beneath them. The chain is the whole of what commit 2
+   * did, so it is pinned the same way the DN10 lines are.
+   */
+  const DN12: [string, string[]][] = [
+    ['vg_shieldgirl', ['vg_shieldgirl', 'vg_shieldmaiden']],
+    ['vg_cairn', ['vg_cairn', 'vg_bulwark', 'vg_colossus']],
+  ]
+
+  it.each(DN12)('%s runs root → … → top off its new root', (root, forms) => {
+    expect(lineChainTo(forms[forms.length - 1])).toEqual(forms)
+    forms.forEach((f, i) => {
+      expect(lineRootOf(f)).toBe(root)
+      expect(lineDepthOf(f)).toBe(i)
+    })
+  })
+
+  it('takes the two forms DN12 promoted out of the camp with them', () => {
+    // The camp sells roots (DN10 §3), so gaining a parent is exactly what stops
+    // a unit being sellable. This is the offer-table move DN12 §7.2 expects.
+    for (const id of ['vg_shieldmaiden', 'vg_colossus']) {
+      expect(isPromotedForm(id), `${id} should now be reached by promotion`).toBe(true)
+    }
+    // ...and the mid-form of the Colossus line never was sellable either.
+    expect(isPromotedForm('vg_bulwark')).toBe(true)
+    for (const id of ['vg_shieldgirl', 'vg_cairn']) {
+      expect(isPromotedForm(id), `${id} should be a sellable root`).toBe(false)
+    }
+  })
+
+  it('leaves both new lines straight — the forks come later', () => {
+    // §3.4 forks the Shieldmaiden into the two Aegis forms, but those units do
+    // not exist yet and naming them early makes buildLineGraph throw at load.
+    expect(unit('vg_shieldgirl').linePaths).toEqual(['vg_shieldmaiden'])
+    expect(unit('vg_shieldmaiden').linePaths).toBeUndefined()
+    expect(unit('vg_cairn').linePaths).toEqual(['vg_bulwark'])
+    expect(unit('vg_bulwark').linePaths).toEqual(['vg_colossus'])
+  })
+
   it('adds a second path to exactly the three lines DN11 §2.3 names', () => {
     const forked = SHIPPED.filter(([root]) => lineOf(root).length > 3).map(([root]) => root)
     expect(forked.sort()).toEqual(['st_slinger', 'vd_dryad', 'vg_militia'])

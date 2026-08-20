@@ -24,6 +24,48 @@ scorer's weights) and re-measure.
 
 **The number that fails:** `npm run sim` → `FORK HEALTH … §8.7 wants ≥80%`.
 
+## The win-delta metric measures selection, not power (DN12 commit 5)
+
+**Status:** open, and it changes what the DN12 §7.10 balance pass can achieve.
+
+DN12 commit 5 was an accidental controlled experiment. It cut the Sunforged
+Champion's ATK from 4 to 3 — one number, strictly weaker, nothing else about
+the unit touched except gaining a counter-attack worth ~1.6 points. The metric
+moved like this, `--runs 4000`, seeds 12345 / 999:
+
+| Champion | ATK | win-delta | n |
+|---|---|---|---|
+| before (commit 4) | 4 | +20.0% | 672 |
+| Bloodlust only | 4 | +21.6% / +21.7% | 672 / 664 |
+| Bloodlust **+ the cut** | 3 | **+30.5% / +27.0%** | **170 / 183** |
+
+**Cutting the unit made its win-delta nine points worse, and its sample fell by
+three quarters.** Vanguard's own average place did not move at all (4.32).
+
+**The read.** The nerf worked exactly as intended on the board — the harness's
+player policy stopped taking the Champion branch of the Footman fork, 672 boards
+down to 170. What is left is a self-selected rump: the boards that still build a
+Champion after it got worse are the boards where it was already winning. The
+metric then reports that rump's win rate as the unit's strength.
+
+So `UNIT WIN-DELTA` is not measuring how strong a unit is. It is measuring how
+strong the boards that chose it are, and cutting a unit *raises* the number by
+shrinking and enriching that population. This is the same signal the Runelord
+entry below has been circling since DN11 — "two rounds of cuts barely moved it"
+— stated as a mechanism rather than a suspicion, and now with a controlled case
+where the only change was one stat on one unit.
+
+**What it means for §7.10.** The balance pass is asked to bring the Champion and
+the Runelord "back under the ±8% flag". On this evidence that is not reachable
+by tuning: every cut shrinks n and pushes the delta up. Either the pass changes
+what the metric measures (weight by board, or report the delta against boards
+that were *offered* the unit rather than boards that took it), or the acceptance
+criterion changes. Cutting harder is the one thing that is now known not to work.
+
+**The number that fails:** `npm run sim` → `UNIT WIN-DELTA … Sunforged Champion`
+and `… Runelord of the Deep Halls`, both far above +8% and both rising as their
+samples fall.
+
 ## Runelord win-delta: read before acting (DN11)
 
 **Status:** open, deliberately not acted on. The Runelord of the Deep Halls
@@ -55,6 +97,7 @@ was checked before being cut into a third time.
 > | 2 roots | +18.3% n727 | +28.3% n384 | +13.3% n908 | +8.0% | 4.34 |
 > | 3 deflect | +17.8% n729 | +27.1% n387 | +14.1% n911 | +8.9% | 4.29 |
 > | 4 raise | +20.0% n672 | +27.1% n387 | +13.6% n908 | +8.0% | 4.32 |
+> | 5 bloodlust + cut | +30.5% n170 | +27.5% n386 | +13.3% n908 | +7.9% | 4.32 |
 >
 > Commit 4 gave the Champion's fork twin a heal and a Raise and the Champion
 > went UP, +17.8% → +20.0%, while its sample fell 729 → 672. A third instance

@@ -53,6 +53,19 @@ export type AbilityTrigger =
   | 'onDeath'
   | 'everyExchange'
   | 'onAttack'
+  /**
+   * DN12 §4.1. This stack was just attacked and lived. The effect is told WHO
+   * attacked it, which is what separates this from `onCasualty` — that fires
+   * on being hurt by anything, this one knows whose blow it was and can answer
+   * it. See `counterAttack`.
+   *
+   * NOTE this is not the whole of retaliation in this engine. Every stack
+   * already strikes back at full ATK once a cycle against any non-Volley,
+   * non-extra attack, in `performAttack` — that predates DN12 and is untouched.
+   * An `onAttacked` counter is an EXTRA answer on top of it, and its reason to
+   * exist is the two cases the universal one skips: volleys, and extra attacks.
+   */
+  | 'onAttacked'
   /** any FRIENDLY stack triggered Frenzy — the effect lands on that stack, not
    *  on the one carrying the ability (DN11 §2.3, the Windspeaker) */
   | 'allyFrenzy'
@@ -78,6 +91,14 @@ export type AbilityEffect =
   | { type: 'splitNextAttack'; x: number }
   /** +x Initiative for the battle, to whichever stack the trigger names */
   | { type: 'grantInit'; x: number }
+  // ── DN12 §4.1 ─────────────────────────────────────────────────────────────
+  /**
+   * Strike the stack that just attacked this one, for `frac` of this stack's
+   * full swing. Only meaningful under `onAttacked`, which is what names the
+   * attacker. A counter never provokes a counter — the engine guards that
+   * centrally rather than trusting each effect.
+   */
+  | { type: 'counterAttack'; frac: number }
 
 export interface Ability {
   trigger: AbilityTrigger

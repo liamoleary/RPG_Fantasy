@@ -1924,6 +1924,44 @@ h3 {
   animation: coverSaved 0.5s ease;
 }
 
+/* Bloodlust (DN12 §3.1): the Champion answers, and takes a red glow for the
+   beat the answer lasts. This is the tell the ability is learned from — a
+   player who only ever sees the log line will never connect the extra damage
+   to being attacked — so it is deliberately louder than the Cover save: a rim
+   of red light plus a short pulse, not a tint that could be mistaken for the
+   ordinary hit flash. */
+@keyframes bloodlustAnswer {
+  0% {
+    box-shadow: 0 0 0 0 rgba(214, 61, 47, 0);
+    filter: none;
+  }
+  35% {
+    box-shadow:
+      0 0 0 2px rgba(214, 61, 47, 0.95),
+      0 0 18px 4px rgba(214, 61, 47, 0.55);
+    filter: saturate(1.35) brightness(1.06);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(214, 61, 47, 0);
+    filter: none;
+  }
+}
+
+.stack[data-bloodlust='true'] {
+  animation: bloodlustAnswer 0.55s ease;
+  z-index: 6;
+}
+
+/* Motion-sensitive players still get the tell — it just holds still. */
+@media (prefers-reduced-motion: reduce) {
+  .stack[data-bloodlust='true'] {
+    animation: none;
+    box-shadow:
+      0 0 0 2px rgba(214, 61, 47, 0.95),
+      0 0 18px 4px rgba(214, 61, 47, 0.45);
+  }
+}
+
 /* A sheet's actions never sit below its fold: they stick to the bottom while
    the content behind them scrolls, so Close and Promote are always one tap
    away however long the sheet is. */

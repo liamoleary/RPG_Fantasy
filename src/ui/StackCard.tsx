@@ -148,6 +148,10 @@ interface Props {
   apexFiring?: boolean
   /** this stack was just saved by a coverer — brief glow */
   savedByCover?: boolean
+  /** DN12 §3.1: this stack is answering with Bloodlust — a red glow for the
+   *  beat the counter lasts. The tell the player reads the ability from, so it
+   *  belongs on the card and not only in the log. */
+  bloodlust?: boolean
   /** measured by the battle screen to draw volley arcs */
   domId?: string
   /** on screen this frame (board, battle) — load the plate immediately */
@@ -185,6 +189,7 @@ export function StackCard({
   apexMax = 0,
   apexFiring,
   savedByCover,
+  bloodlust,
   domId,
   eager,
   priority,
@@ -224,6 +229,7 @@ export function StackCard({
       data-promote={promote ?? undefined}
       data-uid={domId}
       data-saved={savedByCover ? 'true' : undefined}
+      data-bloodlust={bloodlust ? 'true' : undefined}
       data-apex={apexMax > 0 && apexCharge >= apexMax ? 'ready' : undefined}
       data-apex-firing={apexFiring ? 'true' : undefined}
       data-weight={weight >= 0.4 ? 'heavy' : weight > 0 ? 'light' : undefined}
@@ -325,6 +331,7 @@ export function SnapCard({
   glow,
   onClick,
   savedByCover,
+  bloodlust,
   apexFiring,
   size,
 }: {
@@ -336,6 +343,7 @@ export function SnapCard({
   glow?: CastFx | null
   onClick?: () => void
   savedByCover?: boolean
+  bloodlust?: boolean
   apexFiring?: boolean
   size?: CardSize
 }) {
@@ -363,6 +371,7 @@ export function SnapCard({
       apexMax={snap.apexMax}
       apexFiring={apexFiring}
       savedByCover={savedByCover}
+      bloodlust={bloodlust}
       domId={snap.uid}
       eager
       size={size}

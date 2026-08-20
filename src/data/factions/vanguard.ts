@@ -250,16 +250,33 @@ export const VANGUARD_UNITS: UnitDef[] = [
     tags: ['support'],
   },
   {
+    // Bloodlust (DN12 §3.1/§4.1), and the stat cut §3.1 asks for in the same
+    // commit: 4/5 → 3/5. The Champion is the highest win-delta in the game and
+    // TODO.md has it flagged, so the note is explicit that the buff does not
+    // ship alone.
+    //
+    // What the counter is actually worth is smaller than §3.1 assumes. The
+    // engine has retaliated at FULL ATK, for every stack, once a cycle, since
+    // long before DN12 — so half ATK is not "a straight buff", it is a second
+    // answer on top of an existing one. Where it earns its keep is the two
+    // cases the universal retaliation skips: Volley attackers, who currently
+    // pay nothing for shooting into melee, and extra attacks. That is the
+    // Champion's identity here — the archers stop being safe.
     id: 'vg_champion',
     name: 'Sunforged Champion',
     pool: 'vanguard',
     tier: 4,
-    atk: 4,
+    atk: 3,
     hp: 5,
     init: 5,
     musterSize: 1,
     row: 'front',
     keywords: [{ k: 'bulwark', x: 2 }, { k: 'cleave' }],
+    ability: {
+      trigger: 'onAttacked',
+      effect: { type: 'counterAttack', frac: 0.5 },
+      text: 'Bloodlust: when this stack is attacked and lives, it strikes back for half its power',
+    },
     apex: {
       id: 'sunburstVerdict',
       name: 'Sunburst Verdict',

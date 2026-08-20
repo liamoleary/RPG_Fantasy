@@ -47,6 +47,9 @@ interface Frame {
       bloom?: CastFx
       /** this stack is the one casting — it glows in its own flavour (§10) */
       glow?: CastFx
+      /** DN12 §3.1: this stack answered with Bloodlust — red for the beat the
+       *  counter lasts, which is the tell the player learns the ability from. */
+      bloodlust?: boolean
     }
   >
   banner: string | null
@@ -126,6 +129,10 @@ function buildFrames(result: BattleResult, playerIsA: boolean, sides: Record<Sid
     switch (e.t) {
       case 'attack': {
         fx[e.src] = { state: 'act' }
+        // The Bloodlust glow rides on the counter-attacker for exactly the
+        // frame its answer lands (§3.1). Set after `state: 'act'` above so it
+        // survives that assignment rather than being overwritten by it.
+        if (e.bloodlust) fx[e.src] = { state: 'act', bloodlust: true }
         // A volley must read as a shot, not a shove (§3.1).
         if (!e.retaliation && isVolley(boards[e.src]?.unitId)) {
           arc = { from: e.src, to: e.dst, covered: false, shot: projectileOf(unit(boards[e.src].unitId)) }
@@ -667,6 +674,7 @@ function SnapBoard({
               weight={f?.weight ?? 0}
               bloom={f?.bloom ?? null}
               glow={f?.glow ?? null}
+              bloodlust={f?.bloodlust ?? false}
               savedByCover={saved === s.uid}
               apexFiring={apexUid === s.uid}
               onClick={() => onPeek(s)}

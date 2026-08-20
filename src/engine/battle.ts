@@ -106,7 +106,21 @@ export type BattleEvent =
   | { t: 'battleStart'; a: StackSnap[]; b: StackSnap[] }
   /** a battle-scoped hero passive announcing itself at battle start (§1.4) */
   | { t: 'passive'; side: Side; name: string; text: string }
-  | { t: 'attack'; src: string; dst: string; side: Side; dmg: number; absorbed: number; killed: number; retaliation: boolean; snap: StackSnap[] }
+  | {
+      t: 'attack'
+      src: string
+      dst: string
+      side: Side
+      dmg: number
+      absorbed: number
+      killed: number
+      retaliation: boolean
+      /** DN12 §4.1: this answer was a Bloodlust counter, not the universal
+       *  retaliation every stack makes. The battle screen reads it to put the
+       *  red glow on the counter-attacker for the beat it lasts. */
+      bloodlust?: boolean
+      snap: StackSnap[]
+    }
   | { t: 'cleave'; src: string; dst: string; dmg: number; killed: number; snap: StackSnap[] }
   | { t: 'venom'; uid: string; units: number; snap: StackSnap[] }
   | { t: 'cover'; src: string; saved: string; by: string; left: number; snap: StackSnap[] }
@@ -192,6 +206,9 @@ interface RStack {
   frenzied: boolean
   rootedUntil: number
   retaliatedCycle: number
+  /** DN12 §4.1: last cycle this stack fired a Bloodlust counter. Separate from
+   *  `retaliatedCycle` so the two answers are capped independently. */
+  counteredCycle: number
   actions: number
   jitter: number
   rank: number
@@ -233,6 +250,26 @@ interface Ctx {
   exchange: number
   /** Frenzy triggers per side this battle — Bloodcall reads it (§3) */
   frenzyCount: Record<Side, number>
+  /**
+   * The cycle now being resolved (DN12 §4.1). The pre-existing retaliation
+   * takes `cycle` as a parameter and keeps doing so — touching that would move
+   * every seeded log in the repo. Bloodlust reads this instead, because it has
+   * to be gated on extra attacks too, and those call `performAttack` without a
+   * cycle argument.
+   */
+  cycle: number
+  /**
+   * Re-entrancy depth for counter-attacks (§4.1's loop guard). Non-zero means
+   * we are already resolving a counter, and no further counter may fire.
+   *
+   * A counter deals its damage through `applyDamage`, which cannot re-enter
+   * `performAttack` on its own — so the loop this stops is the indirect one: a
+   * counter kills the attacker, the attacker's death fires an ability that
+   * grants an ally an extra attack, that attack lands on the counter-attacker,
+   * and round it goes. A depth counter closes that whatever new path someone
+   * adds later, which a per-stack flag would not.
+   */
+  counterDepth: number
 }
 
 const pool = (s: RStack): number => s.count * s.maxHp - s.wound
@@ -403,6 +440,7 @@ function buildStack(bs: BoardStack, side: Side, hero: HeroState, heroDef: HeroDe
     frenzied: false,
     rootedUntil: -1,
     retaliatedCycle: -1,
+    counteredCycle: -1,
     actions: 0,
     jitter: rng.next(),
     rank,
@@ -688,18 +726,24 @@ function tryRaise(ctx: Ctx, dead: RStack) {
   ctx.events.push({ t: 'raise', uid: dead.uid, by: by.uid, left: by.raiseLeft, snap: snaps(dead, by) })
 }
 
-function fireAbility(ctx: Ctx, s: RStack, trigger: string) {
+/**
+ * `against` names the stack this trigger is a response TO, where the trigger
+ * has one — today only `onAttacked`, whose whole point is answering a
+ * particular blow. Every other trigger leaves it unset and no other effect
+ * reads it.
+ */
+function fireAbility(ctx: Ctx, s: RStack, trigger: string, against?: RStack) {
   const ab = s.def.ability
   if (!ab || ab.trigger !== trigger) return
   // Honored ability echo (§3): the same effect resolves a second time.
   const times = s.abilityEcho ? 2 : 1
   for (let i = 0; i < times; i++) {
     if (trigger !== 'onDeath' && !s.alive) return
-    applyAbilityEffect(ctx, s, ab.effect)
+    applyAbilityEffect(ctx, s, ab.effect, against)
   }
 }
 
-function applyAbilityEffect(ctx: Ctx, s: RStack, e: AbilityEffect) {
+function applyAbilityEffect(ctx: Ctx, s: RStack, e: AbilityEffect, against?: RStack) {
   const allies = aliveOn(ctx, s.side)
 
   switch (e.type) {
@@ -781,6 +825,50 @@ function applyAbilityEffect(ctx: Ctx, s: RStack, e: AbilityEffect) {
       ctx.events.push({ t: 'attack', src: s.uid, dst: t.uid, side: s.side, dmg: res.dealt, absorbed: res.absorbed, killed: res.killed, retaliation: false, snap: snaps(s, t) })
       if (res.died) onDeath(ctx, t)
       else onCasualties(ctx, t, res.killed)
+      break
+    }
+    case 'counterAttack': {
+      // Bloodlust (DN12 §3.1). Answers the stack that struck, for a fraction
+      // of this stack's full swing.
+      //
+      // Spends NO randomness: the target is the attacker, named by the
+      // trigger, so there is no `chooseTarget` and no `rng.pick`. That is what
+      // lets every seeded battle in the game without a counter-attacker on the
+      // board replay byte-for-byte — the rng stream never moves.
+      if (!against || !against.alive || !s.alive || s.atk <= 0) break
+      if (ctx.counterDepth > 0) break
+      if (s.counteredCycle === ctx.cycle) break
+      s.counteredCycle = ctx.cycle
+
+      // floor, not round: every damage number in this engine is an integer,
+      // and a half-point drifting into the pool arithmetic is how a stack ends
+      // a battle on 0.5 of a unit.
+      const raw = Math.floor(s.atk * s.count * e.frac)
+      if (raw <= 0) break
+
+      ctx.counterDepth += 1
+      try {
+        const back = applyDamage(ctx, against, raw, { siege: s.siege })
+        ctx.events.push({
+          t: 'attack',
+          src: s.uid,
+          dst: against.uid,
+          side: s.side,
+          dmg: back.dealt,
+          absorbed: back.absorbed,
+          killed: back.killed,
+          retaliation: true,
+          bloodlust: true,
+          snap: snaps(s, against),
+        })
+        if (back.died) onDeath(ctx, against)
+        else onCasualties(ctx, against, back.killed)
+      } finally {
+        // `finally` so a throw anywhere downstream cannot leave the guard
+        // latched on and silently disable every counter for the rest of the
+        // battle — a failure that would look like a balance change.
+        ctx.counterDepth -= 1
+      }
       break
     }
     case 'extraAttackAlly': {
@@ -1009,6 +1097,18 @@ function performAttack(ctx: Ctx, attacker: RStack, isExtra = false, cycle = 0) {
   const targetDied = res.died
   if (targetDied) onDeath(ctx, target)
   else onCasualties(ctx, target, res.killed)
+
+  // Bloodlust (DN12 §4.1) — the target answers the blow it just took.
+  //
+  // Fires here, at one fixed point in program order: after the target's
+  // casualties have resolved (so a stack wiped by the blow does not answer it)
+  // and BEFORE the universal retaliation below (so the two land in a stable
+  // order, attacker's blow → counter → retaliation, every time).
+  //
+  // Unlike that universal retaliation this is NOT gated on `isExtra` or on the
+  // attacker's Volley: answering an archer, and answering an extra swing, are
+  // exactly the two things it is for.
+  if (target.alive) fireAbility(ctx, target, 'onAttacked', attacker)
 
   // The other prongs of a split attack, each for the same divided share. Like
   // Piercing Volley below they draw no retaliation and report as ordinary
@@ -1276,6 +1376,8 @@ export function simulateBattle(a: BattleSide, b: BattleSide, heroA: HeroDef, her
     lastStandUsed: { a: 0, b: 0 },
     exchange: 0,
     frenzyCount: { a: 0, b: 0 },
+    cycle: 0,
+    counterDepth: 0,
   }
 
   for (const bs of a.board) if (bs.count > 0) ctx.stacks.push(buildStack(bs, 'a', a.hero, heroA, rng))
@@ -1335,6 +1437,12 @@ export function simulateBattle(a: BattleSide, b: BattleSide, heroA: HeroDef, her
     aliveOn(ctx, 'b').length > 0
   ) {
     cycle++
+    // Mirrored onto the context so effects reached through the ability table
+    // can read it — `extraAttackAlly` calls `performAttack` with no cycle
+    // argument, and a Bloodlust counter provoked by one of those still has to
+    // be capped at once per cycle. The pre-existing retaliation keeps using
+    // the parameter, untouched.
+    ctx.cycle = cycle
     const order = ctx.stacks
       .filter((s) => s.alive)
       .slice()

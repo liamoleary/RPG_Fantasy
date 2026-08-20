@@ -1924,6 +1924,97 @@ h3 {
   animation: coverSaved 0.5s ease;
 }
 
+/* The Reflect ring (DN12 §4.3 / §3.4): a sigil on the card that brightens as
+   the shield gathers and goes solid gold at full. A ring, not pips or a bar —
+   those already mean Cover and Apex, and a fourth meter borrowing either shape
+   would be read as that thing rather than as a new one.
+
+   The conic gradient is the fill; --reflect-frac is set per card by the engine
+   snapshot, so the ring can never disagree with the simulation. */
+.reflect-ring {
+  position: absolute;
+  z-index: 4;
+  right: var(--card-pad, 3px);
+  top: var(--card-pad, 3px);
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--vg-gold, #f0c96b) calc(var(--reflect-frac, 0) * 360deg),
+    color-mix(in srgb, var(--stroke-ink) 70%, transparent) 0
+  );
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--stroke-ink) 84%, transparent);
+  opacity: calc(0.45 + var(--reflect-frac, 0) * 0.55);
+}
+
+/* Full: solid, brighter, and breathing, so "it is ready" reads at a glance
+   rather than needing the ring to be measured. */
+.reflect-ring[data-full='true'] {
+  opacity: 1;
+  animation: reflectReady 1.4s ease-in-out infinite;
+}
+
+@keyframes reflectReady {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--stroke-ink) 84%, transparent),
+      0 0 4px 1px color-mix(in srgb, var(--vg-gold, #f0c96b) 55%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--stroke-ink) 84%, transparent),
+      0 0 9px 3px color-mix(in srgb, var(--vg-gold, #f0c96b) 85%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reflect-ring[data-full='true'] {
+    animation: none;
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--stroke-ink) 84%, transparent),
+      0 0 7px 2px color-mix(in srgb, var(--vg-gold, #f0c96b) 80%, transparent);
+  }
+}
+
+/* Bloodlust (DN12 §3.1): the Champion answers, and takes a red glow for the
+   beat the answer lasts. This is the tell the ability is learned from — a
+   player who only ever sees the log line will never connect the extra damage
+   to being attacked — so it is deliberately louder than the Cover save: a rim
+   of red light plus a short pulse, not a tint that could be mistaken for the
+   ordinary hit flash. */
+@keyframes bloodlustAnswer {
+  0% {
+    box-shadow: 0 0 0 0 rgba(214, 61, 47, 0);
+    filter: none;
+  }
+  35% {
+    box-shadow:
+      0 0 0 2px rgba(214, 61, 47, 0.95),
+      0 0 18px 4px rgba(214, 61, 47, 0.55);
+    filter: saturate(1.35) brightness(1.06);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(214, 61, 47, 0);
+    filter: none;
+  }
+}
+
+.stack[data-bloodlust='true'] {
+  animation: bloodlustAnswer 0.55s ease;
+  z-index: 6;
+}
+
+/* Motion-sensitive players still get the tell — it just holds still. */
+@media (prefers-reduced-motion: reduce) {
+  .stack[data-bloodlust='true'] {
+    animation: none;
+    box-shadow:
+      0 0 0 2px rgba(214, 61, 47, 0.95),
+      0 0 18px 4px rgba(214, 61, 47, 0.45);
+  }
+}
+
 /* A sheet's actions never sit below its fold: they stick to the bottom while
    the content behind them scrolls, so Close and Promote are always one tap
    away however long the sheet is. */

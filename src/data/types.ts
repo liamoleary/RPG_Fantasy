@@ -7,6 +7,49 @@ export type RowPref = Row | 'any'
 
 export type KeywordId =
   | 'bulwark'
+  /**
+   * DN12 §4.6. Negates the first x incoming blows of the battle OUTRIGHT, then
+   * is spent. Deliberately a separate keyword from `bulwark` rather than a
+   * magnitude on it: Bulwark is a slice off every hit that wears down by 1,
+   * this is one whole hit that never lands. Sharing a name would make the two
+   * unreadable on the same card.
+   */
+  | 'deflect'
+  /**
+   * DN12 §4.2. When a FRIENDLY stack is wiped, this stack hauls it back onto
+   * the field at 1 unit, x times per battle. A keyword rather than an ability
+   * because `UnitDef.ability` holds exactly one, and the Bannerguard needs its
+   * ability slot for the Paladin's heal — and because a charge spent at a
+   * named moment is the shape Cover and Deflect already have.
+   *
+   * Deliberately NOT Marshal Yseult's Last Stand, which saves a stack from
+   * dying. This one answers after it is already gone. See §3.2.
+   */
+  | 'raise'
+  /**
+   * DN12 §4.3. The shield gathers power as this stack acts; at x charges the
+   * next attack against it is sent BACK at whoever threw it and the charge
+   * empties. A keyword because the magnitude is the charge-up time, which is
+   * the only knob the effect has, and because the card has to show the meter
+   * filling — see `StackSnap.reflectCharge`.
+   */
+  | 'reflect'
+  /**
+   * DN12 §4.5. While this stack stands, every enemy attack must be aimed at
+   * it. A targeting override, and the only one in the engine — see
+   * `chooseTarget`, which is the single place it is applied.
+   */
+  | 'taunt'
+  /**
+   * DN12 §3.6. While this stack lives, its whole front rank intercepts:
+   * anything aimed past the front row is taken by a front-row stack instead,
+   * so the back row cannot be reached at all. A keyword granted BY one unit TO
+   * a rank, the way `guard` is a keyword on one unit that arms its neighbour.
+   *
+   * Unlike Cover this costs no charges and is not limited to the two slots
+   * above the target — and unlike Cover, Siege does not ignore it.
+   */
+  | 'intercept'
   | 'charge'
   | 'volley'
   | 'siege'
@@ -34,6 +77,19 @@ export type AbilityTrigger =
   | 'onDeath'
   | 'everyExchange'
   | 'onAttack'
+  /**
+   * DN12 §4.1. This stack was just attacked and lived. The effect is told WHO
+   * attacked it, which is what separates this from `onCasualty` — that fires
+   * on being hurt by anything, this one knows whose blow it was and can answer
+   * it. See `counterAttack`.
+   *
+   * NOTE this is not the whole of retaliation in this engine. Every stack
+   * already strikes back at full ATK once a cycle against any non-Volley,
+   * non-extra attack, in `performAttack` — that predates DN12 and is untouched.
+   * An `onAttacked` counter is an EXTRA answer on top of it, and its reason to
+   * exist is the two cases the universal one skips: volleys, and extra attacks.
+   */
+  | 'onAttacked'
   /** any FRIENDLY stack triggered Frenzy — the effect lands on that stack, not
    *  on the one carrying the ability (DN11 §2.3, the Windspeaker) */
   | 'allyFrenzy'
@@ -59,6 +115,38 @@ export type AbilityEffect =
   | { type: 'splitNextAttack'; x: number }
   /** +x Initiative for the battle, to whichever stack the trigger names */
   | { type: 'grantInit'; x: number }
+  // ── DN12 §4.1 ─────────────────────────────────────────────────────────────
+  /**
+   * Strike the stack that just attacked this one, for `frac` of this stack's
+   * full swing. Only meaningful under `onAttacked`, which is what names the
+   * attacker. A counter never provokes a counter — the engine guards that
+   * centrally rather than trusting each effect.
+   */
+  | { type: 'counterAttack'; frac: number }
+  /**
+   * DN12 §4.4. The thrown shield. Under `onAttack` the stack's ordinary blow is
+   * the FIRST hit; this adds the ricochets after it, each one `frac` of the
+   * last, running `passes` full circuits of the enemy line from the stack that
+   * was struck. Order is by slot, wrapping — no roll of its own, so the whole
+   * arc is fixed the moment the first target is chosen.
+   */
+  | { type: 'bounceAttack'; frac: number; passes: number }
+  /**
+   * DN12 §3.6, the Anvilborn. Leaps the front line and strikes EVERY enemy
+   * back-row stack for `frac` of this stack's swing. Under `onAttack`, so the
+   * ordinary blow still lands on the front rank first — a second targeting
+   * override fighting Taunt and the rune-wall was not worth the reach.
+   */
+  | { type: 'strikeEnemyBackRow'; frac: number }
+  /**
+   * DN12 §3.3, the Sunshot Duellist. Two pistols fired together: under
+   * `onAttack` the ordinary shot is the first barrel and this is the second,
+   * landing on a DIFFERENT enemy stack for `frac` of the same swing.
+   *
+   * Deliberately not `splitNextAttack`, which divides one blow across targets.
+   * This is two blows. `frac` is the balance lever §3.3 names.
+   */
+  | { type: 'strikeSecondTarget'; frac: number }
 
 export interface Ability {
   trigger: AbilityTrigger

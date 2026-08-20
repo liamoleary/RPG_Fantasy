@@ -92,6 +92,29 @@ export function ApexMeter({ charge, max, ready }: { charge: number; max: number;
 }
 
 /**
+ * The Reflect ring (DN12 §4.3). §3.4 asks for "a filling ring, a brightening
+ * sigil" and is explicit about why: without it the player never learns the
+ * rhythm, and an ability whose whole shape is *timing* becomes random luck.
+ *
+ * Deliberately a RING rather than another bar or another row of pips — the
+ * card already speaks three visual languages (rank chevrons, Cover dots, the
+ * Apex bar) and a fourth that borrowed any of their shapes would be read as
+ * that thing. It brightens as it fills and goes solid at full.
+ */
+export function ReflectRing({ charge, max }: { charge: number; max: number }) {
+  if (max <= 0) return null
+  const full = charge >= max
+  return (
+    <span
+      className="reflect-ring"
+      data-full={full ? 'true' : undefined}
+      style={{ ['--reflect-frac' as string]: String(Math.min(1, charge / max)) }}
+      aria-label={full ? 'Shield charged' : `Shield ${charge} of ${max}`}
+    />
+  )
+}
+
+/**
  * The three canonical card sizes (Design Notes 07 §2). One component renders
  * all of them; nothing else in the app is allowed to invent a card layout.
  *
@@ -144,10 +167,17 @@ interface Props {
   /** Apex meter (DN04 §3) — omit for the forms that have no ultimate */
   apexCharge?: number
   apexMax?: number
+  /** Reflect meter (DN12 §4.3) — omit for stacks without the keyword */
+  reflectCharge?: number
+  reflectMax?: number
   /** this stack is unleashing its ultimate this frame */
   apexFiring?: boolean
   /** this stack was just saved by a coverer — brief glow */
   savedByCover?: boolean
+  /** DN12 §3.1: this stack is answering with Bloodlust — a red glow for the
+   *  beat the counter lasts. The tell the player reads the ability from, so it
+   *  belongs on the card and not only in the log. */
+  bloodlust?: boolean
   /** measured by the battle screen to draw volley arcs */
   domId?: string
   /** on screen this frame (board, battle) — load the plate immediately */
@@ -183,8 +213,11 @@ export function StackCard({
   cover = 0,
   apexCharge = 0,
   apexMax = 0,
+  reflectCharge = 0,
+  reflectMax = 0,
   apexFiring,
   savedByCover,
+  bloodlust,
   domId,
   eager,
   priority,
@@ -224,6 +257,7 @@ export function StackCard({
       data-promote={promote ?? undefined}
       data-uid={domId}
       data-saved={savedByCover ? 'true' : undefined}
+      data-bloodlust={bloodlust ? 'true' : undefined}
       data-apex={apexMax > 0 && apexCharge >= apexMax ? 'ready' : undefined}
       data-apex-firing={apexFiring ? 'true' : undefined}
       data-weight={weight >= 0.4 ? 'heavy' : weight > 0 ? 'light' : undefined}
@@ -273,6 +307,7 @@ export function StackCard({
       {/* Slim edge markers, so neither one eats into the art (§2). */}
       <CoverPips charges={cover} />
       <ApexMeter charge={apexCharge} max={apexMax} ready={apexCharge >= apexMax && apexMax > 0} />
+      <ReflectRing charge={reflectCharge} max={reflectMax} />
       <span className="card-foot">
         {/* No name at board size: the art is the identity (§2). */}
         {size !== 'board' && <span className="stack-name">{def.name}</span>}
@@ -325,6 +360,7 @@ export function SnapCard({
   glow,
   onClick,
   savedByCover,
+  bloodlust,
   apexFiring,
   size,
 }: {
@@ -336,6 +372,7 @@ export function SnapCard({
   glow?: CastFx | null
   onClick?: () => void
   savedByCover?: boolean
+  bloodlust?: boolean
   apexFiring?: boolean
   size?: CardSize
 }) {
@@ -361,8 +398,11 @@ export function SnapCard({
       cover={snap.cover}
       apexCharge={snap.apexCharge}
       apexMax={snap.apexMax}
+      reflectCharge={snap.reflectCharge}
+      reflectMax={snap.reflectMax}
       apexFiring={apexFiring}
       savedByCover={savedByCover}
+      bloodlust={bloodlust}
       domId={snap.uid}
       eager
       size={size}

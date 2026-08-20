@@ -175,9 +175,88 @@ describe('every DN10 line still reads exactly as it did (§7.1)', () => {
     })
   })
 
-  it('adds a second path to exactly the three lines DN11 §2.3 names', () => {
-    const forked = SHIPPED.filter(([root]) => lineOf(root).length > 3).map(([root]) => root)
-    expect(forked.sort()).toEqual(['st_slinger', 'vd_dryad', 'vg_militia'])
+  /**
+   * DN12 §3.4/§3.5. Both of these were standalone units the camp sold outright
+   * — the Shieldmaiden at T2, the Colossus at T5 — and both are now rungs of a
+   * line with a root beneath them. The chain is the whole of what commit 2
+   * did, so it is pinned the same way the DN10 lines are.
+   */
+  const DN12: [string, string[]][] = [
+    ['vg_shieldgirl', ['vg_shieldgirl', 'vg_shieldmaiden']],
+    ['vg_cairn', ['vg_cairn', 'vg_bulwark', 'vg_colossus']],
+  ]
+
+  it.each(DN12)('%s runs root → … → top off its new root', (root, forms) => {
+    expect(lineChainTo(forms[forms.length - 1])).toEqual(forms)
+    forms.forEach((f, i) => {
+      expect(lineRootOf(f)).toBe(root)
+      expect(lineDepthOf(f)).toBe(i)
+    })
+  })
+
+  it('takes the two forms DN12 promoted out of the camp with them', () => {
+    // The camp sells roots (DN10 §3), so gaining a parent is exactly what stops
+    // a unit being sellable. This is the offer-table move DN12 §7.2 expects.
+    for (const id of ['vg_shieldmaiden', 'vg_colossus']) {
+      expect(isPromotedForm(id), `${id} should now be reached by promotion`).toBe(true)
+    }
+    // ...and the mid-form of the Colossus line never was sellable either.
+    expect(isPromotedForm('vg_bulwark')).toBe(true)
+    for (const id of ['vg_shieldgirl', 'vg_cairn']) {
+      expect(isPromotedForm(id), `${id} should be a sellable root`).toBe(false)
+    }
+  })
+
+  it('forks the Shieldmaiden line at the top, and leaves the Colossus straight', () => {
+    // Commit 2 shipped both lines straight, because naming a unit that does
+    // not exist yet makes buildLineGraph throw at load. Commit 6 added the two
+    // Aegis forms and hung them off the Shieldmaiden, which is §3.4's fork.
+    expect(unit('vg_shieldgirl').linePaths).toEqual(['vg_shieldmaiden'])
+    expect(unit('vg_shieldmaiden').linePaths).toEqual(['vg_aegis', 'vg_aegiswarden'])
+    expect(unit('vg_cairn').linePaths).toEqual(['vg_bulwark'])
+    expect(unit('vg_bulwark').linePaths).toEqual(['vg_colossus'])
+  })
+
+  it('gives the Shieldmaiden fork two real leaves at the same tier (§6)', () => {
+    // "Aegis Warden tier: T4, twin of the Aegis of Light." A fork whose two
+    // branches sit at different tiers is not a choice, it is a ladder — the
+    // camp opens one before the other and the Path sheet answers itself.
+    for (const id of ['vg_aegis', 'vg_aegiswarden']) {
+      expect(unit(id).tier, id).toBe(4)
+      expect(LINES.isLeaf(id), `${id} should end its line`).toBe(true)
+      expect(lineRootOf(id)).toBe('vg_shieldgirl')
+    }
+  })
+
+  it('adds a second path to exactly the DN10 lines DN11 §2.3 and DN12 §3.3 name', () => {
+    /**
+     * DN11 §2.3 forked three of the six shipped lines. DN12 §3.3 forks a
+     * fourth — the crossbow line, at the Arbalest. Kept as two statements
+     * rather than one widened list, because the DN11 claim is still a claim:
+     * that pass forked those three lines and no others, and a later note
+     * adding a fork must not be able to quietly restate it.
+     */
+    const forkedAt = (root: string) =>
+      lineOf(root).filter((f) => (unit(f).linePaths ?? []).length > 1)
+
+    expect(SHIPPED.filter(([root]) => forkedAt(root).length > 0).map(([root]) => root).sort()).toEqual([
+      'st_slinger',
+      'vd_dryad',
+      'vg_crossbow',
+      'vg_militia',
+    ])
+
+    // Every one of them forks at the MID form, never at the root — so the
+    // choice always arrives at the second promote, after the player has
+    // already committed to the line. DN12 follows the shape DN11 set.
+    expect(forkedAt('vg_militia')).toEqual(['vg_footman'])
+    expect(forkedAt('vd_dryad')).toEqual(['vd_moonshade'])
+    expect(forkedAt('st_slinger')).toEqual(['st_harpooner'])
+    expect(forkedAt('vg_crossbow')).toEqual(['vg_arbalest'])
+    for (const root of ['vg_militia', 'vd_dryad', 'st_slinger', 'vg_crossbow']) {
+      expect(unit(root).linePaths, `${root} is a root, not a fork`).toHaveLength(1)
+    }
+    expect(unit('vg_arbalest').linePaths).toEqual(['vg_ballistier', 'vg_marksman'])
   })
 
   it('keeps the data layer and the engine layer agreeing on what is promoted', () => {

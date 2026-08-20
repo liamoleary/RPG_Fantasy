@@ -2,7 +2,7 @@
    itself is network-first — index.html points at hashed bundles, and serving a
    stale copy would pin returning players to an old deploy forever.
    Bump CACHE to invalidate. */
-const CACHE = 'bannerfell-v14'
+const CACHE = 'bannerfell-v15'
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg']
 
 self.addEventListener('install', (e) => {

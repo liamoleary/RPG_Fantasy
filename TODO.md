@@ -8,6 +8,104 @@ when the trigger fires — an entry with no failing test is a note, not a TODO.
 economy — was discharged by removal: DN10 deleted the War Tier ladder
 entirely, along with `tests/tiers.test.ts` that guarded it.)*
 
+## DN12 commit 1 never landed: ten stale plates and two stale names
+
+**Status:** open. The DN12 branch shipped commits 2–9 and skipped commit 1,
+which was the art pass. Everything below is still true on `main`.
+
+**The ten swaps.** `Bannerfell_Art/_drop_r3/units/` holds approved replacement
+plates for ten units that already had one, and none of them were copied:
+
+`vg_militia` · `vg_crossbow` · `vg_footman` · `vg_arbalest` · `vg_cleric` ·
+`vg_champion` · `vg_bannerguard` · `vg_ballistier` · `vg_shieldmaiden` ·
+`vg_colossus`
+
+The six NEW units' plates did land, with their units, so the manifest is whole
+and `tests/art.test.ts` is green — it checks that every unit has a plate and
+every plate exists, which is true. It cannot tell an old plate from a new one.
+That is why this entry exists rather than a red test.
+
+DN12 §3.1 is the one that stings: the new Champion plate is what fixes the
+Cleric/Champion twin problem ("the Champion is now a closed helm and a
+longsword, the Cleric a kneeling medic"). On `main` today they still read as
+each other.
+
+**The two renames.** §7.1 also carried two display-name changes that were never
+made. The ids are correct and must not move; only the `name` strings are wrong:
+
+  `vg_shieldmaiden`  "Shieldmaiden"      → "Shield Bearer"
+  `vg_colossus`      "Mountain Colossus" → "Quarry Titan"
+
+Every DN12 comment, test and commit message already calls it the Quarry Titan,
+so the code and the game currently disagree out loud.
+
+**The check that fails** (there is no vitest for it, and adding one would need
+the art drop on CI, which it does not have):
+
+    for f in vg_militia vg_crossbow vg_footman vg_arbalest vg_cleric              vg_champion vg_bannerguard vg_ballistier vg_shieldmaiden vg_colossus; do
+      a=$(sha256sum < "$DROP/$f.webp"); b=$(sha256sum < public/art/units/$f.webp)
+      [ "$a" = "$b" ] || echo "STALE $f"
+    done
+
+All ten report STALE today. Plus: `unit('vg_colossus').name === 'Quarry Titan'`
+is false, and so is the Shield Bearer equivalent.
+
+**Do not** re-encode or regenerate anything to fix this — the plates are final
+and shipping-size, and the work is a byte-for-byte copy plus two string edits.
+
+## DN12 commit 10 never landed: the balance pass
+
+**Status:** open. Commits 2–9 shipped every unit and every primitive DN12 asks
+for, and none of them tuned anything — each one measured, reported and moved
+on, because §7.10 owns balance. That pass has not happened, so the branch
+shipped with six units outside the ±8% flag.
+
+Where it stands after commit 9, `--runs 4000`, seeds 12345 / 999:
+
+| unit | delta | n | tunable? |
+|---|---|---|---|
+| Sunforged Champion | +31.1% / +30.1% | 172 / 188 | no — see the selection entry |
+| Runelord | +27.4% / +24.6% | 375 / 354 | yes, and commit 8 already moved it 7 points |
+| Aegis Warden | +18.4% / +19.3% | 1258 / 1149 | yes — biggest honest overshoot |
+| Sunlance Ballistier | +14.4% / +13.5% | 870 / 904 | partly |
+| Anvilborn Juggernaut | +9.9% / +9.1% | 3511 / 3485 | yes — `frac` 0.5 → 0.4 |
+| Quarry Titan | +8.8% / +8.9% | 6732 / 6466 | marginal |
+
+Faction balance is fine and never moved: Vanguard 4.29, Stormtide 4.52,
+Verdant 4.69, all inside the 4.2–4.8 target.
+
+**The order to do it in.** Two of the three jobs are harness work and have to
+come first, because the third cannot be measured without them: teach `pickPath`
+to weigh abilities, add the path-share column, and only then tune. Tuning first
+would be reading a broken instrument, which is what the two entries below are
+about.
+
+**The number that fails:** `npm run sim` → `UNIT WIN-DELTA` flags all six rows
+above, and `PROMOTION LINES` still reports whole lines rather than the per-branch
+split §7.10 needs.
+
+## The DN11 Kinship groundwork is parked in a stash
+
+**Status:** open, and at risk — a stash is not a branch and nobody will find it
+by accident.
+
+`src/data/kinship.ts` and `tests/kinship.test.ts` were written test-first before
+DN12 started and were never finished. They are in `git stash` on this clone,
+message "DN11 §3 Kinship groundwork (parked for DN12)". They were parked rather
+than committed because committing them lands thirteen red tests, which would
+have made every DN12 commit unverifiable.
+
+What they need before they can go green: `KinId` in `src/data/types.ts`,
+`ownedKinsOf` exported from `src/engine/camp.ts`, `kin` and `kinLocked` fields
+on `UnitDef`, and the kin-locked units themselves. `rollOffer` already takes the
+`OfferContext` they were written against, so the hard refactor is done.
+
+**Recover it with:** `git stash list` then `git stash pop`, and move it onto its
+own branch before touching anything else.
+
+**The number that fails:** with the stash applied, `npx vitest run
+tests/kinship.test.ts` fails 13 tests and `npx tsc --noEmit` reports 17 errors.
+
 ## War Council fork health (DN10 leftovers)
 
 **Status:** open. The DN10 balance pass fixed the one *strictly dominated*
@@ -24,6 +122,197 @@ scorer's weights) and re-measure.
 
 **The number that fails:** `npm run sim` → `FORK HEALTH … §8.7 wants ≥80%`.
 
+## The win-delta metric measures selection, not power (DN12 commit 5)
+
+**Status:** open, and it changes what the DN12 §7.10 balance pass can achieve.
+
+DN12 commit 5 was an accidental controlled experiment. It cut the Sunforged
+Champion's ATK from 4 to 3 — one number, strictly weaker, nothing else about
+the unit touched except gaining a counter-attack worth ~1.6 points. The metric
+moved like this, `--runs 4000`, seeds 12345 / 999:
+
+| Champion | ATK | win-delta | n |
+|---|---|---|---|
+| before (commit 4) | 4 | +20.0% | 672 |
+| Bloodlust only | 4 | +21.6% / +21.7% | 672 / 664 |
+| Bloodlust **+ the cut** | 3 | **+30.5% / +27.0%** | **170 / 183** |
+
+**Cutting the unit made its win-delta nine points worse, and its sample fell by
+three quarters.** Vanguard's own average place did not move at all (4.32).
+
+**The read.** The nerf worked exactly as intended on the board — the harness's
+player policy stopped taking the Champion branch of the Footman fork, 672 boards
+down to 170. What is left is a self-selected rump: the boards that still build a
+Champion after it got worse are the boards where it was already winning. The
+metric then reports that rump's win rate as the unit's strength.
+
+So `UNIT WIN-DELTA` is not measuring how strong a unit is. It is measuring how
+strong the boards that chose it are, and cutting a unit *raises* the number by
+shrinking and enriching that population. This is the same signal the Runelord
+entry below has been circling since DN11 — "two rounds of cuts barely moved it"
+— stated as a mechanism rather than a suspicion, and now with a controlled case
+where the only change was one stat on one unit.
+
+**Refined by commit 8: the artefact bites at FORKS, not at straight lines.**
+
+Commit 8 cut the Runelord hard — it took away a board-wide +2 Bulwark to all
+allies AND his own Guard, replacing both with a conditional wall. The delta
+went **DOWN**, +31.4% → +28.4% and +31.2% → +24.3%, and crucially **n barely
+moved**: 378 → 374 and 361 → 356.
+
+That is the opposite of what happened to the Champion, and the difference is
+structural rather than lucky. The Champion is one branch of the Footman FORK,
+so nerfing it moved boards onto the Bannerguard and the sample collapsed. The
+Runelord is the top of a STRAIGHT line — `vg_runesmith` has exactly one path —
+so a warlord who took the Runesmith branch gets the Runelord whatever it costs.
+There is no choice for the nerf to leak into, the population stays put, and the
+metric measures power again.
+
+So the rule is sharper than "the metric is broken":
+
+  - **Fork branches** (Champion, and the Ballistier's line since commit 2)
+    report selection. Cutting them raises the number.
+  - **Straight-line tops** (Runelord) report power. Cutting them works.
+
+**What it means for §7.10.** The Runelord CAN be tuned to target and commit 8
+already moved it seven points on one seed. The Champion cannot, and no amount
+of cutting will fix its number while it sits on a fork — that one needs the
+metric changed (weight by board, or measure against boards that were *offered*
+the unit rather than boards that took it) or the acceptance criterion relaxed.
+
+**The number that fails:** `npm run sim` → `UNIT WIN-DELTA … Sunforged Champion`
+and `… Runelord of the Deep Halls`, both far above +8% and both rising as their
+samples fall.
+
+## The Aegis Warden is genuinely overpowered (DN12 commit 6)
+
+**Status:** open, and unlike everything else on this branch it is a REAL power
+reading rather than the selection artefact above.
+
+The thrown shield lands at **+18.3% (n 1263)** and **+19.1% (n 1158)**, seeds
+12345 / 999. The sample is an order of magnitude larger than the Champion's
+(n 167) or the Runelord's (n 378), so this is not a self-selected rump: a
+thousand-odd boards took the unit and it won on them.
+
+DN12 §3.4 called this in advance — "total damage across a full board is
+enormous, so the decay and the base number are the whole balance job". Measured
+on a full seven-stack board, ATK 4:
+
+| stack | one swing | hops landed | arc total | x one swing | stacks hit twice |
+|---|---|---|---|---|---|
+| 4 | 16 | 10/14 | 57 | 3.56x | 3/7 |
+| 8 | 32 | 13/14 | 121 | 3.78x | 6/7 |
+| 11 | 44 | 14/14 | 166 | 3.77x | 7/7 |
+| 14 | 56 | 14/14 | 214 | 3.82x | 7/7 |
+
+Two things fall out. The multiplier is capped near **3.8x** — the geometric
+ceiling of x0.75 is 4x and flooring every hop keeps it under — so the arc
+cannot run away; doubling ATK doubles the total rather than compounding it.
+And **"2 full passes" is a cap the arithmetic rarely reaches**: below 11 units
+the decay hits zero first, and at a typical 4-unit T4 only three of seven
+stacks are struck twice.
+
+**The lever.** §6 fixes the decay at x0.75 and the passes at 2, so ATK is the
+only knob, and it is close to linear in the total. It shipped at 4 rather than
+a Champion's 5 for exactly this reason. On these numbers 3 is the obvious next
+try, and unlike the Champion this unit's sample is big enough that a cut should
+show up honestly rather than through the selection effect.
+
+**Not cut in commit 6** because §7.10 owns balance and one seed pair is a
+reading rather than a pass. It is the strongest candidate on the branch for an
+actual tuning change.
+
+**The number that fails:** `npm run sim` → `UNIT WIN-DELTA … Aegis Warden`
+above +8%.
+
+*Commit 7 left it where it was: +19.4% (n 1266) and +20.8% (n 1159). Taunt
+changed nothing about the Warden, as expected — they share no mechanism.*
+
+## Taunt is power-neutral on the unit that carries it (DN12 commit 7)
+
+**Status:** noted, not a problem — recorded because it is surprising and will
+save the next person re-measuring it.
+
+§4.5 calls Taunt "the most disruptive thing in this note", and on the board it
+is: every enemy attack is redirected, volleys lose the back row entirely, and
+Cover stops being spent. The Quarry Titan's own win-delta moved **+8.0% →
++8.3% / +8.7%** (n ~6700, seeds 12345 / 999). Vanguard did not move at all
+(4.32 both before and after).
+
+So Taunt reshapes battles without much changing who wins them. That reads right
+for a mechanic that mostly moves damage around rather than adding any: the
+Titan soaks blows its line would have taken, and it was already the thing most
+attacks reached. Worth knowing before §7.10 tries to pay for Taunt with a stat
+cut it does not need.
+
+## Fork share is decided by printed stats alone (DN12 commit 9)
+
+**Status:** open, and it is the root cause under two other entries here. This
+is the one to fix first.
+
+`pickPath` in `src/engine/rivals.ts` is how every warlord in the harness takes a
+fork. It scores each branch as:
+
+    o.atk * 1.1 + o.hp * 0.7 + o.tier * 1.5 + noise + tag bonuses
+
+It never reads `ability` and never reads `keywords`. A branch whose whole
+identity is what it DOES rather than what it prints is therefore invisible to
+the thing measuring whether the fork is healthy.
+
+Measured across every Vanguard fork after commit 9:
+
+| fork | score gap | share of the rarer branch |
+|---|---|---|
+| Shieldmaiden → Aegis of Light / Aegis Warden | **0.3** | ~30% |
+| Footman → Champion / Bannerguard | 2.1 | ~3% |
+| Arbalest → Ballistier / **Sunshot Duellist** | 2.2 | ~4% |
+| Forgeline tops → Runelord / Anvilborn | 3.6 | ~10% |
+
+The correlation is the whole story: the ONLY fork anywhere near DN11 §6's
+35/65 band is the only one whose two branches have near-identical printed
+stats. Everything else is decided before an ability is ever considered, and the
+`noise` term is the only reason the losing branch is picked at all.
+
+**It also explains the selection artefact above.** Commit 5 cut the Champion's
+ATK 4 → 3. That took 1.1 straight off its `pickPath` score and widened the
+Footman gap from 1.0 to 2.1 — which is exactly why its sample halved. The
+"metric measures selection" finding and this one are the same mechanism seen
+from two ends.
+
+**What it means for §7.10.** "No fork an auto-pick outside 35/65" is currently
+reachable only by flattening printed stats across every fork — which would
+erase the design distinctions DN12 spent nine commits making — OR by teaching
+`pickPath` to weigh what a branch does. The second is the real fix, and it is
+harness work, not content work. It should land with the path-share column §7.10
+needs anyway, since neither is measurable without the other.
+
+**The number that fails:** `npm run sim` → `PROMOTION LINES` cannot show it yet
+(it reports the line, not the split). Until the column exists, the split is
+`Sunlance Ballistier` unit n against the crossbow line's n: 870 of 903.
+
+## The Anvilborn's leap is newly flagged (DN12 commit 8)
+
+**Status:** open. Second real power reading on the branch, after the Aegis
+Warden — and like that one it has the sample to be trusted.
+
+The back-row leap (§3.6) reads **+9.9% (n 3512)** and **+9.0% (n 3486)**, seeds
+12345 / 999, having been comfortably inside the flag before commit 8. n ~3500
+is the largest sample of any flagged unit here, so this is power, not selection
+— and the Anvilborn is a fork branch, where the artefact would if anything push
+the number the other way.
+
+**Why it is strong.** It rides on `onAttack`, so the ordinary blow lands on the
+front rank and the leap comes on top: against a full back row that is one
+attack doing four stacks' worth of damage. The lever is `frac`, currently 0.5,
+and it is linear.
+
+**Not cut in commit 8** — §7.10 owns balance, and it landed at 9% rather than
+19%, so it is a tuning job rather than an emergency. `frac: 0.4` is the obvious
+first try.
+
+**The number that fails:** `npm run sim` → `UNIT WIN-DELTA … Anvilborn
+Juggernaut` above +8%.
+
 ## Runelord win-delta: read before acting (DN11)
 
 **Status:** open, deliberately not acted on. The Runelord of the Deep Halls
@@ -31,6 +320,41 @@ reads **+19.8% win-delta (n=302)** at 4000 lobbies, far past the ±8% flag. Two
 rounds of cuts barely moved it — halving the Runesmith's grant took it 21.5% →
 19.2%, halving the Runelord's own took it → 18.8% — which is why the number
 was checked before being cut into a third time.
+
+> **Re-measured after DN12 commit 2** (`--runs 4000`, seeds 12345 / 999). The
+> Colossus and Shieldmaiden lines gained roots, which took `vg_shieldmaiden`
+> and `vg_colossus` out of the camp and left the Vanguard counter with nothing
+> at T2 or T5 (see the entry below). The Runelord went the wrong way — **+28.3%
+> (n=384) and +27.7% (n=363)** — and the Sunlance Ballistier followed it,
+> **+9.5% → +13.3%** while its sample nearly halved, 1607 → 908. The Champion
+> moved the other way on its own, +21.7% → +18.3%, with no stat change.
+>
+> This is the same rarity signal the table below already describes, arriving
+> now for a second unit: the Ballistier got rarer and its delta rose. Nothing
+> here was cut in response, per the reasoning below — the lever is the camp
+> hole, not the Runelord's payload, and the path-share column still has to land
+> before either is touched.
+>
+> **Running figures**, seed 12345 at 4000 lobbies, so the entry is never read
+> against a stale snapshot:
+>
+> | after commit | Champion | Runelord | Ballistier | Colossus | Vanguard |
+> |---|---|---|---|---|---|
+> | 1 (baseline) | +21.7% n882 | +19.8% n302 | +9.5% n1607 | — | 4.36 |
+> | 2 roots | +18.3% n727 | +28.3% n384 | +13.3% n908 | +8.0% | 4.34 |
+> | 3 deflect | +17.8% n729 | +27.1% n387 | +14.1% n911 | +8.9% | 4.29 |
+> | 4 raise | +20.0% n672 | +27.1% n387 | +13.6% n908 | +8.0% | 4.32 |
+> | 5 bloodlust + cut | +30.5% n170 | +27.5% n386 | +13.3% n908 | +7.9% | 4.32 |
+> | 6 aegis fork | +29.4% n167 | +28.7% n378 | +13.3% n905 | +8.0% | 4.32 |
+> | 7 taunt | +30.0% n169 | +31.4% n378 | +14.5% n902 | +8.3% | 4.32 |
+> | 8 forgeline | +31.3% n168 | **+28.4% n374** | +14.8% n902 | +8.9% | 4.29 |
+> | 9 arbalest fork | +31.1% n172 | +27.4% n375 | +14.4% n870 | +8.8% | 4.29 |
+>
+> Commit 4 gave the Champion's fork twin a heal and a Raise and the Champion
+> went UP, +17.8% → +20.0%, while its sample fell 729 → 672. A third instance
+> of the same signal: boards moved to the Bannerguard, the Champion got rarer,
+> and the rarer branch reads higher. The Bannerguard itself stayed inside the
+> ±8% flag after both gifts.
 
 **The read.** Printed side by side, the fifteen T4 line tops span **+21.7% to
 −11.5%**, so "apexes all ride high" is false as a class effect and the delta is
@@ -64,6 +388,47 @@ boards reach a rare form, and the lever is Vanguard's Bulwark curve instead.
 **The number that fails:** `npm run sim` → `UNIT WIN-DELTA … Runelord of the
 Deep Halls` above +8%, and `PATH HEALTH` (commit 7) outside 35/65 for the
 Forgeline.
+
+## The Vanguard camp has no T2 and no T5 (DN12)
+
+**Status:** open, opened by DN12 commit 2. DN10 §3 sells only line roots, so
+giving the Shieldmaiden and Colossus lines roots took both units off the
+counter. What is left sellable in the Vanguard pool is:
+
+| | |
+|---|---|
+| T1 | Militia, Crossbow Levy, Mule Cart, Shield Girl, Cairn Whelp, Forge Apprentice |
+| T2 | — |
+| T3 | Battle Cleric |
+| T4 | Cannon Crew |
+| T5 | — |
+
+Verdant and Stormtide still cover T1–T5 with something of their own. Vanguard
+is the only faction where reaching camp tier 2 unlocks nothing it can buy, so
+the tier weighting (`1 / (1 + (campTier - unitTier) × 0.35)`) spends those
+rolls on T1s.
+
+**Why it matters more than a shifted distribution.** This is the most likely
+cause of the Runelord and Ballistier deltas above: gold that used to buy a
+Shieldmaiden at T2 now flows into the two lines whose roots are still cheap,
+and both lines end in a flagged form. It also invalidates the DN10 rationale
+still written on `vg_shieldmaiden` — she was moved to T2 precisely so the camp
+had a Vanguard body at that tier.
+
+**Why it can wait:** DN12 §7.10 makes the last commit a balance pass, and this
+is exactly what that pass is for. It cannot be fixed by tuning, though — the
+hole is structural. Closing it means a new Vanguard root at T2 and at T5, or
+re-tiering something already sellable, and that is a data decision rather than
+a dial.
+
+**The number that fails:** `npm run sim` → `UNIT WIN-DELTA … Runelord of the
+Deep Halls`, `… Sunlance Ballistier` and `… Mountain Colossus` above +8%.
+
+The Colossus joined that list in commit 3, +8.0% → +8.9% (n 6776), when The
+Bulwark gained its Deflect charge — a stronger mid-form hands the capstone more
+boards in better shape. Vanguard drifted 4.34 → 4.29 in the same commit, still
+inside 4.2–4.8. Both are the camp hole showing through a second time: the line
+is the only door to the Colossus now, so everyone who has one walked it.
 
 ## Honored edge rides slightly hot
 

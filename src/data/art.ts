@@ -71,6 +71,17 @@ export const UNIT_ART: Record<string, string> = {
   st_deepmaw: '/art/units/st_deepmaw.webp',
   st_alpha: '/art/units/st_alpha.webp',
   st_windspeaker: '/art/units/st_windspeaker.webp',
+
+  // ── DN12 ────────────────────────────────────────────────────────────────
+  // the roots the Shieldmaiden and Colossus lines never had (§3.4, §3.5)
+  vg_shieldgirl: '/art/units/vg_shieldgirl.webp',
+  vg_cairn: '/art/units/vg_cairn.webp',
+  vg_bulwark: '/art/units/vg_bulwark.webp',
+  // the fork at the top of the Shieldmaiden line (§3.4)
+  vg_aegis: '/art/units/vg_aegis.webp',
+  vg_aegiswarden: '/art/units/vg_aegiswarden.webp',
+  // the Duellist twin at the top of the crossbow line (§3.3)
+  vg_marksman: '/art/units/vg_marksman.webp',
 }
 
 export const HERO_ART: Record<string, string> = {

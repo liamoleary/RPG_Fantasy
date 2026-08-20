@@ -17,7 +17,41 @@ const ENTRIES: Record<KeywordId, Entry> = {
   bulwark: {
     name: 'Bulwark',
     detail: (x) => `absorbs ${x} damage per unit from each attack, then weakens by 1`,
-    generic: 'Armour. Absorbs X damage per surviving unit from every incoming attack, then weakens by 1.',
+    generic:
+      'Armour. Absorbs X damage per surviving unit from every incoming attack, then weakens by 1. It takes a slice off every blow and lasts all battle — where Deflect stops one blow completely and is then spent.',
+  },
+  raise: {
+    name: 'Raise',
+    detail: (x) =>
+      `${x === 1 ? 'once' : `${x} times`} per battle, a friendly stack that is wiped out returns at 1 unit`,
+    generic:
+      'X times each battle, a friendly stack that has been wiped out is brought back onto the field at 1 unit. This is not Marshal Yseult’s Last Stand: hers keeps a stack from ever falling, this one answers after it already has. A warband can carry both, and they do not overlap.',
+  },
+  intercept: {
+    name: 'Intercept',
+    detail: () => 'while this stack lives, your whole front rank takes anything aimed past it',
+    generic:
+      'While this stack lives, your whole front rank stands in front of the back row: any attack aimed past the front row is taken by a front-row stack instead, so the back row cannot be reached at all. Unlike Cover it costs no charges, it is not limited to the two slots above the target, and Siege does NOT ignore it. A stack that leaps the line rather than aiming past it still gets through.',
+  },
+  taunt: {
+    name: 'Taunt',
+    detail: () => 'while this stack stands, every enemy attack must be aimed at it',
+    generic:
+      'While this stack stands, every enemy attack must be aimed at it — melee and volleys both, whatever they would rather hit. Siege ignores Bulwark but not Taunt. It governs which stack is ATTACKED, so it does not redirect hero spells, and it does not stop an effect that spreads after it lands: a ricochet or a Piercing Volley still carries on into the line behind.',
+  },
+  reflect: {
+    name: 'Reflect',
+    detail: (x) =>
+      `charges as this stack acts; every ${x} actions the next attack against it is sent back at the attacker instead`,
+    generic:
+      'Charges by 1 each time this stack acts. At X charges the next attack against it is sent straight back at whoever threw it — the stack takes nothing, the attacker takes the whole blow, and the meter empties. Unlike Deflect the attacker does not walk away. Only a stack can be answered this way: hero spells and Apex ultimates have nobody to send it back to, so they land normally.',
+  },
+  deflect: {
+    name: 'Deflect',
+    detail: (x) =>
+      `the first ${x === 1 ? 'attack' : `${x} attacks`} against this stack each battle ${x === 1 ? 'is' : 'are'} stopped completely`,
+    generic:
+      'The first X attacks against this stack each battle are stopped completely — no damage, no Venom, no armour spent. This is not Bulwark: Bulwark shaves every hit for the whole battle, Deflect cancels one hit outright and is then gone. Siege ignores Bulwark but not Deflect. Venom already coursing through the stack is a condition, not an attack, and is not deflected.',
   },
   charge: {
     name: 'Charge',

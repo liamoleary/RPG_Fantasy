@@ -100,16 +100,49 @@ export interface StackSnap {
   /** Apex meter — 0/0 for the forms that have no ultimate (DN04 §3) */
   apexCharge: number
   apexMax: number
+  /**
+   * Reflect meter (DN12 §4.3) — 0/0 for everything that does not carry it.
+   * §3.4 is explicit that the charge has to be readable on the card or the
+   * player never learns the rhythm, so it rides in the snapshot like the Apex
+   * meter rather than being engine-private state.
+   */
+  reflectCharge: number
+  reflectMax: number
 }
 
 export type BattleEvent =
   | { t: 'battleStart'; a: StackSnap[]; b: StackSnap[] }
   /** a battle-scoped hero passive announcing itself at battle start (§1.4) */
   | { t: 'passive'; side: Side; name: string; text: string }
-  | { t: 'attack'; src: string; dst: string; side: Side; dmg: number; absorbed: number; killed: number; retaliation: boolean; snap: StackSnap[] }
+  | {
+      t: 'attack'
+      src: string
+      dst: string
+      side: Side
+      dmg: number
+      absorbed: number
+      killed: number
+      retaliation: boolean
+      /** DN12 §4.1: this answer was a Bloodlust counter, not the universal
+       *  retaliation every stack makes. The battle screen reads it to put the
+       *  red glow on the counter-attacker for the beat it lasts. */
+      bloodlust?: boolean
+      snap: StackSnap[]
+    }
   | { t: 'cleave'; src: string; dst: string; dmg: number; killed: number; snap: StackSnap[] }
   | { t: 'venom'; uid: string; units: number; snap: StackSnap[] }
   | { t: 'cover'; src: string; saved: string; by: string; left: number; snap: StackSnap[] }
+  /** Deflect (DN12 §4.6): a blow negated whole. `left` is what remains after. */
+  | { t: 'deflect'; uid: string; left: number; snap: StackSnap[] }
+  /** Raise (DN12 §4.2): `by` hauls the wiped `uid` back up at 1 unit. */
+  | { t: 'raise'; uid: string; by: string; left: number; snap: StackSnap[] }
+  /** Intercept (DN12 §3.6): the rune-wall put `by` in front of `saved`. */
+  | { t: 'intercept'; src: string; saved: string; by: string; snap: StackSnap[] }
+  /** Reflect (DN12 §4.3): `uid`'s full shield sent the blow back at `dst`. */
+  | { t: 'reflect'; uid: string; dst: string; dmg: number; absorbed: number; killed: number; snap: StackSnap[] }
+  /** Bounce (DN12 §4.4): one ricochet of a thrown shield. `hop` counts from 1
+   *  — the throw itself is the ordinary attack event that precedes them. */
+  | { t: 'bounce'; src: string; dst: string; hop: number; dmg: number; absorbed: number; killed: number; snap: StackSnap[] }
   /** `src` is the stack that cast it, when a stack cast it (Design Notes 04 §10) */
   | { t: 'buff'; uids: string[]; text: string; src?: string; snap: StackSnap[] }
   | { t: 'heal'; uid: string; amount: number; revived: number; src?: string; snap: StackSnap[] }
@@ -188,6 +221,9 @@ interface RStack {
   frenzied: boolean
   rootedUntil: number
   retaliatedCycle: number
+  /** DN12 §4.1: last cycle this stack fired a Bloodlust counter. Separate from
+   *  `retaliatedCycle` so the two answers are capped independently. */
+  counteredCycle: number
   actions: number
   jitter: number
   rank: number
@@ -209,6 +245,19 @@ interface RStack {
   splitNext: number
   /** Cover charges left this battle (front row only) */
   coverLeft: number
+  /** Deflect charges left this battle (DN12 §4.6) — any row, unlike Cover */
+  deflectLeft: number
+  /** Raises left this battle (DN12 §4.2) */
+  raiseLeft: number
+  /** Reflect (DN12 §4.3): charges gathered, and the number needed to fire.
+   *  `reflectMax` of 0 means the stack does not carry the keyword at all. */
+  reflectCharge: number
+  reflectMax: number
+  /** Taunt (DN12 §4.5): every enemy attack must be aimed at this stack. */
+  taunt: boolean
+  /** Intercept (DN12 §3.6): while this stack lives, its front rank takes
+   *  anything aimed past it. Granted to the rank, not carried by it. */
+  grantsIntercept: boolean
   /** the ultimate this stack charges toward, if its form has one (§3) */
   apex: ApexDef | null
   apexCharge: number
@@ -225,6 +274,26 @@ interface Ctx {
   exchange: number
   /** Frenzy triggers per side this battle — Bloodcall reads it (§3) */
   frenzyCount: Record<Side, number>
+  /**
+   * The cycle now being resolved (DN12 §4.1). The pre-existing retaliation
+   * takes `cycle` as a parameter and keeps doing so — touching that would move
+   * every seeded log in the repo. Bloodlust reads this instead, because it has
+   * to be gated on extra attacks too, and those call `performAttack` without a
+   * cycle argument.
+   */
+  cycle: number
+  /**
+   * Re-entrancy depth for counter-attacks (§4.1's loop guard). Non-zero means
+   * we are already resolving a counter, and no further counter may fire.
+   *
+   * A counter deals its damage through `applyDamage`, which cannot re-enter
+   * `performAttack` on its own — so the loop this stops is the indirect one: a
+   * counter kills the attacker, the attacker's death fires an ability that
+   * grants an ally an extra attack, that attack lands on the counter-attacker,
+   * and round it goes. A depth counter closes that whatever new path someone
+   * adds later, which a per-stack flag would not.
+   */
+  counterDepth: number
 }
 
 const pool = (s: RStack): number => s.count * s.maxHp - s.wound
@@ -258,6 +327,8 @@ function snap(s: RStack): StackSnap {
     cover: s.coverLeft,
     apexCharge: s.apex ? s.apexCharge : 0,
     apexMax: s.apex ? s.apex.charge : 0,
+    reflectCharge: s.reflectMax > 0 ? s.reflectCharge : 0,
+    reflectMax: s.reflectMax,
   }
 }
 
@@ -395,6 +466,7 @@ function buildStack(bs: BoardStack, side: Side, hero: HeroState, heroDef: HeroDe
     frenzied: false,
     rootedUntil: -1,
     retaliatedCycle: -1,
+    counteredCycle: -1,
     actions: 0,
     jitter: rng.next(),
     rank,
@@ -411,6 +483,17 @@ function buildStack(bs: BoardStack, side: Side, hero: HeroState, heroDef: HeroDe
     apexCharge: 0,
     // Cover is a front-line job: a back-row stack cannot shield anything.
     coverLeft: row === 'front' ? (kw(def, 'cover') ?? 0) + extraKw('cover') + m.frontCover : 0,
+    // Deflect is not: it is this stack's own shield, and a back-row stack
+    // raising it against the volley that found it is exactly the point.
+    deflectLeft: (kw(def, 'deflect') ?? 0) + extraKw('deflect'),
+    raiseLeft: (kw(def, 'raise') ?? 0) + extraKw('raise'),
+    // Starts EMPTY, like the Apex meter: the first exchanges of a battle are
+    // when a shield-bearer is most vulnerable, and handing her a loaded shield
+    // at the horns would remove the rhythm the ability is made of.
+    reflectCharge: 0,
+    reflectMax: (kw(def, 'reflect') ?? 0) + extraKw('reflect'),
+    taunt: has('taunt'),
+    grantsIntercept: has('intercept'),
   }
 }
 
@@ -422,11 +505,38 @@ interface DamageOut {
   killed: number
   overkill: number
   died: boolean
+  /** the blow never landed — a Deflect charge ate it whole (DN12 §4.6) */
+  deflected: boolean
 }
 
-function applyDamage(ctx: Ctx, target: RStack, raw: number, opts: { siege?: boolean } = {}): DamageOut {
-  const out: DamageOut = { dealt: 0, absorbed: 0, killed: 0, overkill: 0, died: false }
+/**
+ * `status` marks damage that is NOT an incoming blow — Venom resolving on the
+ * poisoned stack's own action is the only such source today. It exists so
+ * Deflect can be opt-OUT rather than opt-in: every present and future way of
+ * hitting a stack spends a charge by default, and the one thing that is a
+ * lingering condition rather than a hit says so. The other way round, a damage
+ * source added later would silently slip past a shield that promises to eat
+ * "the first attack", which is the failure nobody would notice.
+ */
+function applyDamage(ctx: Ctx, target: RStack, raw: number, opts: { siege?: boolean; status?: boolean } = {}): DamageOut {
+  const out: DamageOut = { dealt: 0, absorbed: 0, killed: 0, overkill: 0, died: false, deflected: false }
   if (!target.alive || raw <= 0) return out
+
+  // Deflect (DN12 §4.6) resolves FIRST, and it is not Bulwark. Bulwark takes a
+  // slice off every blow and wears down by one; this takes one blow entirely
+  // and is then gone. Because the attack never lands, it costs no armour
+  // either — there is nothing for the Bulwark to have soaked — so the check
+  // sits above the block below rather than inside it.
+  //
+  // Siege does not bypass it. Siege ignores *armour*, and a shield thrown up
+  // to eat one hit is not armour; keeping them independent is also what lets
+  // the pair be explained in one sentence each.
+  if (!opts.status && target.deflectLeft > 0) {
+    target.deflectLeft -= 1
+    out.deflected = true
+    ctx.events.push({ t: 'deflect', uid: target.uid, left: target.deflectLeft, snap: snaps(target) })
+    return out
+  }
 
   let dmg = raw
   if (!opts.siege && target.bulwark > 0) {
@@ -504,17 +614,82 @@ function healStack(ctx: Ctx, target: RStack, amount: number, src?: RStack): { he
 const aliveOn = (ctx: Ctx, side: Side): RStack[] => ctx.stacks.filter((s) => s.side === side && s.alive)
 const enemiesOf = (ctx: Ctx, s: RStack): RStack[] => aliveOn(ctx, s.side === 'a' ? 'b' : 'a')
 
+/**
+ * Taunt (DN12 §4.5). The enemy stack that is forcing every blow onto itself,
+ * or undefined when nobody is.
+ *
+ * Lowest slot wins when more than one stands — the same tie-break
+ * `interceptorFor` uses, and for the same reason: the answer must not depend
+ * on the order stacks happen to sit in `ctx.stacks`. No randomness at all.
+ */
+function taunterAgainst(ctx: Ctx, attacker: RStack): RStack | undefined {
+  let best: RStack | undefined
+  for (const f of ctx.stacks) {
+    if (f.side === attacker.side || !f.alive || !f.taunt) continue
+    if (!best || f.slot < best.slot) best = f
+  }
+  return best
+}
+
+/**
+ * Who this attack lands on. The ONE place a target is chosen, which is why
+ * Taunt is applied here and nowhere else: `performAttack` and both of the
+ * Apex branches that aim (`sunburstVerdict`, `sunlance`) all come through it,
+ * so none of them can quietly bypass the override.
+ *
+ * ── Why the override sits at each `return` rather than at the top ──────────
+ *
+ * The branches below do not draw the same number of random values. Siege with
+ * an armoured target draws none; a volley draws one; melee draws none when the
+ * mirrored column is occupied and one when it is not. An early return at the
+ * top of this function would skip whichever draw the natural branch would have
+ * made, and every seeded decision for the rest of that battle would shift.
+ *
+ * So each branch runs to the point where it has picked, spending exactly the
+ * randomness it always spent, and the override replaces the ANSWER. A battle
+ * in which Taunt does not actually change who is hit therefore replays
+ * byte-for-byte as it did before the keyword existed.
+ *
+ * It also has to land BEFORE Cover resolves, not after: Cover spends a charge
+ * and writes an event, and a volley that was going to be intercepted but is
+ * pulled onto the taunter instead never happened, so no charge may be spent
+ * for it.
+ *
+ * Precedence: Taunt > the rune-wall (§3.6) > Siege > Cover > mirrored column
+ * > random front. The wall sits above Cover on purpose: both pull a blow off
+ * the back row, and the free one answering first means a Runelord's line never
+ * spends a Cover charge — banked, exactly as a Taunt line banks them.
+ */
 function chooseTarget(ctx: Ctx, attacker: RStack): RStack | undefined {
   const foes = enemiesOf(ctx, attacker)
   if (foes.length === 0) return undefined
+  const taunt = taunterAgainst(ctx, attacker)
+
+  /** The rune-wall steps in, and says so, or the blow goes where it was aimed. */
+  const past = (aimed: RStack): RStack => {
+    const wall = frontRankFor(ctx, aimed)
+    if (!wall || wall.uid === aimed.uid) return aimed
+    ctx.events.push({ t: 'intercept', src: attacker.uid, saved: aimed.uid, by: wall.uid, snap: snaps(aimed, wall) })
+    return wall
+  }
 
   if (attacker.siege) {
     let best = foes[0]
     for (const f of foes) if (f.bulwark > best.bulwark) best = f
-    if (best.bulwark > 0) return best
+    // Taunt beats Siege. Siege ignores ARMOUR, which is a different thing from
+    // ignoring the stack bellowing at it — and in practice the taunter is
+    // usually the best-armoured target anyway, so this rarely changes a blow.
+    // The wall beats it too: Siege ignores Cover, but §3.6's promise that the
+    // back row cannot be reached is unqualified, and a gunner walking through
+    // it would leave the Runelord paying for something he does not have.
+    if (best.bulwark > 0) return taunt ?? past(best)
   }
   if (attacker.volley) {
     const picked = ctx.rng.pick(foes)
+    if (taunt) return taunt
+    // Before Cover, so a blow the wall already turned never spends a charge.
+    const walled = past(picked)
+    if (walled.uid !== picked.uid) return walled
     // Cover (§2.1): a volley into a covered back-row stack is taken by the
     // front-row unit standing over it. Siege ignores Cover unconditionally —
     // a Siege unit reaches this branch whenever no Bulwark target exists, so
@@ -539,9 +714,11 @@ function chooseTarget(ctx: Ctx, attacker: RStack): RStack | undefined {
   if (front.length > 0) {
     const column = attacker.slot % FRONT_SLOTS
     const mirrored = front.find((f) => f.slot === column)
-    return mirrored ?? ctx.rng.pick(front)
+    const natural = mirrored ?? ctx.rng.pick(front)
+    return taunt ?? natural
   }
-  return ctx.rng.pick(foes)
+  const natural = ctx.rng.pick(foes)
+  return taunt ?? natural
 }
 
 /**
@@ -572,6 +749,43 @@ function interceptorFor(ctx: Ctx, target: RStack): RStack | undefined {
     return best
   }
   return undefined
+}
+
+/**
+ * The rune-wall (DN12 §3.6). While a stack carrying `intercept` lives, its
+ * whole front rank stands in front of the back row: anything aimed past the
+ * front row is taken by a front-row stack instead.
+ *
+ * Returns the stack that steps in, or undefined when the target is not behind
+ * a wall. Preference is the front-row stack standing OVER the target — the
+ * same slot geometry Cover uses, so the blow lands where a player would expect
+ * it to — and failing that the lowest-slot front stack, because §3.6's promise
+ * ("the back row cannot be reached while a front rank stands") is absolute and
+ * must not fall through a gap in the line. No randomness either way.
+ *
+ * Three deliberate differences from Cover, all of them in the Glossary copy:
+ * it costs no charges, it is not limited to the two slots above the target,
+ * and Siege does not ignore it. Siege ignores ARMOUR and it ignores a shield
+ * raised on a charge; a wall of runes is neither.
+ */
+function frontRankFor(ctx: Ctx, target: RStack): RStack | undefined {
+  if (target.row === 'front' || target.slot < FRONT_SLOTS) return undefined
+  const side = target.side
+  let granted = false
+  for (const s of ctx.stacks) {
+    if (s.side === side && s.alive && s.grantsIntercept) { granted = true; break }
+  }
+  if (!granted) return undefined
+
+  const [a, b] = coveringSlotsFor(target.slot)
+  let over: RStack | undefined
+  let lowest: RStack | undefined
+  for (const s of ctx.stacks) {
+    if (s.side !== side || !s.alive || s.row !== 'front') continue
+    if (!lowest || s.slot < lowest.slot) lowest = s
+    if ((s.slot === a || s.slot === b) && (!over || s.slot < over.slot)) over = s
+  }
+  return over ?? lowest
 }
 
 function adjacentAlly(ctx: Ctx, s: RStack): RStack | undefined {
@@ -614,20 +828,59 @@ function onCasualties(ctx: Ctx, s: RStack, killed: number) {
 function onDeath(ctx: Ctx, s: RStack) {
   ctx.events.push({ t: 'death', uid: s.uid, snap: snaps(s) })
   fireAbility(ctx, s, 'onDeath')
+  // After the stack's own last word, not before it: a Deathcry is the thing it
+  // does as it goes, and being hauled back up is what happens to it afterwards.
+  tryRaise(ctx, s)
 }
 
-function fireAbility(ctx: Ctx, s: RStack, trigger: string) {
+/**
+ * Raise (DN12 §4.2). A wiped stack is put back on the field at 1 unit by an
+ * ally holding a `raise` charge.
+ *
+ * The pick is deterministic and spends no randomness: lowest slot among the
+ * living allies that still have a charge — the same tie-break `interceptorFor`
+ * uses, chosen for the same reason. A stack cannot raise itself; it is the one
+ * on the floor.
+ *
+ * Where this sits relative to Marshal Yseult (§3.2) is the whole design. Her
+ * Last Stand fires inside `applyDamage` and prevents the wipe, so `onDeath`
+ * never runs and no charge is spent. This answers only once a stack is really
+ * gone. They stack cleanly and neither shadows the other.
+ */
+function tryRaise(ctx: Ctx, dead: RStack) {
+  if (dead.alive) return
+  let by: RStack | undefined
+  for (const a of ctx.stacks) {
+    if (a.side !== dead.side || !a.alive || a.uid === dead.uid || a.raiseLeft <= 0) continue
+    if (!by || a.slot < by.slot) by = a
+  }
+  if (!by) return
+
+  by.raiseLeft -= 1
+  dead.alive = true
+  dead.count = 1
+  dead.wound = 0
+  ctx.events.push({ t: 'raise', uid: dead.uid, by: by.uid, left: by.raiseLeft, snap: snaps(dead, by) })
+}
+
+/**
+ * `against` names the stack this trigger is a response TO, where the trigger
+ * has one — today only `onAttacked`, whose whole point is answering a
+ * particular blow. Every other trigger leaves it unset and no other effect
+ * reads it.
+ */
+function fireAbility(ctx: Ctx, s: RStack, trigger: string, against?: RStack) {
   const ab = s.def.ability
   if (!ab || ab.trigger !== trigger) return
   // Honored ability echo (§3): the same effect resolves a second time.
   const times = s.abilityEcho ? 2 : 1
   for (let i = 0; i < times; i++) {
     if (trigger !== 'onDeath' && !s.alive) return
-    applyAbilityEffect(ctx, s, ab.effect)
+    applyAbilityEffect(ctx, s, ab.effect, against)
   }
 }
 
-function applyAbilityEffect(ctx: Ctx, s: RStack, e: AbilityEffect) {
+function applyAbilityEffect(ctx: Ctx, s: RStack, e: AbilityEffect, against?: RStack) {
   const allies = aliveOn(ctx, s.side)
 
   switch (e.type) {
@@ -711,6 +964,190 @@ function applyAbilityEffect(ctx: Ctx, s: RStack, e: AbilityEffect) {
       else onCasualties(ctx, t, res.killed)
       break
     }
+    case 'counterAttack': {
+      // Bloodlust (DN12 §3.1). Answers the stack that struck, for a fraction
+      // of this stack's full swing.
+      //
+      // Spends NO randomness: the target is the attacker, named by the
+      // trigger, so there is no `chooseTarget` and no `rng.pick`. That is what
+      // lets every seeded battle in the game without a counter-attacker on the
+      // board replay byte-for-byte — the rng stream never moves.
+      if (!against || !against.alive || !s.alive || s.atk <= 0) break
+      if (ctx.counterDepth > 0) break
+      if (s.counteredCycle === ctx.cycle) break
+      s.counteredCycle = ctx.cycle
+
+      // floor, not round: every damage number in this engine is an integer,
+      // and a half-point drifting into the pool arithmetic is how a stack ends
+      // a battle on 0.5 of a unit.
+      const raw = Math.floor(s.atk * s.count * e.frac)
+      if (raw <= 0) break
+
+      ctx.counterDepth += 1
+      try {
+        const back = applyDamage(ctx, against, raw, { siege: s.siege })
+        ctx.events.push({
+          t: 'attack',
+          src: s.uid,
+          dst: against.uid,
+          side: s.side,
+          dmg: back.dealt,
+          absorbed: back.absorbed,
+          killed: back.killed,
+          retaliation: true,
+          bloodlust: true,
+          snap: snaps(s, against),
+        })
+        if (back.died) onDeath(ctx, against)
+        else onCasualties(ctx, against, back.killed)
+      } finally {
+        // `finally` so a throw anywhere downstream cannot leave the guard
+        // latched on and silently disable every counter for the rest of the
+        // battle — a failure that would look like a balance change.
+        ctx.counterDepth -= 1
+      }
+      break
+    }
+    case 'strikeSecondTarget': {
+      /**
+       * The second barrel (DN12 §3.3). The first shot has already landed on
+       * `against`; this finds the next living enemy by slot, wrapping, and
+       * fires at it for `frac` of the same swing.
+       *
+       * Next-by-slot rather than a roll, for the same reason the ricochet in
+       * §4.4 works that way: no rng of its own, so the pair of shots is fixed
+       * the moment the first one is aimed. And like every other effect that
+       * spreads AFTER a blow lands, it is not pulled onto a Taunt and not
+       * turned by the rune-wall — §4.5 governs which stack is attacked, not
+       * where a second barrel goes.
+       */
+      if (!against || !s.alive) break
+      const line = enemiesOf(ctx, s).slice().sort((p, q) => p.slot - q.slot)
+      if (line.length < 2) break
+      const start = line.findIndex((f) => f.uid === against.uid)
+      // The first target may have been wiped by the opening shot, in which
+      // case it is gone from `line` and the second barrel simply starts from
+      // the lowest slot instead of nowhere.
+      const t = line[(Math.max(0, start) + 1) % line.length]
+      if (!t || t.uid === against.uid) break
+      const raw = Math.floor(s.atk * s.count * e.frac)
+      if (raw <= 0) break
+      const r = applyDamage(ctx, t, raw, { siege: s.siege })
+      ctx.events.push({
+        t: 'attack',
+        src: s.uid,
+        dst: t.uid,
+        side: s.side,
+        dmg: r.dealt,
+        absorbed: r.absorbed,
+        killed: r.killed,
+        retaliation: false,
+        snap: snaps(s, t),
+      })
+      if (r.died) onDeath(ctx, t)
+      else onCasualties(ctx, t, r.killed)
+      break
+    }
+    case 'strikeEnemyBackRow': {
+      /**
+       * The Anvilborn leaps the line (DN12 §3.6). Every enemy back-row stack
+       * takes `frac` of this stack's swing, in ascending slot order, with no
+       * roll of any kind.
+       *
+       * Note what this does NOT go through: `chooseTarget`. So the leap is not
+       * pulled onto a Taunt, and — deliberately — it is not stopped by the
+       * Runelord's rune-wall either. The two ends of the Forgeline answer each
+       * other: one makes the back row unreachable, the other goes over the top
+       * of it. That is the fork having an argument, and it is the reason the
+       * effect enumerates the row itself rather than aiming at it.
+       */
+      if (!s.alive) break
+      const raw = Math.floor(s.atk * s.count * e.frac)
+      if (raw <= 0) break
+      const back = enemiesOf(ctx, s)
+        .filter((f) => f.row !== 'front' && f.slot >= FRONT_SLOTS)
+        .sort((p, q) => p.slot - q.slot)
+      for (const t of back) {
+        if (!t.alive) continue
+        const r = applyDamage(ctx, t, raw)
+        ctx.events.push({
+          t: 'attack',
+          src: s.uid,
+          dst: t.uid,
+          side: s.side,
+          dmg: r.dealt,
+          absorbed: r.absorbed,
+          killed: r.killed,
+          retaliation: false,
+          snap: snaps(s, t),
+        })
+        if (r.died) onDeath(ctx, t)
+        else onCasualties(ctx, t, r.killed)
+      }
+      break
+    }
+    case 'bounceAttack': {
+      /**
+       * The thrown shield (DN12 §4.4). Under `onAttack` the stack's ordinary
+       * blow has already landed on `against` — that is hop 0, at full strength
+       * — and this adds the ricochets after it.
+       *
+       * The arc, exactly as §3.4 decides it:
+       *
+       *   - the enemy line is FROZEN at throw time, in slot order. A stack
+       *     that dies part-way through keeps its place in the sequence, so
+       *     nothing after it shifts forward. That is what "skipping nothing"
+       *     buys: the arc a player watches is the arc they could have counted.
+       *   - `passes` full circuits, wrapping from the last slot back to the
+       *     first, so every stack on the board is struck exactly `passes`
+       *     times however many stacks there are.
+       *   - each hop is `frac` of the one before, floored. Integers only, and
+       *     the tail dies out on its own rather than needing a cutoff.
+       *
+       * Not one call to `ctx.rng`. The first target was chosen by the ordinary
+       * attack that preceded this, and everything after it is arithmetic — so
+       * "deterministic under the seed" holds in the strong sense: the arc is
+       * fixed the instant the throw lands.
+       */
+      if (!against || !s.alive) break
+      // The struck stack is always part of the line, ALIVE OR NOT. The throw
+      // resolves before this effect runs, so a blow that wipes its target
+      // would otherwise leave `against` missing from the enemy list, the start
+      // index unfindable, and the entire arc silently cancelled — the shield
+      // would vanish precisely when the throw went best.
+      const foeSide: Side = s.side === 'a' ? 'b' : 'a'
+      const line = ctx.stacks
+        .filter((x) => x.side === foeSide && (x.alive || x.uid === against.uid))
+        .sort((p, q) => p.slot - q.slot)
+      if (line.length === 0) break
+      const start = line.findIndex((f) => f.uid === against.uid)
+      if (start < 0) break
+
+      const raw = s.atk * s.count
+      const hops = line.length * e.passes
+      for (let i = 1; i < hops; i++) {
+        const dmg = Math.floor(raw * Math.pow(e.frac, i))
+        if (dmg <= 0) break
+        const t = line[(start + i) % line.length]
+        // A hop onto a stack that has already fallen is spent, not re-aimed:
+        // `applyDamage` returns zero for a dead target and the decay carries
+        // on regardless. The shield does not get cleverer as the line thins.
+        const r = applyDamage(ctx, t, dmg)
+        ctx.events.push({
+          t: 'bounce',
+          src: s.uid,
+          dst: t.uid,
+          hop: i,
+          dmg: r.dealt,
+          absorbed: r.absorbed,
+          killed: r.killed,
+          snap: snaps(s, t),
+        })
+        if (r.died) onDeath(ctx, t)
+        else onCasualties(ctx, t, r.killed)
+      }
+      break
+    }
     case 'extraAttackAlly': {
       const others = allies.filter((a) => a.uid !== s.uid && a.atk > 0)
       if (others.length === 0) break
@@ -758,6 +1195,19 @@ function gainApex(s: RStack) {
 }
 
 const apexReady = (s: RStack): boolean => s.apex !== null && s.apexCharge >= s.apex.charge
+
+/**
+ * The Aegis gathers power as she fights (DN12 §4.3). Charged on this stack's
+ * own action, from the same place the Apex meter fills, and capped so the card
+ * can never read past full — a meter that lies about how close the moment is
+ * is worse than no meter.
+ */
+function gainReflect(s: RStack) {
+  if (s.reflectMax <= 0 || !s.alive) return
+  if (s.reflectCharge < s.reflectMax) s.reflectCharge += 1
+}
+
+const reflectReady = (s: RStack): boolean => s.reflectMax > 0 && s.reflectCharge >= s.reflectMax
 
 /** The stack directly behind a front-row target, for Sunlance. */
 function behindOf(ctx: Ctx, target: RStack): RStack | undefined {
@@ -909,6 +1359,33 @@ function performAttack(ctx: Ctx, attacker: RStack, isExtra = false, cycle = 0) {
     attacker.splitNext = 0
     raw = Math.max(1, Math.floor(raw / split))
   }
+  // Reflect (DN12 §4.3). A full shield sends the blow back whole: the target
+  // takes nothing, the attacker takes what it threw, and the charge empties.
+  //
+  // Sits here rather than in `applyDamage` for a reason that is also the rule
+  // the card copy states — you can only send a blow back at somebody who threw
+  // it. `applyDamage` does not know who did; hero spells and Apex ultimates
+  // have no stack to answer, and they land normally.
+  //
+  // Returns immediately: the attack never happened, so no Venom rides in, no
+  // Lifesteal is fed, no Cleave spills, and neither answer below fires.
+  if (reflectReady(target)) {
+    target.reflectCharge = 0
+    const back = applyDamage(ctx, attacker, raw, { siege: target.siege })
+    ctx.events.push({
+      t: 'reflect',
+      uid: target.uid,
+      dst: attacker.uid,
+      dmg: back.dealt,
+      absorbed: back.absorbed,
+      killed: back.killed,
+      snap: snaps(target, attacker),
+    })
+    if (back.died) onDeath(ctx, attacker)
+    else onCasualties(ctx, attacker, back.killed)
+    return
+  }
+
   const res = applyDamage(ctx, target, raw, { siege: attacker.siege })
   ctx.events.push({
     t: 'attack',
@@ -922,7 +1399,9 @@ function performAttack(ctx: Ctx, attacker: RStack, isExtra = false, cycle = 0) {
     snap: snaps(attacker, target),
   })
 
-  if (attacker.venom > 0 && target.alive) {
+  // A deflected blow never connected, so it carries no Venom in with it —
+  // otherwise the shield stops the sword and the poison on it lands anyway.
+  if (attacker.venom > 0 && target.alive && !res.deflected) {
     target.venomPending += attacker.venom
     ctx.events.push({ t: 'venom', uid: target.uid, units: attacker.venom, snap: snaps(target) })
   }
@@ -930,11 +1409,25 @@ function performAttack(ctx: Ctx, attacker: RStack, isExtra = false, cycle = 0) {
     healStack(ctx, attacker, Math.floor(res.dealt / 2))
   }
 
-  fireAbility(ctx, attacker, 'onAttack')
+  // The struck stack goes through as `against`: the thrown shield (§4.4) needs
+  // to know where the arc starts, and its first hit is the blow just landed.
+  fireAbility(ctx, attacker, 'onAttack', target)
 
   const targetDied = res.died
   if (targetDied) onDeath(ctx, target)
   else onCasualties(ctx, target, res.killed)
+
+  // Bloodlust (DN12 §4.1) — the target answers the blow it just took.
+  //
+  // Fires here, at one fixed point in program order: after the target's
+  // casualties have resolved (so a stack wiped by the blow does not answer it)
+  // and BEFORE the universal retaliation below (so the two land in a stable
+  // order, attacker's blow → counter → retaliation, every time).
+  //
+  // Unlike that universal retaliation this is NOT gated on `isExtra` or on the
+  // attacker's Volley: answering an archer, and answering an extra swing, are
+  // exactly the two things it is for.
+  if (target.alive) fireAbility(ctx, target, 'onAttacked', attacker)
 
   // The other prongs of a split attack, each for the same divided share. Like
   // Piercing Volley below they draw no retaliation and report as ordinary
@@ -1202,6 +1695,8 @@ export function simulateBattle(a: BattleSide, b: BattleSide, heroA: HeroDef, her
     lastStandUsed: { a: 0, b: 0 },
     exchange: 0,
     frenzyCount: { a: 0, b: 0 },
+    cycle: 0,
+    counterDepth: 0,
   }
 
   for (const bs of a.board) if (bs.count > 0) ctx.stacks.push(buildStack(bs, 'a', a.hero, heroA, rng))
@@ -1261,6 +1756,12 @@ export function simulateBattle(a: BattleSide, b: BattleSide, heroA: HeroDef, her
     aliveOn(ctx, 'b').length > 0
   ) {
     cycle++
+    // Mirrored onto the context so effects reached through the ability table
+    // can read it — `extraAttackAlly` calls `performAttack` with no cycle
+    // argument, and a Bloodlust counter provoked by one of those still has to
+    // be capped at once per cycle. The pre-existing retaliation keeps using
+    // the parameter, untouched.
+    ctx.cycle = cycle
     const order = ctx.stacks
       .filter((s) => s.alive)
       .slice()
@@ -1292,7 +1793,9 @@ export function simulateBattle(a: BattleSide, b: BattleSide, heroA: HeroDef, her
         const lost = Math.min(s.count - 1, s.venomPending)
         s.venomPending = 0
         if (lost > 0) {
-          const res = applyDamage(ctx, s, lost * s.maxHp - s.wound, { siege: true })
+          // `status`: Venom is a condition the stack carries, resolving on its
+          // own action — not a blow arriving, so no Deflect charge answers it.
+          const res = applyDamage(ctx, s, lost * s.maxHp - s.wound, { siege: true, status: true })
           ctx.events.push({ t: 'venom', uid: s.uid, units: res.killed, snap: snaps(s) })
           onCasualties(ctx, s, res.killed)
         }
@@ -1311,6 +1814,7 @@ export function simulateBattle(a: BattleSide, b: BattleSide, heroA: HeroDef, her
         fireApex(ctx, s, cycle)
       } else {
         gainApex(s)
+        gainReflect(s)
         performAttack(ctx, s, false, cycle)
       }
 

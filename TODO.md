@@ -107,6 +107,26 @@ actual tuning change.
 **The number that fails:** `npm run sim` → `UNIT WIN-DELTA … Aegis Warden`
 above +8%.
 
+*Commit 7 left it where it was: +19.4% (n 1266) and +20.8% (n 1159). Taunt
+changed nothing about the Warden, as expected — they share no mechanism.*
+
+## Taunt is power-neutral on the unit that carries it (DN12 commit 7)
+
+**Status:** noted, not a problem — recorded because it is surprising and will
+save the next person re-measuring it.
+
+§4.5 calls Taunt "the most disruptive thing in this note", and on the board it
+is: every enemy attack is redirected, volleys lose the back row entirely, and
+Cover stops being spent. The Quarry Titan's own win-delta moved **+8.0% →
++8.3% / +8.7%** (n ~6700, seeds 12345 / 999). Vanguard did not move at all
+(4.32 both before and after).
+
+So Taunt reshapes battles without much changing who wins them. That reads right
+for a mechanic that mostly moves damage around rather than adding any: the
+Titan soaks blows its line would have taken, and it was already the thing most
+attacks reached. Worth knowing before §7.10 tries to pay for Taunt with a stat
+cut it does not need.
+
 ## Runelord win-delta: read before acting (DN11)
 
 **Status:** open, deliberately not acted on. The Runelord of the Deep Halls
@@ -140,6 +160,7 @@ was checked before being cut into a third time.
 > | 4 raise | +20.0% n672 | +27.1% n387 | +13.6% n908 | +8.0% | 4.32 |
 > | 5 bloodlust + cut | +30.5% n170 | +27.5% n386 | +13.3% n908 | +7.9% | 4.32 |
 > | 6 aegis fork | +29.4% n167 | +28.7% n378 | +13.3% n905 | +8.0% | 4.32 |
+> | 7 taunt | +30.0% n169 | +31.4% n378 | +14.5% n902 | +8.3% | 4.32 |
 >
 > Commit 4 gave the Champion's fork twin a heal and a Raise and the Champion
 > went UP, +17.8% → +20.0%, while its sample fell 729 → 672. A third instance

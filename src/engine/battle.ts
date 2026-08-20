@@ -251,6 +251,8 @@ interface RStack {
    *  `reflectMax` of 0 means the stack does not carry the keyword at all. */
   reflectCharge: number
   reflectMax: number
+  /** Taunt (DN12 §4.5): every enemy attack must be aimed at this stack. */
+  taunt: boolean
   /** the ultimate this stack charges toward, if its form has one (§3) */
   apex: ApexDef | null
   apexCharge: number
@@ -485,6 +487,7 @@ function buildStack(bs: BoardStack, side: Side, hero: HeroState, heroDef: HeroDe
     // at the horns would remove the rhythm the ability is made of.
     reflectCharge: 0,
     reflectMax: (kw(def, 'reflect') ?? 0) + extraKw('reflect'),
+    taunt: has('taunt'),
   }
 }
 
@@ -605,17 +608,65 @@ function healStack(ctx: Ctx, target: RStack, amount: number, src?: RStack): { he
 const aliveOn = (ctx: Ctx, side: Side): RStack[] => ctx.stacks.filter((s) => s.side === side && s.alive)
 const enemiesOf = (ctx: Ctx, s: RStack): RStack[] => aliveOn(ctx, s.side === 'a' ? 'b' : 'a')
 
+/**
+ * Taunt (DN12 §4.5). The enemy stack that is forcing every blow onto itself,
+ * or undefined when nobody is.
+ *
+ * Lowest slot wins when more than one stands — the same tie-break
+ * `interceptorFor` uses, and for the same reason: the answer must not depend
+ * on the order stacks happen to sit in `ctx.stacks`. No randomness at all.
+ */
+function taunterAgainst(ctx: Ctx, attacker: RStack): RStack | undefined {
+  let best: RStack | undefined
+  for (const f of ctx.stacks) {
+    if (f.side === attacker.side || !f.alive || !f.taunt) continue
+    if (!best || f.slot < best.slot) best = f
+  }
+  return best
+}
+
+/**
+ * Who this attack lands on. The ONE place a target is chosen, which is why
+ * Taunt is applied here and nowhere else: `performAttack` and both of the
+ * Apex branches that aim (`sunburstVerdict`, `sunlance`) all come through it,
+ * so none of them can quietly bypass the override.
+ *
+ * ── Why the override sits at each `return` rather than at the top ──────────
+ *
+ * The branches below do not draw the same number of random values. Siege with
+ * an armoured target draws none; a volley draws one; melee draws none when the
+ * mirrored column is occupied and one when it is not. An early return at the
+ * top of this function would skip whichever draw the natural branch would have
+ * made, and every seeded decision for the rest of that battle would shift.
+ *
+ * So each branch runs to the point where it has picked, spending exactly the
+ * randomness it always spent, and the override replaces the ANSWER. A battle
+ * in which Taunt does not actually change who is hit therefore replays
+ * byte-for-byte as it did before the keyword existed.
+ *
+ * It also has to land BEFORE Cover resolves, not after: Cover spends a charge
+ * and writes an event, and a volley that was going to be intercepted but is
+ * pulled onto the taunter instead never happened, so no charge may be spent
+ * for it.
+ *
+ * Precedence: Taunt > Siege > Cover > mirrored column > random front.
+ */
 function chooseTarget(ctx: Ctx, attacker: RStack): RStack | undefined {
   const foes = enemiesOf(ctx, attacker)
   if (foes.length === 0) return undefined
+  const taunt = taunterAgainst(ctx, attacker)
 
   if (attacker.siege) {
     let best = foes[0]
     for (const f of foes) if (f.bulwark > best.bulwark) best = f
-    if (best.bulwark > 0) return best
+    // Taunt beats Siege. Siege ignores ARMOUR, which is a different thing from
+    // ignoring the stack bellowing at it — and in practice the taunter is
+    // usually the best-armoured target anyway, so this rarely changes a blow.
+    if (best.bulwark > 0) return taunt ?? best
   }
   if (attacker.volley) {
     const picked = ctx.rng.pick(foes)
+    if (taunt) return taunt
     // Cover (§2.1): a volley into a covered back-row stack is taken by the
     // front-row unit standing over it. Siege ignores Cover unconditionally —
     // a Siege unit reaches this branch whenever no Bulwark target exists, so
@@ -640,9 +691,11 @@ function chooseTarget(ctx: Ctx, attacker: RStack): RStack | undefined {
   if (front.length > 0) {
     const column = attacker.slot % FRONT_SLOTS
     const mirrored = front.find((f) => f.slot === column)
-    return mirrored ?? ctx.rng.pick(front)
+    const natural = mirrored ?? ctx.rng.pick(front)
+    return taunt ?? natural
   }
-  return ctx.rng.pick(foes)
+  const natural = ctx.rng.pick(foes)
+  return taunt ?? natural
 }
 
 /**

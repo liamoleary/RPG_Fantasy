@@ -34,6 +34,12 @@ export type KeywordId =
    * filling — see `StackSnap.reflectCharge`.
    */
   | 'reflect'
+  /**
+   * DN12 §4.5. While this stack stands, every enemy attack must be aimed at
+   * it. A targeting override, and the only one in the engine — see
+   * `chooseTarget`, which is the single place it is applied.
+   */
+  | 'taunt'
   | 'charge'
   | 'volley'
   | 'siege'

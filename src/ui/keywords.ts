@@ -27,6 +27,12 @@ const ENTRIES: Record<KeywordId, Entry> = {
     generic:
       'X times each battle, a friendly stack that has been wiped out is brought back onto the field at 1 unit. This is not Marshal Yseult’s Last Stand: hers keeps a stack from ever falling, this one answers after it already has. A warband can carry both, and they do not overlap.',
   },
+  taunt: {
+    name: 'Taunt',
+    detail: () => 'while this stack stands, every enemy attack must be aimed at it',
+    generic:
+      'While this stack stands, every enemy attack must be aimed at it — melee and volleys both, whatever they would rather hit. Siege ignores Bulwark but not Taunt. It governs which stack is ATTACKED, so it does not redirect hero spells, and it does not stop an effect that spreads after it lands: a ricochet or a Piercing Volley still carries on into the line behind.',
+  },
   reflect: {
     name: 'Reflect',
     detail: (x) =>

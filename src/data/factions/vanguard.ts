@@ -417,9 +417,16 @@ export const VANGUARD_UNITS: UnitDef[] = [
     tags: ['wall', 'bulwark'],
   },
   {
-    // DN12 §3.5 renames it Quarry Titan and gives it Taunt, both in later
-    // commits. Here it only stops being a root: the id is untouched, and so is
-    // everything it does on a board.
+    // DN12 §3.5/§4.5: Taunt. Every enemy attack must come to it while it
+    // stands, which the note calls the most disruptive thing in the pass.
+    //
+    // Note the anti-synergy it creates on its own card, which is real and
+    // deliberate rather than an oversight: its Guard 1 buffs a neighbour who
+    // will never be attacked while the Taunt holds, and its Cover 2 can
+    // intercept nothing because nothing is ever aimed past it. Both come back
+    // the moment it falls, which is exactly when the line needs them.
+    //
+    // The rename to Quarry Titan is commit 1's, with the other display names.
     id: 'vg_colossus',
     name: 'Mountain Colossus',
     pool: 'vanguard',
@@ -429,7 +436,7 @@ export const VANGUARD_UNITS: UnitDef[] = [
     init: 3,
     musterSize: 1,
     row: 'front',
-    keywords: [{ k: 'bulwark', x: 4 }, { k: 'guard', x: 1 }, { k: 'cover', x: 2 }],
+    keywords: [{ k: 'bulwark', x: 4 }, { k: 'guard', x: 1 }, { k: 'cover', x: 2 }, { k: 'taunt' }],
     ability: {
       trigger: 'battleStart',
       effect: { type: 'alliesBulwark', x: 1 },

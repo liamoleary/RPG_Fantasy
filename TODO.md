@@ -8,6 +8,104 @@ when the trigger fires — an entry with no failing test is a note, not a TODO.
 economy — was discharged by removal: DN10 deleted the War Tier ladder
 entirely, along with `tests/tiers.test.ts` that guarded it.)*
 
+## DN12 commit 1 never landed: ten stale plates and two stale names
+
+**Status:** open. The DN12 branch shipped commits 2–9 and skipped commit 1,
+which was the art pass. Everything below is still true on `main`.
+
+**The ten swaps.** `Bannerfell_Art/_drop_r3/units/` holds approved replacement
+plates for ten units that already had one, and none of them were copied:
+
+`vg_militia` · `vg_crossbow` · `vg_footman` · `vg_arbalest` · `vg_cleric` ·
+`vg_champion` · `vg_bannerguard` · `vg_ballistier` · `vg_shieldmaiden` ·
+`vg_colossus`
+
+The six NEW units' plates did land, with their units, so the manifest is whole
+and `tests/art.test.ts` is green — it checks that every unit has a plate and
+every plate exists, which is true. It cannot tell an old plate from a new one.
+That is why this entry exists rather than a red test.
+
+DN12 §3.1 is the one that stings: the new Champion plate is what fixes the
+Cleric/Champion twin problem ("the Champion is now a closed helm and a
+longsword, the Cleric a kneeling medic"). On `main` today they still read as
+each other.
+
+**The two renames.** §7.1 also carried two display-name changes that were never
+made. The ids are correct and must not move; only the `name` strings are wrong:
+
+  `vg_shieldmaiden`  "Shieldmaiden"      → "Shield Bearer"
+  `vg_colossus`      "Mountain Colossus" → "Quarry Titan"
+
+Every DN12 comment, test and commit message already calls it the Quarry Titan,
+so the code and the game currently disagree out loud.
+
+**The check that fails** (there is no vitest for it, and adding one would need
+the art drop on CI, which it does not have):
+
+    for f in vg_militia vg_crossbow vg_footman vg_arbalest vg_cleric              vg_champion vg_bannerguard vg_ballistier vg_shieldmaiden vg_colossus; do
+      a=$(sha256sum < "$DROP/$f.webp"); b=$(sha256sum < public/art/units/$f.webp)
+      [ "$a" = "$b" ] || echo "STALE $f"
+    done
+
+All ten report STALE today. Plus: `unit('vg_colossus').name === 'Quarry Titan'`
+is false, and so is the Shield Bearer equivalent.
+
+**Do not** re-encode or regenerate anything to fix this — the plates are final
+and shipping-size, and the work is a byte-for-byte copy plus two string edits.
+
+## DN12 commit 10 never landed: the balance pass
+
+**Status:** open. Commits 2–9 shipped every unit and every primitive DN12 asks
+for, and none of them tuned anything — each one measured, reported and moved
+on, because §7.10 owns balance. That pass has not happened, so the branch
+shipped with six units outside the ±8% flag.
+
+Where it stands after commit 9, `--runs 4000`, seeds 12345 / 999:
+
+| unit | delta | n | tunable? |
+|---|---|---|---|
+| Sunforged Champion | +31.1% / +30.1% | 172 / 188 | no — see the selection entry |
+| Runelord | +27.4% / +24.6% | 375 / 354 | yes, and commit 8 already moved it 7 points |
+| Aegis Warden | +18.4% / +19.3% | 1258 / 1149 | yes — biggest honest overshoot |
+| Sunlance Ballistier | +14.4% / +13.5% | 870 / 904 | partly |
+| Anvilborn Juggernaut | +9.9% / +9.1% | 3511 / 3485 | yes — `frac` 0.5 → 0.4 |
+| Quarry Titan | +8.8% / +8.9% | 6732 / 6466 | marginal |
+
+Faction balance is fine and never moved: Vanguard 4.29, Stormtide 4.52,
+Verdant 4.69, all inside the 4.2–4.8 target.
+
+**The order to do it in.** Two of the three jobs are harness work and have to
+come first, because the third cannot be measured without them: teach `pickPath`
+to weigh abilities, add the path-share column, and only then tune. Tuning first
+would be reading a broken instrument, which is what the two entries below are
+about.
+
+**The number that fails:** `npm run sim` → `UNIT WIN-DELTA` flags all six rows
+above, and `PROMOTION LINES` still reports whole lines rather than the per-branch
+split §7.10 needs.
+
+## The DN11 Kinship groundwork is parked in a stash
+
+**Status:** open, and at risk — a stash is not a branch and nobody will find it
+by accident.
+
+`src/data/kinship.ts` and `tests/kinship.test.ts` were written test-first before
+DN12 started and were never finished. They are in `git stash` on this clone,
+message "DN11 §3 Kinship groundwork (parked for DN12)". They were parked rather
+than committed because committing them lands thirteen red tests, which would
+have made every DN12 commit unverifiable.
+
+What they need before they can go green: `KinId` in `src/data/types.ts`,
+`ownedKinsOf` exported from `src/engine/camp.ts`, `kin` and `kinLocked` fields
+on `UnitDef`, and the kin-locked units themselves. `rollOffer` already takes the
+`OfferContext` they were written against, so the hard refactor is done.
+
+**Recover it with:** `git stash list` then `git stash pop`, and move it onto its
+own branch before touching anything else.
+
+**The number that fails:** with the stash applied, `npx vitest run
+tests/kinship.test.ts` fails 13 tests and `npx tsc --noEmit` reports 17 errors.
+
 ## War Council fork health (DN10 leftovers)
 
 **Status:** open. The DN10 balance pass fixed the one *strictly dominated*

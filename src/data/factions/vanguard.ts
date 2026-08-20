@@ -248,7 +248,10 @@ export const VANGUARD_UNITS: UnitDef[] = [
     // renaming it would churn art.ts, save data and the sim harness for
     // nothing. Her fork into the two Aegis forms lands with those units.
     id: 'vg_shieldmaiden',
-    name: 'Shieldmaiden',
+    // DN12 §7.1. The id is deliberately NOT renamed with her: it is written
+    // into art.ts, into save data and into the sim harness, and none of that
+    // is worth churning for a string.
+    name: 'Shield Bearer',
     pool: 'vanguard',
     tier: 2,
     atk: 2,
@@ -463,9 +466,9 @@ export const VANGUARD_UNITS: UnitDef[] = [
     // intercept nothing because nothing is ever aimed past it. Both come back
     // the moment it falls, which is exactly when the line needs them.
     //
-    // The rename to Quarry Titan is commit 1's, with the other display names.
     id: 'vg_colossus',
-    name: 'Mountain Colossus',
+    // Renamed with the Shield Bearer, and for the same reason the id stays put.
+    name: 'Quarry Titan',
     pool: 'vanguard',
     tier: 5,
     atk: 8,

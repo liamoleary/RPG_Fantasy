@@ -207,13 +207,25 @@ describe('every DN10 line still reads exactly as it did (§7.1)', () => {
     }
   })
 
-  it('leaves both new lines straight — the forks come later', () => {
-    // §3.4 forks the Shieldmaiden into the two Aegis forms, but those units do
-    // not exist yet and naming them early makes buildLineGraph throw at load.
+  it('forks the Shieldmaiden line at the top, and leaves the Colossus straight', () => {
+    // Commit 2 shipped both lines straight, because naming a unit that does
+    // not exist yet makes buildLineGraph throw at load. Commit 6 added the two
+    // Aegis forms and hung them off the Shieldmaiden, which is §3.4's fork.
     expect(unit('vg_shieldgirl').linePaths).toEqual(['vg_shieldmaiden'])
-    expect(unit('vg_shieldmaiden').linePaths).toBeUndefined()
+    expect(unit('vg_shieldmaiden').linePaths).toEqual(['vg_aegis', 'vg_aegiswarden'])
     expect(unit('vg_cairn').linePaths).toEqual(['vg_bulwark'])
     expect(unit('vg_bulwark').linePaths).toEqual(['vg_colossus'])
+  })
+
+  it('gives the Shieldmaiden fork two real leaves at the same tier (§6)', () => {
+    // "Aegis Warden tier: T4, twin of the Aegis of Light." A fork whose two
+    // branches sit at different tiers is not a choice, it is a ladder — the
+    // camp opens one before the other and the Path sheet answers itself.
+    for (const id of ['vg_aegis', 'vg_aegiswarden']) {
+      expect(unit(id).tier, id).toBe(4)
+      expect(LINES.isLeaf(id), `${id} should end its line`).toBe(true)
+      expect(lineRootOf(id)).toBe('vg_shieldgirl')
+    }
   })
 
   it('adds a second path to exactly the three lines DN11 §2.3 names', () => {

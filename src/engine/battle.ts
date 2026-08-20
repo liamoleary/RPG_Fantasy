@@ -100,6 +100,14 @@ export interface StackSnap {
   /** Apex meter — 0/0 for the forms that have no ultimate (DN04 §3) */
   apexCharge: number
   apexMax: number
+  /**
+   * Reflect meter (DN12 §4.3) — 0/0 for everything that does not carry it.
+   * §3.4 is explicit that the charge has to be readable on the card or the
+   * player never learns the rhythm, so it rides in the snapshot like the Apex
+   * meter rather than being engine-private state.
+   */
+  reflectCharge: number
+  reflectMax: number
 }
 
 export type BattleEvent =
@@ -128,6 +136,11 @@ export type BattleEvent =
   | { t: 'deflect'; uid: string; left: number; snap: StackSnap[] }
   /** Raise (DN12 §4.2): `by` hauls the wiped `uid` back up at 1 unit. */
   | { t: 'raise'; uid: string; by: string; left: number; snap: StackSnap[] }
+  /** Reflect (DN12 §4.3): `uid`'s full shield sent the blow back at `dst`. */
+  | { t: 'reflect'; uid: string; dst: string; dmg: number; absorbed: number; killed: number; snap: StackSnap[] }
+  /** Bounce (DN12 §4.4): one ricochet of a thrown shield. `hop` counts from 1
+   *  — the throw itself is the ordinary attack event that precedes them. */
+  | { t: 'bounce'; src: string; dst: string; hop: number; dmg: number; absorbed: number; killed: number; snap: StackSnap[] }
   /** `src` is the stack that cast it, when a stack cast it (Design Notes 04 §10) */
   | { t: 'buff'; uids: string[]; text: string; src?: string; snap: StackSnap[] }
   | { t: 'heal'; uid: string; amount: number; revived: number; src?: string; snap: StackSnap[] }
@@ -234,6 +247,10 @@ interface RStack {
   deflectLeft: number
   /** Raises left this battle (DN12 §4.2) */
   raiseLeft: number
+  /** Reflect (DN12 §4.3): charges gathered, and the number needed to fire.
+   *  `reflectMax` of 0 means the stack does not carry the keyword at all. */
+  reflectCharge: number
+  reflectMax: number
   /** the ultimate this stack charges toward, if its form has one (§3) */
   apex: ApexDef | null
   apexCharge: number
@@ -303,6 +320,8 @@ function snap(s: RStack): StackSnap {
     cover: s.coverLeft,
     apexCharge: s.apex ? s.apexCharge : 0,
     apexMax: s.apex ? s.apex.charge : 0,
+    reflectCharge: s.reflectMax > 0 ? s.reflectCharge : 0,
+    reflectMax: s.reflectMax,
   }
 }
 
@@ -461,6 +480,11 @@ function buildStack(bs: BoardStack, side: Side, hero: HeroState, heroDef: HeroDe
     // raising it against the volley that found it is exactly the point.
     deflectLeft: (kw(def, 'deflect') ?? 0) + extraKw('deflect'),
     raiseLeft: (kw(def, 'raise') ?? 0) + extraKw('raise'),
+    // Starts EMPTY, like the Apex meter: the first exchanges of a battle are
+    // when a shield-bearer is most vulnerable, and handing her a loaded shield
+    // at the horns would remove the rhythm the ability is made of.
+    reflectCharge: 0,
+    reflectMax: (kw(def, 'reflect') ?? 0) + extraKw('reflect'),
   }
 }
 
@@ -871,6 +895,68 @@ function applyAbilityEffect(ctx: Ctx, s: RStack, e: AbilityEffect, against?: RSt
       }
       break
     }
+    case 'bounceAttack': {
+      /**
+       * The thrown shield (DN12 §4.4). Under `onAttack` the stack's ordinary
+       * blow has already landed on `against` — that is hop 0, at full strength
+       * — and this adds the ricochets after it.
+       *
+       * The arc, exactly as §3.4 decides it:
+       *
+       *   - the enemy line is FROZEN at throw time, in slot order. A stack
+       *     that dies part-way through keeps its place in the sequence, so
+       *     nothing after it shifts forward. That is what "skipping nothing"
+       *     buys: the arc a player watches is the arc they could have counted.
+       *   - `passes` full circuits, wrapping from the last slot back to the
+       *     first, so every stack on the board is struck exactly `passes`
+       *     times however many stacks there are.
+       *   - each hop is `frac` of the one before, floored. Integers only, and
+       *     the tail dies out on its own rather than needing a cutoff.
+       *
+       * Not one call to `ctx.rng`. The first target was chosen by the ordinary
+       * attack that preceded this, and everything after it is arithmetic — so
+       * "deterministic under the seed" holds in the strong sense: the arc is
+       * fixed the instant the throw lands.
+       */
+      if (!against || !s.alive) break
+      // The struck stack is always part of the line, ALIVE OR NOT. The throw
+      // resolves before this effect runs, so a blow that wipes its target
+      // would otherwise leave `against` missing from the enemy list, the start
+      // index unfindable, and the entire arc silently cancelled — the shield
+      // would vanish precisely when the throw went best.
+      const foeSide: Side = s.side === 'a' ? 'b' : 'a'
+      const line = ctx.stacks
+        .filter((x) => x.side === foeSide && (x.alive || x.uid === against.uid))
+        .sort((p, q) => p.slot - q.slot)
+      if (line.length === 0) break
+      const start = line.findIndex((f) => f.uid === against.uid)
+      if (start < 0) break
+
+      const raw = s.atk * s.count
+      const hops = line.length * e.passes
+      for (let i = 1; i < hops; i++) {
+        const dmg = Math.floor(raw * Math.pow(e.frac, i))
+        if (dmg <= 0) break
+        const t = line[(start + i) % line.length]
+        // A hop onto a stack that has already fallen is spent, not re-aimed:
+        // `applyDamage` returns zero for a dead target and the decay carries
+        // on regardless. The shield does not get cleverer as the line thins.
+        const r = applyDamage(ctx, t, dmg)
+        ctx.events.push({
+          t: 'bounce',
+          src: s.uid,
+          dst: t.uid,
+          hop: i,
+          dmg: r.dealt,
+          absorbed: r.absorbed,
+          killed: r.killed,
+          snap: snaps(s, t),
+        })
+        if (r.died) onDeath(ctx, t)
+        else onCasualties(ctx, t, r.killed)
+      }
+      break
+    }
     case 'extraAttackAlly': {
       const others = allies.filter((a) => a.uid !== s.uid && a.atk > 0)
       if (others.length === 0) break
@@ -918,6 +1004,19 @@ function gainApex(s: RStack) {
 }
 
 const apexReady = (s: RStack): boolean => s.apex !== null && s.apexCharge >= s.apex.charge
+
+/**
+ * The Aegis gathers power as she fights (DN12 §4.3). Charged on this stack's
+ * own action, from the same place the Apex meter fills, and capped so the card
+ * can never read past full — a meter that lies about how close the moment is
+ * is worse than no meter.
+ */
+function gainReflect(s: RStack) {
+  if (s.reflectMax <= 0 || !s.alive) return
+  if (s.reflectCharge < s.reflectMax) s.reflectCharge += 1
+}
+
+const reflectReady = (s: RStack): boolean => s.reflectMax > 0 && s.reflectCharge >= s.reflectMax
 
 /** The stack directly behind a front-row target, for Sunlance. */
 function behindOf(ctx: Ctx, target: RStack): RStack | undefined {
@@ -1069,6 +1168,33 @@ function performAttack(ctx: Ctx, attacker: RStack, isExtra = false, cycle = 0) {
     attacker.splitNext = 0
     raw = Math.max(1, Math.floor(raw / split))
   }
+  // Reflect (DN12 §4.3). A full shield sends the blow back whole: the target
+  // takes nothing, the attacker takes what it threw, and the charge empties.
+  //
+  // Sits here rather than in `applyDamage` for a reason that is also the rule
+  // the card copy states — you can only send a blow back at somebody who threw
+  // it. `applyDamage` does not know who did; hero spells and Apex ultimates
+  // have no stack to answer, and they land normally.
+  //
+  // Returns immediately: the attack never happened, so no Venom rides in, no
+  // Lifesteal is fed, no Cleave spills, and neither answer below fires.
+  if (reflectReady(target)) {
+    target.reflectCharge = 0
+    const back = applyDamage(ctx, attacker, raw, { siege: target.siege })
+    ctx.events.push({
+      t: 'reflect',
+      uid: target.uid,
+      dst: attacker.uid,
+      dmg: back.dealt,
+      absorbed: back.absorbed,
+      killed: back.killed,
+      snap: snaps(target, attacker),
+    })
+    if (back.died) onDeath(ctx, attacker)
+    else onCasualties(ctx, attacker, back.killed)
+    return
+  }
+
   const res = applyDamage(ctx, target, raw, { siege: attacker.siege })
   ctx.events.push({
     t: 'attack',
@@ -1092,7 +1218,9 @@ function performAttack(ctx: Ctx, attacker: RStack, isExtra = false, cycle = 0) {
     healStack(ctx, attacker, Math.floor(res.dealt / 2))
   }
 
-  fireAbility(ctx, attacker, 'onAttack')
+  // The struck stack goes through as `against`: the thrown shield (§4.4) needs
+  // to know where the arc starts, and its first hit is the blow just landed.
+  fireAbility(ctx, attacker, 'onAttack', target)
 
   const targetDied = res.died
   if (targetDied) onDeath(ctx, target)
@@ -1495,6 +1623,7 @@ export function simulateBattle(a: BattleSide, b: BattleSide, heroA: HeroDef, her
         fireApex(ctx, s, cycle)
       } else {
         gainApex(s)
+        gainReflect(s)
         performAttack(ctx, s, false, cycle)
       }
 

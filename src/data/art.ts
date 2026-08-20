@@ -77,6 +77,9 @@ export const UNIT_ART: Record<string, string> = {
   vg_shieldgirl: '/art/units/vg_shieldgirl.webp',
   vg_cairn: '/art/units/vg_cairn.webp',
   vg_bulwark: '/art/units/vg_bulwark.webp',
+  // the fork at the top of the Shieldmaiden line (§3.4)
+  vg_aegis: '/art/units/vg_aegis.webp',
+  vg_aegiswarden: '/art/units/vg_aegiswarden.webp',
 }
 
 export const HERO_ART: Record<string, string> = {

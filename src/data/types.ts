@@ -26,6 +26,14 @@ export type KeywordId =
    * dying. This one answers after it is already gone. See §3.2.
    */
   | 'raise'
+  /**
+   * DN12 §4.3. The shield gathers power as this stack acts; at x charges the
+   * next attack against it is sent BACK at whoever threw it and the charge
+   * empties. A keyword because the magnitude is the charge-up time, which is
+   * the only knob the effect has, and because the card has to show the meter
+   * filling — see `StackSnap.reflectCharge`.
+   */
+  | 'reflect'
   | 'charge'
   | 'volley'
   | 'siege'
@@ -99,6 +107,14 @@ export type AbilityEffect =
    * centrally rather than trusting each effect.
    */
   | { type: 'counterAttack'; frac: number }
+  /**
+   * DN12 §4.4. The thrown shield. Under `onAttack` the stack's ordinary blow is
+   * the FIRST hit; this adds the ricochets after it, each one `frac` of the
+   * last, running `passes` full circuits of the enemy line from the stack that
+   * was struck. Order is by slot, wrapping — no roll of its own, so the whole
+   * arc is fixed the moment the first target is chosen.
+   */
+  | { type: 'bounceAttack'; frac: number; passes: number }
 
 export interface Ability {
   trigger: AbilityTrigger

@@ -27,6 +27,13 @@ const ENTRIES: Record<KeywordId, Entry> = {
     generic:
       'X times each battle, a friendly stack that has been wiped out is brought back onto the field at 1 unit. This is not Marshal Yseult’s Last Stand: hers keeps a stack from ever falling, this one answers after it already has. A warband can carry both, and they do not overlap.',
   },
+  reflect: {
+    name: 'Reflect',
+    detail: (x) =>
+      `charges as this stack acts; every ${x} actions the next attack against it is sent back at the attacker instead`,
+    generic:
+      'Charges by 1 each time this stack acts. At X charges the next attack against it is sent straight back at whoever threw it — the stack takes nothing, the attacker takes the whole blow, and the meter empties. Unlike Deflect the attacker does not walk away. Only a stack can be answered this way: hero spells and Apex ultimates have nobody to send it back to, so they land normally.',
+  },
   deflect: {
     name: 'Deflect',
     detail: (x) =>

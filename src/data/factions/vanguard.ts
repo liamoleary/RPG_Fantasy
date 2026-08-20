@@ -220,8 +220,63 @@ export const VANGUARD_UNITS: UnitDef[] = [
     musterSize: 2,
     row: 'front',
     keywords: [{ k: 'bulwark', x: 2 }, { k: 'guard', x: 1 }, { k: 'cover', x: 2 }],
+    // DN12 §3.4: the fork at the top of the line. Two women with the same
+    // shield who disagree about what a shield is for — one holds it up, one
+    // throws it.
+    linePaths: ['vg_aegis', 'vg_aegiswarden'],
     sigil: 'shield',
     tags: ['wall', 'bulwark'],
+  },
+  {
+    // Aegis of Light (DN12 §3.4). The defensive end of the fork: she gathers
+    // light across the fight and, at full charge, hands the next blow straight
+    // back. Reflect 3 means roughly every fourth attack on her is returned —
+    // slow enough that the meter is worth watching, fast enough to see twice
+    // in a battle.
+    //
+    // Pointedly NOT a Deflect (§4.6): that eats a blow and the attacker walks
+    // away. This one is a mirror.
+    id: 'vg_aegis',
+    name: 'Aegis of Light',
+    pool: 'vanguard',
+    tier: 4,
+    atk: 3,
+    hp: 9,
+    init: 3,
+    musterSize: 1,
+    row: 'front',
+    keywords: [{ k: 'bulwark', x: 3 }, { k: 'cover', x: 2 }, { k: 'reflect', x: 3 }],
+    sigil: 'shield',
+    castFx: 'holy',
+    tags: ['elite', 'wall', 'bulwark'],
+  },
+  {
+    // Aegis Warden (DN12 §3.4). The offensive end: she throws the shield and it
+    // ricochets twice through the enemy line, ×0.75 a hop (§6).
+    //
+    // The note is explicit that "total damage across a full board is enormous,
+    // so the decay and the base number are the whole balance job" — and the
+    // decay is fixed by §6, so ATK is the only lever left. Deliberately started
+    // at 4 rather than a Champion's 5: across a full seven-stack board the arc
+    // sums to roughly 3.6x one swing, so a point of ATK here is worth nearly
+    // four anywhere else.
+    id: 'vg_aegiswarden',
+    name: 'Aegis Warden',
+    pool: 'vanguard',
+    tier: 4,
+    atk: 4,
+    hp: 7,
+    init: 4,
+    musterSize: 1,
+    row: 'front',
+    keywords: [{ k: 'bulwark', x: 2 }],
+    ability: {
+      trigger: 'onAttack',
+      effect: { type: 'bounceAttack', frac: 0.75, passes: 2 },
+      text: 'The thrown shield ricochets twice through the enemy line, each hop three quarters of the last',
+    },
+    sigil: 'shield',
+    tags: ['elite', 'bulwark'],
   },
   {
     id: 'vg_cleric',

@@ -75,6 +75,16 @@ export function describe(e: BattleEvent, playerIsA: boolean): string {
       const name = (uid: string, fallback: string) => nameOf(e.snap.find((x) => x.uid === uid), fallback)
       return `${name(e.by, 'The front line')} covers ${name(e.saved, 'the back line')} — volley intercepted.`
     }
+    case 'reflect': {
+      const name = (uid: string, fallback: string) => nameOf(e.snap.find((x) => x.uid === uid), fallback)
+      // "turned back on" — the blow travelled, which is the whole difference
+      // between this and Deflect, where it simply stops.
+      return `${name(e.uid, 'The shield')} blazes — the blow is turned back on ${name(e.dst, 'the attacker')} for ${e.dmg}.`
+    }
+    case 'bounce': {
+      const name = (uid: string, fallback: string) => nameOf(e.snap.find((x) => x.uid === uid), fallback)
+      return `The shield ricochets into ${name(e.dst, 'the line')} for ${e.dmg}${e.killed > 0 ? `, ${e.killed} slain` : ''}.`
+    }
     case 'raise': {
       const name = (uid: string, fallback: string) => nameOf(e.snap.find((x) => x.uid === uid), fallback)
       // "back on its feet", never "survives" or "holds" — those belong to Last

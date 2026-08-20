@@ -66,6 +66,47 @@ criterion changes. Cutting harder is the one thing that is now known not to work
 and `… Runelord of the Deep Halls`, both far above +8% and both rising as their
 samples fall.
 
+## The Aegis Warden is genuinely overpowered (DN12 commit 6)
+
+**Status:** open, and unlike everything else on this branch it is a REAL power
+reading rather than the selection artefact above.
+
+The thrown shield lands at **+18.3% (n 1263)** and **+19.1% (n 1158)**, seeds
+12345 / 999. The sample is an order of magnitude larger than the Champion's
+(n 167) or the Runelord's (n 378), so this is not a self-selected rump: a
+thousand-odd boards took the unit and it won on them.
+
+DN12 §3.4 called this in advance — "total damage across a full board is
+enormous, so the decay and the base number are the whole balance job". Measured
+on a full seven-stack board, ATK 4:
+
+| stack | one swing | hops landed | arc total | x one swing | stacks hit twice |
+|---|---|---|---|---|---|
+| 4 | 16 | 10/14 | 57 | 3.56x | 3/7 |
+| 8 | 32 | 13/14 | 121 | 3.78x | 6/7 |
+| 11 | 44 | 14/14 | 166 | 3.77x | 7/7 |
+| 14 | 56 | 14/14 | 214 | 3.82x | 7/7 |
+
+Two things fall out. The multiplier is capped near **3.8x** — the geometric
+ceiling of x0.75 is 4x and flooring every hop keeps it under — so the arc
+cannot run away; doubling ATK doubles the total rather than compounding it.
+And **"2 full passes" is a cap the arithmetic rarely reaches**: below 11 units
+the decay hits zero first, and at a typical 4-unit T4 only three of seven
+stacks are struck twice.
+
+**The lever.** §6 fixes the decay at x0.75 and the passes at 2, so ATK is the
+only knob, and it is close to linear in the total. It shipped at 4 rather than
+a Champion's 5 for exactly this reason. On these numbers 3 is the obvious next
+try, and unlike the Champion this unit's sample is big enough that a cut should
+show up honestly rather than through the selection effect.
+
+**Not cut in commit 6** because §7.10 owns balance and one seed pair is a
+reading rather than a pass. It is the strongest candidate on the branch for an
+actual tuning change.
+
+**The number that fails:** `npm run sim` → `UNIT WIN-DELTA … Aegis Warden`
+above +8%.
+
 ## Runelord win-delta: read before acting (DN11)
 
 **Status:** open, deliberately not acted on. The Runelord of the Deep Halls
@@ -98,6 +139,7 @@ was checked before being cut into a third time.
 > | 3 deflect | +17.8% n729 | +27.1% n387 | +14.1% n911 | +8.9% | 4.29 |
 > | 4 raise | +20.0% n672 | +27.1% n387 | +13.6% n908 | +8.0% | 4.32 |
 > | 5 bloodlust + cut | +30.5% n170 | +27.5% n386 | +13.3% n908 | +7.9% | 4.32 |
+> | 6 aegis fork | +29.4% n167 | +28.7% n378 | +13.3% n905 | +8.0% | 4.32 |
 >
 > Commit 4 gave the Champion's fork twin a heal and a Raise and the Champion
 > went UP, +17.8% → +20.0%, while its sample fell 729 → 672. A third instance

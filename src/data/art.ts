@@ -80,6 +80,8 @@ export const UNIT_ART: Record<string, string> = {
   // the fork at the top of the Shieldmaiden line (§3.4)
   vg_aegis: '/art/units/vg_aegis.webp',
   vg_aegiswarden: '/art/units/vg_aegiswarden.webp',
+  // the Duellist twin at the top of the crossbow line (§3.3)
+  vg_marksman: '/art/units/vg_marksman.webp',
 }
 
 export const HERO_ART: Record<string, string> = {

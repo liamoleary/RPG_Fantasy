@@ -228,9 +228,35 @@ describe('every DN10 line still reads exactly as it did (§7.1)', () => {
     }
   })
 
-  it('adds a second path to exactly the three lines DN11 §2.3 names', () => {
-    const forked = SHIPPED.filter(([root]) => lineOf(root).length > 3).map(([root]) => root)
-    expect(forked.sort()).toEqual(['st_slinger', 'vd_dryad', 'vg_militia'])
+  it('adds a second path to exactly the DN10 lines DN11 §2.3 and DN12 §3.3 name', () => {
+    /**
+     * DN11 §2.3 forked three of the six shipped lines. DN12 §3.3 forks a
+     * fourth — the crossbow line, at the Arbalest. Kept as two statements
+     * rather than one widened list, because the DN11 claim is still a claim:
+     * that pass forked those three lines and no others, and a later note
+     * adding a fork must not be able to quietly restate it.
+     */
+    const forkedAt = (root: string) =>
+      lineOf(root).filter((f) => (unit(f).linePaths ?? []).length > 1)
+
+    expect(SHIPPED.filter(([root]) => forkedAt(root).length > 0).map(([root]) => root).sort()).toEqual([
+      'st_slinger',
+      'vd_dryad',
+      'vg_crossbow',
+      'vg_militia',
+    ])
+
+    // Every one of them forks at the MID form, never at the root — so the
+    // choice always arrives at the second promote, after the player has
+    // already committed to the line. DN12 follows the shape DN11 set.
+    expect(forkedAt('vg_militia')).toEqual(['vg_footman'])
+    expect(forkedAt('vd_dryad')).toEqual(['vd_moonshade'])
+    expect(forkedAt('st_slinger')).toEqual(['st_harpooner'])
+    expect(forkedAt('vg_crossbow')).toEqual(['vg_arbalest'])
+    for (const root of ['vg_militia', 'vd_dryad', 'st_slinger', 'vg_crossbow']) {
+      expect(unit(root).linePaths, `${root} is a root, not a fork`).toHaveLength(1)
+    }
+    expect(unit('vg_arbalest').linePaths).toEqual(['vg_ballistier', 'vg_marksman'])
   })
 
   it('keeps the data layer and the engine layer agreeing on what is promoted', () => {

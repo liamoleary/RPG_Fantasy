@@ -1008,6 +1008,46 @@ function applyAbilityEffect(ctx: Ctx, s: RStack, e: AbilityEffect, against?: RSt
       }
       break
     }
+    case 'strikeSecondTarget': {
+      /**
+       * The second barrel (DN12 §3.3). The first shot has already landed on
+       * `against`; this finds the next living enemy by slot, wrapping, and
+       * fires at it for `frac` of the same swing.
+       *
+       * Next-by-slot rather than a roll, for the same reason the ricochet in
+       * §4.4 works that way: no rng of its own, so the pair of shots is fixed
+       * the moment the first one is aimed. And like every other effect that
+       * spreads AFTER a blow lands, it is not pulled onto a Taunt and not
+       * turned by the rune-wall — §4.5 governs which stack is attacked, not
+       * where a second barrel goes.
+       */
+      if (!against || !s.alive) break
+      const line = enemiesOf(ctx, s).slice().sort((p, q) => p.slot - q.slot)
+      if (line.length < 2) break
+      const start = line.findIndex((f) => f.uid === against.uid)
+      // The first target may have been wiped by the opening shot, in which
+      // case it is gone from `line` and the second barrel simply starts from
+      // the lowest slot instead of nowhere.
+      const t = line[(Math.max(0, start) + 1) % line.length]
+      if (!t || t.uid === against.uid) break
+      const raw = Math.floor(s.atk * s.count * e.frac)
+      if (raw <= 0) break
+      const r = applyDamage(ctx, t, raw, { siege: s.siege })
+      ctx.events.push({
+        t: 'attack',
+        src: s.uid,
+        dst: t.uid,
+        side: s.side,
+        dmg: r.dealt,
+        absorbed: r.absorbed,
+        killed: r.killed,
+        retaliation: false,
+        snap: snaps(s, t),
+      })
+      if (r.died) onDeath(ctx, t)
+      else onCasualties(ctx, t, r.killed)
+      break
+    }
     case 'strikeEnemyBackRow': {
       /**
        * The Anvilborn leaps the line (DN12 §3.6). Every enemy back-row stack

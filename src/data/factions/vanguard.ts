@@ -141,7 +141,9 @@ export const VANGUARD_UNITS: UnitDef[] = [
     musterSize: 2,
     row: 'back',
     keywords: [{ k: 'volley' }],
-    linePaths: ['vg_ballistier'],
+    // DN12 §3.3: the crossbow line learns to fork, like the Footman before it.
+    // One enormous bolt, or two pistols fired together.
+    linePaths: ['vg_ballistier', 'vg_marksman'],
     sigil: 'bow',
     tags: ['ranged'],
   },
@@ -164,6 +166,41 @@ export const VANGUARD_UNITS: UnitDef[] = [
       text: 'A piercing bolt through the front-row target and the stack behind it.',
       charge: 5,
       x: 1,
+    },
+    sigil: 'bow',
+    tags: ['ranged', 'elite'],
+  },
+  {
+    /**
+     * The Duellist twin (DN12 §3.3). The id stays `vg_marksman` and the name
+     * is "Sunshot Duellist" — §6 is explicit that the string may change and
+     * the id may not, because the approved art gave him duelling pistols
+     * rather than a sunlance and "Marksman" stopped fitting the picture.
+     *
+     * The fork's lever, in §3.3's own words: "the Ballistier's single hit
+     * overkills small stacks, the Duellist never wastes a point but never
+     * one-shots a T5 either." So he is built UNDER the Ballistier per shot and
+     * over it in total — ATK 3 to its 5, fired twice. Three per unit keeps a
+     * typical stack's barrel below a T5's pool, which is the half of that
+     * sentence that had to be a number rather than a feeling.
+     *
+     * No Apex: DN04 §3 keeps meters to the six named line tops, and
+     * tests/apex.test.ts checks that exhaustively.
+     */
+    id: 'vg_marksman',
+    name: 'Sunshot Duellist',
+    pool: 'vanguard',
+    tier: 4,
+    atk: 3,
+    hp: 4,
+    init: 5,
+    musterSize: 1,
+    row: 'back',
+    keywords: [{ k: 'volley' }],
+    ability: {
+      trigger: 'onAttack',
+      effect: { type: 'strikeSecondTarget', frac: 1 },
+      text: 'Both pistols: a second enemy stack takes the same shot',
     },
     sigil: 'bow',
     tags: ['ranged', 'elite'],

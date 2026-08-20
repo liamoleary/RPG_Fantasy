@@ -147,6 +147,51 @@ Titan soaks blows its line would have taken, and it was already the thing most
 attacks reached. Worth knowing before §7.10 tries to pay for Taunt with a stat
 cut it does not need.
 
+## Fork share is decided by printed stats alone (DN12 commit 9)
+
+**Status:** open, and it is the root cause under two other entries here. This
+is the one to fix first.
+
+`pickPath` in `src/engine/rivals.ts` is how every warlord in the harness takes a
+fork. It scores each branch as:
+
+    o.atk * 1.1 + o.hp * 0.7 + o.tier * 1.5 + noise + tag bonuses
+
+It never reads `ability` and never reads `keywords`. A branch whose whole
+identity is what it DOES rather than what it prints is therefore invisible to
+the thing measuring whether the fork is healthy.
+
+Measured across every Vanguard fork after commit 9:
+
+| fork | score gap | share of the rarer branch |
+|---|---|---|
+| Shieldmaiden → Aegis of Light / Aegis Warden | **0.3** | ~30% |
+| Footman → Champion / Bannerguard | 2.1 | ~3% |
+| Arbalest → Ballistier / **Sunshot Duellist** | 2.2 | ~4% |
+| Forgeline tops → Runelord / Anvilborn | 3.6 | ~10% |
+
+The correlation is the whole story: the ONLY fork anywhere near DN11 §6's
+35/65 band is the only one whose two branches have near-identical printed
+stats. Everything else is decided before an ability is ever considered, and the
+`noise` term is the only reason the losing branch is picked at all.
+
+**It also explains the selection artefact above.** Commit 5 cut the Champion's
+ATK 4 → 3. That took 1.1 straight off its `pickPath` score and widened the
+Footman gap from 1.0 to 2.1 — which is exactly why its sample halved. The
+"metric measures selection" finding and this one are the same mechanism seen
+from two ends.
+
+**What it means for §7.10.** "No fork an auto-pick outside 35/65" is currently
+reachable only by flattening printed stats across every fork — which would
+erase the design distinctions DN12 spent nine commits making — OR by teaching
+`pickPath` to weigh what a branch does. The second is the real fix, and it is
+harness work, not content work. It should land with the path-share column §7.10
+needs anyway, since neither is measurable without the other.
+
+**The number that fails:** `npm run sim` → `PROMOTION LINES` cannot show it yet
+(it reports the line, not the split). Until the column exists, the split is
+`Sunlance Ballistier` unit n against the crossbow line's n: 870 of 903.
+
 ## The Anvilborn's leap is newly flagged (DN12 commit 8)
 
 **Status:** open. Second real power reading on the branch, after the Aegis
@@ -205,6 +250,7 @@ was checked before being cut into a third time.
 > | 6 aegis fork | +29.4% n167 | +28.7% n378 | +13.3% n905 | +8.0% | 4.32 |
 > | 7 taunt | +30.0% n169 | +31.4% n378 | +14.5% n902 | +8.3% | 4.32 |
 > | 8 forgeline | +31.3% n168 | **+28.4% n374** | +14.8% n902 | +8.9% | 4.29 |
+> | 9 arbalest fork | +31.1% n172 | +27.4% n375 | +14.4% n870 | +8.8% | 4.29 |
 >
 > Commit 4 gave the Champion's fork twin a heal and a Raise and the Champion
 > went UP, +17.8% → +20.0%, while its sample fell 729 → 672. A third instance

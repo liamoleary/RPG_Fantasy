@@ -138,6 +138,15 @@ export type AbilityEffect =
    * override fighting Taunt and the rune-wall was not worth the reach.
    */
   | { type: 'strikeEnemyBackRow'; frac: number }
+  /**
+   * DN12 §3.3, the Sunshot Duellist. Two pistols fired together: under
+   * `onAttack` the ordinary shot is the first barrel and this is the second,
+   * landing on a DIFFERENT enemy stack for `frac` of the same swing.
+   *
+   * Deliberately not `splitNextAttack`, which divides one blow across targets.
+   * This is two blows. `frac` is the balance lever §3.3 names.
+   */
+  | { type: 'strikeSecondTarget'; frac: number }
 
 export interface Ability {
   trigger: AbilityTrigger

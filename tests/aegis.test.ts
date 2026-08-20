@@ -49,7 +49,14 @@ describe('both forms are data, at the tier §6 decided', () => {
 
   it('carry the two new primitives and nothing else does', () => {
     expect(unit('vg_aegis').keywords.find((k) => k.k === 'reflect')?.x).toBe(3)
-    expect(unit('vg_aegiswarden').ability?.effect).toEqual({ type: 'bounceAttack', frac: 0.75, passes: 2 })
+    // The shape, not the tuning: §6 fixed 2 passes, and §7.10's balance pass
+    // moved the decay. Pinning the tuned number here would make every future
+    // tune look like a broken mechanic.
+    const bounce = unit('vg_aegiswarden').ability!.effect
+    expect(bounce.type).toBe('bounceAttack')
+    expect((bounce as { passes: number }).passes).toBe(2)
+    expect((bounce as { frac: number }).frac).toBeGreaterThan(0)
+    expect((bounce as { frac: number }).frac).toBeLessThan(1)
 
     const reflectors = ALL_UNITS.filter((u) => u.keywords.some((k) => k.k === 'reflect')).map((u) => u.id)
     const throwers = ALL_UNITS.filter((u) => u.ability?.effect.type === 'bounceAttack').map((u) => u.id)
@@ -70,6 +77,14 @@ describe('the thrown shield across a full board (§4.4)', () => {
    * §3.4 calls "enormous" and asks to be measured rather than guessed at.
    */
   const ONE_SWING = (count: number) => unit('vg_aegiswarden').atk * count
+  /**
+   * Read from the data, never hard-coded. A balance pass moves `frac` and
+   * `passes` — DN12 §7.10 moved the decay once already — and a test that pins
+   * the tuned NUMBER fails on every future tune while proving nothing about
+   * the mechanism. What is worth pinning is the shape: geometric, floored,
+   * slot order, wrapping, and a ceiling set by the decay.
+   */
+  const BOUNCE = unit('vg_aegiswarden').ability!.effect as { frac: number; passes: number }
 
   /** The first throw only: hop 0 is the ordinary blow, then its ricochets. */
   function firstArc(count: number): { hop: number; dst: string; dealt: number }[] {
@@ -95,14 +110,17 @@ describe('the thrown shield across a full board (§4.4)', () => {
     return out
   }
 
-  it('decays x0.75 a hop, floored, from the swing that threw it', () => {
-    const arc = firstArc(4)
-    const raw = ONE_SWING(4)
+  it('decays geometrically a hop, floored, from the swing that threw it', () => {
+    const arc = firstArc(12)
+    const raw = ONE_SWING(12)
     expect(arc[0].dealt).toBe(raw)
-    for (const h of arc) expect(h.dealt, `hop ${h.hop}`).toBe(Math.floor(raw * Math.pow(0.75, h.hop)))
-    // 16, 12, 9, 6, 5, 3, 2, 2, 1, 1 — the ladder in full, so a change to the
-    // decay or the rounding shows up here as a number rather than a feeling.
-    expect(arc.map((h) => h.dealt)).toEqual([16, 12, 9, 6, 5, 3, 2, 2, 1, 1])
+    for (const h of arc) {
+      expect(h.dealt, `hop ${h.hop}`).toBe(Math.floor(raw * Math.pow(BOUNCE.frac, h.hop)))
+    }
+    // Strictly non-increasing, and every hop a real hit: the tail is dropped
+    // rather than logged as a row of zeroes.
+    for (let i = 1; i < arc.length; i++) expect(arc[i].dealt).toBeLessThanOrEqual(arc[i - 1].dealt)
+    expect(arc[arc.length - 1].dealt).toBeGreaterThan(0)
   })
 
   it('runs the line in slot order, wrapping, from wherever the throw landed', () => {
@@ -115,42 +133,45 @@ describe('the thrown shield across a full board (§4.4)', () => {
 
   it('stops when the decay reaches zero — two passes is a CAP, not a promise', () => {
     /**
-     * The most useful thing these numbers say. §6 fixes "2 full passes", but
-     * x0.75 floored dies out before 14 hops unless the swing behind it is big
-     * enough: at 4 units the arc reaches 10 of 14 and only three of the seven
-     * stacks are struck twice. The note's "2 full passes" is what the loop is
-     * allowed to do, and the arithmetic usually stops it first.
+     * The most useful thing these numbers say, and it survives retuning: the
+     * loop is ALLOWED `passes` circuits, and the arithmetic usually stops it
+     * first, because a floored geometric decay reaches zero. A small stack's
+     * shield never finishes its second lap; a big one's does.
      */
-    const small = firstArc(4)
-    expect(small.length).toBe(10)
-    expect(small[small.length - 1].dealt).toBeGreaterThan(0)
-
+    const hops = 7 * BOUNCE.passes
     const hitTwice = (arc: { dst: string }[]) => {
       const n = new Map<string, number>()
       for (const h of arc) n.set(h.dst, (n.get(h.dst) ?? 0) + 1)
       return [...n.values()].filter((c) => c === 2).length
     }
-    expect(hitTwice(small)).toBe(3)
 
-    // Big enough, and both passes complete: every stack struck exactly twice.
-    const big = firstArc(11)
-    expect(big.length).toBe(14)
+    const small = firstArc(4)
+    expect(small.length).toBeLessThan(hops)
+    expect(hitTwice(small)).toBeLessThan(7)
+    expect(small[small.length - 1].dealt).toBeGreaterThan(0)
+
+    // Big enough that the last hop still floors above zero, and both passes
+    // complete: every stack on the board struck exactly twice.
+    const need = Math.ceil(1 / Math.pow(BOUNCE.frac, hops - 1) / unit('vg_aegiswarden').atk)
+    const big = firstArc(need)
+    expect(big.length).toBe(hops)
     expect(hitTwice(big)).toBe(7)
   })
 
-  it('tops out near 3.8x a single swing however big the stack gets', () => {
+  it('cannot run away — the arc is capped by its own decay', () => {
     /**
-     * The ceiling is the geometric series: 1 / (1 - 0.75) = 4x, and flooring
-     * every hop keeps it under that. So the arc is enormous in absolute terms
-     * on a full board but cannot run away — doubling ATK doubles the total and
-     * does not compound it. That is the shape the balance pass is tuning.
+     * The ceiling is the geometric series, 1 / (1 - frac), and flooring every
+     * hop keeps the real total under it. So the arc is large in absolute terms
+     * on a full board but bounded: ATK moves the total linearly and never
+     * compounds it. That bound is what makes ATK a safe balance lever, and it
+     * holds at whatever the decay is tuned to.
      */
-    for (const count of [4, 8, 14]) {
+    const ceiling = 1 / (1 - BOUNCE.frac)
+    for (const count of [8, 14, 24]) {
       const arc = firstArc(count)
-      const total = arc.reduce((n, h) => n + h.dealt, 0)
-      const ratio = total / ONE_SWING(count)
-      expect(ratio, `${count} units`).toBeGreaterThan(3.5)
-      expect(ratio, `${count} units`).toBeLessThan(4)
+      const ratio = arc.reduce((n, h) => n + h.dealt, 0) / ONE_SWING(count)
+      expect(ratio, `${count} units`).toBeLessThan(ceiling)
+      expect(ratio, `${count} units`).toBeGreaterThan(ceiling * 0.8)
     }
   })
 
@@ -181,7 +202,7 @@ describe('the thrown shield across a full board (§4.4)', () => {
     // that falls does not pull the rest of the sequence forward — the hop that
     // would have hit it is simply spent.
     const res = simulateBattle(
-      { board: [stack('vg_aegiswarden', 8, 0)], hero: hero('h_sylvaen') },
+      { board: [stack('vg_aegiswarden', 24, 0)], hero: hero('h_sylvaen') },
       { board: [0, 1, 2, 3, 4, 5, 6].map((slot) => stack('vg_mule', 1, slot)), hero: hero('h_sylvaen') },
       sylvaen,
       sylvaen,

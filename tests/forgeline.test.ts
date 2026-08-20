@@ -209,7 +209,7 @@ describe('the back row cannot be reached while a front rank stands', () => {
 })
 
 describe('the Anvilborn leaps it (§3.6)', () => {
-  it('hits every enemy back-row stack, in slot order, for half its swing', () => {
+  it('hits every enemy back-row stack, in slot order, for its share of the swing', () => {
     const res = simulateBattle(
       { board: [stack('vg_anvilborn', 6, 0)], hero: hero('h_sylvaen') },
       {
@@ -235,8 +235,12 @@ describe('the Anvilborn leaps it (§3.6)', () => {
     // ...then the leap takes the whole back row, ascending, at half power.
     const leap = swung.slice(1, 4)
     expect(leap.map((a) => a.dst)).toEqual(['vg_mule@4d', 'vg_mule@5d', 'vg_mule@6d'])
+    // `frac` is the lever §3.6 leaves and §7.10 tuned, so it is read rather
+    // than pinned: what matters is that every back-row stack takes the same
+    // share of the same swing.
+    const frac = (unit('vg_anvilborn').ability!.effect as { frac: number }).frac
     const me = leap[0].snap.find((s) => s.uid === 'vg_anvilborn@0')!
-    for (const a of leap) expect(a.dmg + a.absorbed).toBe(Math.floor(me.power * 0.5))
+    for (const a of leap) expect(a.dmg + a.absorbed).toBe(Math.floor(me.power * frac))
   })
 
   it('goes over a rune-wall — the fork answers itself', () => {

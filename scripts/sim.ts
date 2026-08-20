@@ -17,7 +17,7 @@ import { HARD_CAP_ROUND, advanceRound, newRun, resolveBattles, type RunState } f
 import { boardPower, rivalMuster, type Difficulty } from '../src/engine/rivals'
 import { MAX_TALENT_POINTS, isLevelUpRound, scoreNode, type TalentOffer } from '../src/engine/talents'
 import { applyTalent } from '../src/engine/run'
-import { lineOf } from '../src/engine/camp'
+import { lineChainTo, lineOf } from '../src/engine/camp'
 import { lineRootOf, thresholdsFor } from '../src/engine/ranks'
 import { hashSeed, makeRng, type RNG } from '../src/engine/rng'
 
@@ -359,6 +359,24 @@ function main() {
   })
   const lineSeat = new Map<string, { held: number; top: number; topPlacementSum: number }>()
 
+  /**
+   * Path share (DN11 §6.1, finally built for DN12 §7.10).
+   *
+   * LINE SEAT above answers "is this line walked to the top". It cannot answer
+   * "when the line forks, which way do warlords go", because it collapses both
+   * branches into one row — which is exactly the question DN12 §3.3 and §7.10
+   * are asking, and the reason a fork could sit at 96/4 through nine commits
+   * without anything saying so.
+   *
+   * Counted per STACK rather than per board: a warlord fielding a Champion and
+   * a Bannerguard made the choice twice and meant it both times. A stack's
+   * chain is root → … → its form, so every fork it passed through names the
+   * branch it took.
+   */
+  const forkPoints = ALL_UNITS.filter((u) => (u.linePaths ?? []).length > 1)
+  const pathPicks = new Map<string, Map<string, number>>()
+  for (const f of forkPoints) pathPicks.set(f.id, new Map((f.linePaths ?? []).map((b) => [b, 0])))
+
   for (let i = 0; i < args.runs; i++) {
     const seed = args.seed + i * 7919
     const rng = makeRng(seed)
@@ -401,6 +419,14 @@ function main() {
           if ((s.rank ?? 0) < 2) continue
           const line = lineRootOf(s.unitId)
           honoredByLine.set(line, (honoredByLine.get(line) ?? 0) + 1)
+        }
+        for (const st of w.board) {
+          const chain = lineChainTo(st.unitId)
+          for (let ci = 0; ci < chain.length - 1; ci++) {
+            const at = pathPicks.get(chain[ci])
+            if (!at) continue
+            at.set(chain[ci + 1], (at.get(chain[ci + 1]) ?? 0) + 1)
+          }
         }
         // Once per board, not once per stack — two Militia stacks are still
         // one seat that chose the Militia line.
@@ -489,8 +515,19 @@ function main() {
     t.wonWith += r.wonWith
     tierTotals.set(tier, t)
   }
+  /**
+   * Sample gate. It was 40, which is not a measurement: at n=40 on a top-2
+   * rate near 0.3 the standard error is about 7 points, so an 8% flag is one
+   * SE and the table reliably surfaced mid-line forms nobody had drafted on
+   * purpose. 250 puts the SE near 2.9 points, so a flag means something.
+   *
+   * Rows below the gate are not hidden — they are printed by the THIN list
+   * under the table, without a flag, because "we cannot tell" and "it is fine"
+   * are different answers.
+   */
+  const N_GATE = 250
   const deltas = [...unitSeen.entries()]
-    .filter(([, r]) => r.drafted >= 40)
+    .filter(([, r]) => r.drafted >= N_GATE)
     .map(([id, r]) => {
       const tier = UNIT_BY_ID.get(id)?.tier ?? 1
       const t = tierTotals.get(tier)!
@@ -509,6 +546,33 @@ function main() {
       ] as [string, string][]
     }),
   )
+
+  /**
+   * The offset the per-unit rows cannot show. The baseline above pools every
+   * faction at a tier, so if one faction sits at the strong end of the 4.2–4.8
+   * band and another at the weak end, EVERY unit of the first reads high and
+   * every unit of the second reads low however even they are internally. Two
+   * factions eight points apart here is a faction-balance number wearing a
+   * unit-balance costume, and tuning individual units cannot close it.
+   */
+  const factionDelta = new Map<string, { sum: number; n: number }>()
+  for (const d of deltas) {
+    const pool = UNIT_BY_ID.get(d.id)?.pool ?? 'merc'
+    const f = factionDelta.get(pool) ?? { sum: 0, n: 0 }
+    f.sum += d.delta
+    f.n += 1
+    factionDelta.set(pool, f)
+  }
+  console.log(
+    `  mean delta by pool: ${[...factionDelta.entries()]
+      .sort((a, b) => b[1].sum / b[1].n - a[1].sum / a[1].n)
+      .map(([k, v]) => `${k} ${v.sum / v.n >= 0 ? '+' : ''}${((v.sum / v.n) * 100).toFixed(1)}%`)
+      .join('   ')}`,
+  )
+  const thin = [...unitSeen.entries()]
+    .filter(([, r]) => r.drafted < N_GATE && r.drafted >= 40)
+    .map(([id]) => UNIT_BY_ID.get(id)?.name ?? id)
+  if (thin.length > 0) console.log(`  thin (n < ${N_GATE}, not judged): ${thin.length} forms`)
 
   const avg = (b: { n: number; placementSum: number }): number => (b.n > 0 ? b.placementSum / b.n : 0)
   const honAvg = avg(honoredSeat)
@@ -759,6 +823,42 @@ function main() {
   // floor (the long game still failing to finish builds).
   console.log(
     `\nCAPSTONE RATE  ${pct(capRate)} of runs reach a capstone (target 60–95%)${capRate < 0.6 || capRate > 0.95 ? '  ⚠' : ''}`,
+  )
+
+  /**
+   * PATH HEALTH — the promotion-fork column DN12 §7.10 asks for, and the one
+   * DN11 §6.1 promised. Band is 35/65: outside it a branch is an auto-pick and
+   * the Path sheet is asking a question with one answer.
+   */
+  const pathRows = [...pathPicks.entries()]
+    .map(([fork, inner]) => {
+      const opts = [...inner.entries()]
+      const total = opts.reduce((a, [, n]) => a + n, 0)
+      return { fork, opts, total }
+    })
+    .filter((r) => r.total > 0)
+    .sort((a, b) => a.fork.localeCompare(b.fork))
+  let pathHealthy = 0
+  table(
+    'PATH HEALTH        promotion forks — which branch was taken    band 35–65%',
+    pathRows.map((r) => {
+      const shares = r.opts.map(([, n]) => n / r.total)
+      const ok = shares.every((x) => x >= 0.35 && x <= 0.65)
+      if (ok) pathHealthy++
+      const label = r.opts
+        .map(([id, n]) => `${UNIT_BY_ID.get(id)?.name ?? id} ${pct(n / r.total)}`)
+        .join(' / ')
+      return [
+        [`${UNIT_BY_ID.get(r.fork)?.name ?? r.fork}`.padEnd(20), ''],
+        [label.padEnd(46), ok ? '' : '  ⚠'],
+        [String(r.total).padStart(6), ''],
+      ] as [string, string][]
+    }),
+  )
+  const pathShare = pathRows.length > 0 ? pathHealthy / pathRows.length : 1
+  console.log(
+    `
+PATH HEALTH    ${pathHealthy}/${pathRows.length} forks inside 35–65% (${pct(pathShare)})${pathHealthy < pathRows.length ? '  ⚠' : ''}`,
   )
 
   const forkRows = [...forkPicks.entries()].sort()

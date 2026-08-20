@@ -4,7 +4,7 @@
  * stat cheat.
  */
 import { unit } from '../data/index'
-import type { BoonDef, FactionId, HeroMods, UnitDef } from '../data/types'
+import type { AbilityEffect, BoonDef, FactionId, HeroMods, KeywordId, UnitDef } from '../data/types'
 import type { BoardStack } from './battle'
 import { FRONT_SLOTS } from './battle'
 import {
@@ -111,6 +111,96 @@ function rankPull(existing: BoardStack, add: number, archetype: Archetype): numb
   return 0
 }
 
+
+/**
+ * What a FORM is worth, beyond the three numbers printed on it (DN12 §7.10).
+ *
+ * `pickPath` used to score a fork on `atk`, `hp`, `tier` and tags alone. That
+ * made every branch whose identity is an ABILITY invisible to it — and since
+ * the standard-difficulty noise band is 3, any score gap past about half a
+ * point becomes a near-certainty. The result was seven of eight promotion
+ * forks sitting outside DN11 §6.1's 35–65% band, four of them from DN11
+ * itself, with the Path sheet asking a question that had one answer.
+ *
+ * These are deliberately COARSE. The aim is not to price a keyword correctly —
+ * that is what the win-delta column is for — it is to stop a form that does
+ * something being read as a form that does nothing. A closed table, like every
+ * other closed set in the engine, so a new keyword has to be given a number
+ * rather than silently scoring zero.
+ */
+const KEYWORD_POWER: Record<KeywordId, number> = {
+  bulwark: 0.8,
+  deflect: 1.4,
+  raise: 1.8,
+  reflect: 3.2,
+  taunt: 2.0,
+  intercept: 2.6,
+  charge: 0.6,
+  volley: 1.2,
+  siege: 1.0,
+  guard: 0.8,
+  cleave: 1.0,
+  venom: 1.0,
+  lifesteal: 1.0,
+  deathcry: 0.5,
+  growth: 1.2,
+  frenzy: 1.0,
+  summon: 1.2,
+  cover: 0.6,
+}
+
+/** Keywords whose `x` is a COST (a charge-up), not a magnitude. */
+const INVERSE_MAGNITUDE: ReadonlySet<KeywordId> = new Set<KeywordId>(['reflect'])
+
+const EFFECT_POWER: Record<AbilityEffect['type'], number> = {
+  alliesBulwark: 2.6,
+  alliesAtk: 2.6,
+  allyBulwark: 1.0,
+  healLowest: 1.6,
+  selfAtk: 0.8,
+  selfBulwark: 0.8,
+  damageRandom: 1.0,
+  summon: 1.6,
+  goldNextMuster: 0.6,
+  extraAttackAlly: 1.6,
+  adjacentHpPerGrowth: 1.0,
+  splitNextAttack: 1.0,
+  grantInit: 0.8,
+  counterAttack: 1.6,
+  bounceAttack: 3.0,
+  strikeEnemyBackRow: 2.6,
+  strikeSecondTarget: 2.6,
+}
+
+export function formPower(def: UnitDef): number {
+  let p = def.atk * 1.1 + def.hp * 0.7
+  for (const k of def.keywords) {
+    const base = KEYWORD_POWER[k.k] ?? 0
+    p += INVERSE_MAGNITUDE.has(k.k) ? base / Math.max(1, k.x ?? 1) : base * (k.x ?? 1)
+  }
+  if (def.ability) {
+    const e = def.ability.effect
+    const base = EFFECT_POWER[e.type] ?? 0
+    // Where an effect carries a magnitude it is priced per point: the
+    // Runesmith's "+2 Bulwark to the ally with the least" is worth twice the
+    // Apprentice's "+1", and reading both as one flat grant is most of why
+    // the Forgeline fork read 1/99.
+    const magnitude = 'x' in e && typeof e.x === 'number' ? base * e.x : base
+    // Cadence: an `everyExchange` ability that fires every 3rd action is worth
+    // a third of one that fires every action. Ignoring `everyN` priced the
+    // Bannerguard's periodic heal as if it landed every swing, which put it
+    // 3.3 clear of a Champion the win-delta column says is the stronger form.
+    p += def.ability.everyN && def.ability.everyN > 1 ? magnitude / def.ability.everyN : magnitude
+  }
+  // An Apex is a whole second ability that fires on a meter (DN04 §3), but it
+  // is worth less than it looks: the Stormspear Tidecaller carries one and the
+  // Squallcaller Windspeaker does not, and the win-delta column has them
+  // within 0.2 points of each other. Priced from that pair rather than from
+  // how impressive an ultimate feels.
+  if (def.apex) p += 1.2
+  return p
+}
+
 /**
  * Which way a rival takes a fork (DN11 §2.1).
  *
@@ -125,13 +215,35 @@ function rankPull(existing: BoardStack, add: number, archetype: Archetype): numb
  * seed the day the first forked line shipped — the migration has to be
  * invisible in the harness, not just in the rules.
  */
+/**
+ * A promotion fork is a TASTE decision between two viable forms, not a power
+ * decision between a good buy and a bad one — DN11 §2.1 says so in as many
+ * words: "a rival that always walked path A would make the harness's
+ * path-share column meaningless and hand the player a lobby they could
+ * memorise". So the fork gets a wider spread than the recruit counter does.
+ *
+ * The size is set from the band rather than from taste. With the noise term
+ * uniform on ±n/2, the difference of two draws is triangular on ±n, and a
+ * score gap of g gives the better branch 0.5 + g/n - g²/2n². DN11 §6.1 wants
+ * every branch inside 35–65%, i.e. g/n <= ~0.16 — so a form-power model
+ * accurate to about a point needs a fork spread near 6, not the 3 a recruit
+ * decision runs on.
+ */
+const FORK_NOISE_SCALE = 2.5
+
 function pickPath(options: UnitDef[], archetype: Archetype, noise: number, rng: RNG): UnitDef {
   if (options.length === 1) return options[0]
+  const spread = noise * FORK_NOISE_SCALE
   let best = options[0]
   let bestScore = -Infinity
   for (const o of options) {
-    let score = o.atk * 1.1 + o.hp * 0.7 + o.tier * 1.5 + (rng.next() - 0.5) * noise
-    for (const t of o.tags ?? []) score += TAG_BONUS[archetype][t] ?? 0
+    // Tags are TASTE, and at a fork both branches are usually the same broad
+    // shape, so their full weight was swamping the power difference it is
+    // supposed to season. Halved here and nowhere else: the recruit scorer
+    // still reads them at full strength, where choosing between a wall and an
+    // archer is exactly the decision they exist for.
+    let score = formPower(o) + o.tier * 1.5 + (rng.next() - 0.5) * spread
+    for (const t of o.tags ?? []) score += (TAG_BONUS[archetype][t] ?? 0) * 0.5
     if (score > bestScore) {
       bestScore = score
       best = o

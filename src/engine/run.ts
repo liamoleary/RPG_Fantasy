@@ -516,7 +516,14 @@ export const WAR_BANKS: Record<string, WarBank> = {
   // DN10 balance pass: Vanguard measured 3.70 average placement against
   // Verdant's 5.06, and the banks were most of the gap — so the wall banks
   // thinner and the grove banks fatter, without touching the shared trigger.
-  vanguard: { trigger: 'stood', atk: 2, hp: 3 },
+  // DN12 §7.10, the same dial DN10 reached for and for the same reason. Every
+  // Vanguard unit was reading about +12.6% against a same-tier baseline pooled
+  // across all three factions, while Verdant read -7.0% — a nineteen-point
+  // spread that no unit-level cut can close, because it is a faction sitting
+  // at the strong end of the placement band measured against one sitting at
+  // the weak end. The bank is what carries a Vanguard board's advantage from
+  // round to round, so it is where the level is set.
+  vanguard: { trigger: 'stood', atk: 1, hp: 2 },
   stormtide: { trigger: 'stood', atk: 2, hp: 2 },
   verdant: { trigger: 'stood', atk: 1, hp: 4 },
 }

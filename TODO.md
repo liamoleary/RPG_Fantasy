@@ -17,36 +17,67 @@ plate EXISTS, never that it is the current one, and CI has no art drop to
 compare against — so a stale plate is caught by nothing but a person looking at
 it.)*
 
-## DN12 commit 10 never landed: the balance pass
+*(The former entries here — DN12 commit 10's balance pass, "the win-delta metric
+measures selection not power", "fork share is decided by printed stats alone",
+"the Aegis Warden is genuinely overpowered" and "the Anvilborn's leap is newly
+flagged" — were all discharged by commit 10. They turned out to be one problem
+wearing five hats: the harness could not see abilities, could not see fork
+share at all, flagged rows at n=40, and measured every unit against a baseline
+pooled across factions that were nineteen points apart. Fixing the instruments
+moved more numbers than any content cut did.)*
 
-**Status:** open. Commits 2–9 shipped every unit and every primitive DN12 asks
-for, and none of them tuned anything — each one measured, reported and moved
-on, because §7.10 owns balance. That pass has not happened, so the branch
-shipped with six units outside the ±8% flag.
+## Two promotion forks are auto-picks, in factions DN12 may not touch
 
-Where it stands after commit 9, `--runs 4000`, seeds 12345 / 999:
+**Status:** open, and newly VISIBLE rather than newly broken — the PATH HEALTH
+column that found them did not exist until DN12 commit 10.
 
-| unit | delta | n | tunable? |
-|---|---|---|---|
-| Sunforged Champion | +31.1% / +30.1% | 172 / 188 | no — see the selection entry |
-| Runelord | +27.4% / +24.6% | 375 / 354 | yes, and commit 8 already moved it 7 points |
-| Aegis Warden | +18.4% / +19.3% | 1258 / 1149 | yes — biggest honest overshoot |
-| Sunlance Ballistier | +14.4% / +13.5% | 870 / 904 | partly |
-| Anvilborn Juggernaut | +9.9% / +9.1% | 3511 / 3485 | yes — `frac` 0.5 → 0.4 |
-| Quarry Titan | +8.8% / +8.9% | 6732 / 6466 | marginal |
+Six of eight forks now sit inside DN11 §6.1's 35–65% band. These two do not:
 
-Faction balance is fine and never moved: Vanguard 4.29, Stormtide 4.52,
-Verdant 4.69, all inside the 4.2–4.8 target.
+| fork | share | score gap |
+|---|---|---|
+| Squall Harpooner → Tidecaller / Windspeaker | 75 / 25 | 1.8 |
+| Moonshade Archer → Matriarch / Nightblade | 88 / 12 | 3.3 |
 
-**The order to do it in.** Two of the three jobs are harness work and have to
-come first, because the third cannot be measured without them: teach `pickPath`
-to weigh abilities, add the path-share column, and only then tune. Tuning first
-would be reading a broken instrument, which is what the two entries below are
-about.
+Both are DN11 forks in Stormtide and Verdant. DN12's preamble is explicit —
+"Verdant, Stormtide and the Free Companies were reviewed in the same pass and
+are unchanged. **Do not touch them.**" — so commit 10 tuned neither, and the
+scorer alone cannot close a gap that reflects a real power difference: the
+Moonshade Nightblade reads −16% where its twin reads −4%, so `pickPath` is
+right to prefer the Matriarch.
 
-**The number that fails:** `npm run sim` → `UNIT WIN-DELTA` flags all six rows
-above, and `PROMOTION LINES` still reports whole lines rather than the per-branch
-split §7.10 needs.
+**The work:** buff the losing branch of each, in a pass that owns those
+factions. The Nightblade is the clearer case of the two.
+
+**The number that fails:** `npm run sim` → `PATH HEALTH … Squall Harpooner` and
+`… Moonshade Archer` outside 35–65%.
+
+## Three units outside ±8%, all outside the Vanguard pass
+
+**Status:** open, same reason as the entry above — DN12 may not touch them.
+
+| unit | 12345 | 999 |
+|---|---|---|
+| Tempest Wyvern (Stormtide) | +8.2% | +9.4% |
+| Moonshade Archer (Verdant) | −21.0% | −21.7% |
+| Thornbark Sentinel (Verdant) | −22.3% | −23.7% |
+
+The two Verdant T2s are the widest misses in the game and have been since
+before DN12; the faction-level levelling in commit 10 moved Verdant's mean
+delta from −7.0% to about −1.8%, which makes these two stand out as genuine
+outliers rather than as symptoms of a weak faction.
+
+**The number that fails:** `npm run sim` → `UNIT WIN-DELTA` flags all three.
+
+## The Sunshot Duellist straddles the flag on one seed
+
+**Status:** open, low priority — it may be nothing.
+
++6.8% on seed 12345 and +8.5% on seed 999, n ~1040 both times. The mean is
+under the flag and the spread between seeds is 1.7 points, so this is probably
+seed variance rather than a hot unit. Two more seeds would settle it.
+
+**The number that fails:** `npm run sim --seed 999` → `UNIT WIN-DELTA … Sunshot
+Duellist` at +8.5%.
 
 ## The DN11 Kinship groundwork is parked in a stash
 

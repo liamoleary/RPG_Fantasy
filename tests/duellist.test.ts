@@ -101,10 +101,13 @@ describe('both pistols, on two different stacks', () => {
     expect(shots.length).toBeGreaterThanOrEqual(2)
     const [first, second] = shots
     expect(second.dst).not.toBe(first.dst)
-    // frac is 1, so both barrels carry the full swing: ATK 3 x 5 units = 15.
+    // The first barrel is the ordinary shot; the second carries `frac` of it.
+    // Read from the data, because `frac` is §3.3's balance lever and §7.10
+    // already moved it once.
+    const frac = (unit('vg_marksman').ability!.effect as { frac: number }).frac
     const me = first.snap.find((s) => s.uid === 'vg_marksman@4')!
     expect(first.dmg + first.absorbed).toBe(me.power)
-    expect(second.dmg + second.absorbed).toBe(me.power)
+    expect(second.dmg + second.absorbed).toBe(Math.floor(me.power * frac))
   })
 
   it('takes the next stack by slot, wrapping — no roll of its own', () => {

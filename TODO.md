@@ -45,6 +45,22 @@ was checked before being cut into a third time.
 > here was cut in response, per the reasoning below — the lever is the camp
 > hole, not the Runelord's payload, and the path-share column still has to land
 > before either is touched.
+>
+> **Running figures**, seed 12345 at 4000 lobbies, so the entry is never read
+> against a stale snapshot:
+>
+> | after commit | Champion | Runelord | Ballistier | Colossus | Vanguard |
+> |---|---|---|---|---|---|
+> | 1 (baseline) | +21.7% n882 | +19.8% n302 | +9.5% n1607 | — | 4.36 |
+> | 2 roots | +18.3% n727 | +28.3% n384 | +13.3% n908 | +8.0% | 4.34 |
+> | 3 deflect | +17.8% n729 | +27.1% n387 | +14.1% n911 | +8.9% | 4.29 |
+> | 4 raise | +20.0% n672 | +27.1% n387 | +13.6% n908 | +8.0% | 4.32 |
+>
+> Commit 4 gave the Champion's fork twin a heal and a Raise and the Champion
+> went UP, +17.8% → +20.0%, while its sample fell 729 → 672. A third instance
+> of the same signal: boards moved to the Bannerguard, the Champion got rarer,
+> and the rarer branch reads higher. The Bannerguard itself stayed inside the
+> ±8% flag after both gifts.
 
 **The read.** Printed side by side, the fifteen T4 line tops span **+21.7% to
 −11.5%**, so "apexes all ride high" is false as a class effect and the delta is

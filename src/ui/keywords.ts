@@ -20,6 +20,13 @@ const ENTRIES: Record<KeywordId, Entry> = {
     generic:
       'Armour. Absorbs X damage per surviving unit from every incoming attack, then weakens by 1. It takes a slice off every blow and lasts all battle — where Deflect stops one blow completely and is then spent.',
   },
+  raise: {
+    name: 'Raise',
+    detail: (x) =>
+      `${x === 1 ? 'once' : `${x} times`} per battle, a friendly stack that is wiped out returns at 1 unit`,
+    generic:
+      'X times each battle, a friendly stack that has been wiped out is brought back onto the field at 1 unit. This is not Marshal Yseult’s Last Stand: hers keeps a stack from ever falling, this one answers after it already has. A warband can carry both, and they do not overlap.',
+  },
   deflect: {
     name: 'Deflect',
     detail: (x) =>

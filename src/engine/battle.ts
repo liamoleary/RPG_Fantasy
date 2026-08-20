@@ -112,6 +112,8 @@ export type BattleEvent =
   | { t: 'cover'; src: string; saved: string; by: string; left: number; snap: StackSnap[] }
   /** Deflect (DN12 §4.6): a blow negated whole. `left` is what remains after. */
   | { t: 'deflect'; uid: string; left: number; snap: StackSnap[] }
+  /** Raise (DN12 §4.2): `by` hauls the wiped `uid` back up at 1 unit. */
+  | { t: 'raise'; uid: string; by: string; left: number; snap: StackSnap[] }
   /** `src` is the stack that cast it, when a stack cast it (Design Notes 04 §10) */
   | { t: 'buff'; uids: string[]; text: string; src?: string; snap: StackSnap[] }
   | { t: 'heal'; uid: string; amount: number; revived: number; src?: string; snap: StackSnap[] }
@@ -213,6 +215,8 @@ interface RStack {
   coverLeft: number
   /** Deflect charges left this battle (DN12 §4.6) — any row, unlike Cover */
   deflectLeft: number
+  /** Raises left this battle (DN12 §4.2) */
+  raiseLeft: number
   /** the ultimate this stack charges toward, if its form has one (§3) */
   apex: ApexDef | null
   apexCharge: number
@@ -418,6 +422,7 @@ function buildStack(bs: BoardStack, side: Side, hero: HeroState, heroDef: HeroDe
     // Deflect is not: it is this stack's own shield, and a back-row stack
     // raising it against the volley that found it is exactly the point.
     deflectLeft: (kw(def, 'deflect') ?? 0) + extraKw('deflect'),
+    raiseLeft: (kw(def, 'raise') ?? 0) + extraKw('raise'),
   }
 }
 
@@ -648,6 +653,39 @@ function onCasualties(ctx: Ctx, s: RStack, killed: number) {
 function onDeath(ctx: Ctx, s: RStack) {
   ctx.events.push({ t: 'death', uid: s.uid, snap: snaps(s) })
   fireAbility(ctx, s, 'onDeath')
+  // After the stack's own last word, not before it: a Deathcry is the thing it
+  // does as it goes, and being hauled back up is what happens to it afterwards.
+  tryRaise(ctx, s)
+}
+
+/**
+ * Raise (DN12 §4.2). A wiped stack is put back on the field at 1 unit by an
+ * ally holding a `raise` charge.
+ *
+ * The pick is deterministic and spends no randomness: lowest slot among the
+ * living allies that still have a charge — the same tie-break `interceptorFor`
+ * uses, chosen for the same reason. A stack cannot raise itself; it is the one
+ * on the floor.
+ *
+ * Where this sits relative to Marshal Yseult (§3.2) is the whole design. Her
+ * Last Stand fires inside `applyDamage` and prevents the wipe, so `onDeath`
+ * never runs and no charge is spent. This answers only once a stack is really
+ * gone. They stack cleanly and neither shadows the other.
+ */
+function tryRaise(ctx: Ctx, dead: RStack) {
+  if (dead.alive) return
+  let by: RStack | undefined
+  for (const a of ctx.stacks) {
+    if (a.side !== dead.side || !a.alive || a.uid === dead.uid || a.raiseLeft <= 0) continue
+    if (!by || a.slot < by.slot) by = a
+  }
+  if (!by) return
+
+  by.raiseLeft -= 1
+  dead.alive = true
+  dead.count = 1
+  dead.wound = 0
+  ctx.events.push({ t: 'raise', uid: dead.uid, by: by.uid, left: by.raiseLeft, snap: snaps(dead, by) })
 }
 
 function fireAbility(ctx: Ctx, s: RStack, trigger: string) {

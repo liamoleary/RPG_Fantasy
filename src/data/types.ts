@@ -15,6 +15,17 @@ export type KeywordId =
    * unreadable on the same card.
    */
   | 'deflect'
+  /**
+   * DN12 §4.2. When a FRIENDLY stack is wiped, this stack hauls it back onto
+   * the field at 1 unit, x times per battle. A keyword rather than an ability
+   * because `UnitDef.ability` holds exactly one, and the Bannerguard needs its
+   * ability slot for the Paladin's heal — and because a charge spent at a
+   * named moment is the shape Cover and Deflect already have.
+   *
+   * Deliberately NOT Marshal Yseult's Last Stand, which saves a stack from
+   * dying. This one answers after it is already gone. See §3.2.
+   */
+  | 'raise'
   | 'charge'
   | 'volley'
   | 'siege'

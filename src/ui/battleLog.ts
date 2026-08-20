@@ -75,6 +75,12 @@ export function describe(e: BattleEvent, playerIsA: boolean): string {
       const name = (uid: string, fallback: string) => nameOf(e.snap.find((x) => x.uid === uid), fallback)
       return `${name(e.by, 'The front line')} covers ${name(e.saved, 'the back line')} — volley intercepted.`
     }
+    case 'raise': {
+      const name = (uid: string, fallback: string) => nameOf(e.snap.find((x) => x.uid === uid), fallback)
+      // "back on its feet", never "survives" or "holds" — those belong to Last
+      // Stand, which is the effect this one is most likely to be mistaken for.
+      return `${name(e.by, 'A banner')} raises ${name(e.uid, 'the fallen')} — back on its feet at 1 unit.`
+    }
     case 'deflect': {
       const who = nameOf(e.snap.find((x) => x.uid === e.uid), 'The stack')
       // Says "turned aside", never "absorbed" or "soaked" — those words belong

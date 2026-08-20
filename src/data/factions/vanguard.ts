@@ -103,6 +103,14 @@ export const VANGUARD_UNITS: UnitDef[] = [
   {
     // The defensive twin to the Champion (DN11 §2.3). Guard is already "adjacent
     // stacks +1 Bulwark" in the engine, so the identity is data, not new code.
+    //
+    // DN12 §3.2 makes it a Paladin, which is two behaviours: a periodic heal on
+    // the Guard chassis, and one Raise. The heal reuses the Battle Cleric's
+    // exact shape — `everyExchange` + `healLowest` — because the maths is
+    // already understood, and it is pitched deliberately UNDER the Cleric's:
+    // every 3rd action rather than every 2nd, on a stack that musters 1 rather
+    // than 2. The Bannerguard is getting a second gift in the same commit, and
+    // it already reads +4.1% before either of them.
     id: 'vg_bannerguard',
     name: 'Bannerguard Sentinel',
     pool: 'vanguard',
@@ -112,9 +120,15 @@ export const VANGUARD_UNITS: UnitDef[] = [
     init: 4,
     musterSize: 1,
     row: 'front',
-    keywords: [{ k: 'guard', x: 1 }, { k: 'bulwark', x: 1 }],
+    keywords: [{ k: 'guard', x: 1 }, { k: 'bulwark', x: 1 }, { k: 'raise', x: 1 }],
+    ability: {
+      trigger: 'everyExchange',
+      everyN: 3,
+      effect: { type: 'healLowest', x: 2 },
+      text: 'Every 3rd action: heal the most-wounded ally for 2 per unit in this stack',
+    },
     sigil: 'wall',
-    tags: ['elite', 'wall', 'bulwark'],
+    tags: ['elite', 'wall', 'bulwark', 'support'],
   },
   {
     id: 'vg_arbalest',
